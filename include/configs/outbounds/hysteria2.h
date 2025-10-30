@@ -5,10 +5,9 @@
 
 namespace Configs
 {
-    class hysteria2 : public baseConfig, public outboundMeta
+    class hysteria2 : public outbound
     {
         public:
-        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
         QStringList server_ports;
         QString hop_interval;
         int up_mbps = 0;
@@ -30,5 +29,14 @@ namespace Configs
             _add(new configItem("password", &password, string));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
         }
+
+        // baseConfig overrides
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+
+        QString DisplayType() override;
     };
 }

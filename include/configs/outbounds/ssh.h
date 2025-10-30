@@ -4,10 +4,9 @@
 
 namespace Configs
 {
-    class ssh : public baseConfig, public outboundMeta
+    class ssh : public outbound
     {
         public:
-        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
         QString user;
         QString password;
         QString private_key;
@@ -29,5 +28,14 @@ namespace Configs
             _add(new configItem("host_key_algorithms", &host_key_algorithms, stringList));
             _add(new configItem("client_version", &client_version, string));
         }
+
+        // baseConfig overrides
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+
+        QString DisplayType() override;
     };
 }

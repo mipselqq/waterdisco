@@ -1,7 +1,10 @@
 #pragma once
 
-#include <QJsonObject>
 #include <QString>
+#include <include/global/Utils.hpp>
+
+#include "generate.h"
+#include "common/Outbound.h"
 #include "include/global/ConfigItem.hpp"
 
 namespace Configs
@@ -9,30 +12,44 @@ namespace Configs
     class baseConfig : public JsonStore
     {
     public:
-        virtual bool ParseFromLink(QString link);
+        virtual bool ParseFromLink(const QString& link);
 
-        virtual bool ParseFromJson(QJsonObject object);
+        virtual bool ParseFromJson(const QJsonObject& object);
 
         virtual QString ExportToLink();
 
         virtual QJsonObject ExportToJson();
 
-        virtual QJsonObject Build();
+        virtual BuildResult Build();
     };
 
-    class outboundMeta
+    class outbound : public baseConfig
     {
         public:
+        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
+
         void ResolveDomainToIP(const std::function<void()> &onFinished);
 
-        virtual QString DisplayAddress();
+        virtual QString DisplayAddress()
+        {
+            return ::DisplayAddress(commons->server, commons->server_port);
+        }
 
-        virtual QString DisplayName();
+        QString DisplayName()
+        {
+            if (commons->name.isEmpty()) {
+                return DisplayAddress();
+            }
+            return commons->name;
+        }
 
         virtual QString DisplayType() { return {}; };
 
-        virtual QString DisplayTypeAndName();
+        QString DisplayTypeAndName()
+        {
+            return QString("[%1] %2").arg(DisplayType(), DisplayName());
+        }
 
-        virtual bool IsEndpoint() { return false; };
+        static bool IsEndpoint() { return false; };
     };
 }

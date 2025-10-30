@@ -9,15 +9,14 @@ namespace Configs
 {
     inline QStringList vlessFlows = {"xtls-rprx-vision"};
 
-    class vless : public baseConfig, public outboundMeta
+    class vless : public outbound
     {
         public:
-        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
         QString uuid;
         QString flow;
         std::shared_ptr<TLS> tls = std::make_shared<TLS>();
         QString packet_encoding;
-        std::shared_ptr<Multiplex> mux = std::make_shared<Multiplex>();
+        std::shared_ptr<Multiplex> multiplex = std::make_shared<Multiplex>();
         std::shared_ptr<Transport> transport = std::make_shared<Transport>();
 
         vless()
@@ -27,8 +26,17 @@ namespace Configs
             _add(new configItem("flow", &flow, string));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
             _add(new configItem("packet_encoding", &packet_encoding, string));
-            _add(new configItem("mux", dynamic_cast<JsonStore *>(mux.get()), jsonStore));
+            _add(new configItem("multiplex", dynamic_cast<JsonStore *>(multiplex.get()), jsonStore));
             _add(new configItem("transport", dynamic_cast<JsonStore *>(transport.get()), jsonStore));
         }
+
+        // baseConfig overrides
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+
+        QString DisplayType() override;
     };
 }
