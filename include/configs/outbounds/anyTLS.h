@@ -5,10 +5,9 @@
 
 namespace Configs
 {
-    class anyTLS : public baseConfig, public outboundMeta
+    class anyTLS : public outbound
     {
         public:
-        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
         QString password;
         QString idle_session_check_interval = "30s";
         QString idle_session_timeout = "30s";
@@ -24,5 +23,14 @@ namespace Configs
             _add(new configItem("min_idle_session", &min_idle_session, integer));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
         }
+
+        // baseConfig overrides
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+
+        QString DisplayType() override;
     };
 }

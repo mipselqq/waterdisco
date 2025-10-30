@@ -9,10 +9,9 @@ namespace Configs
     inline QStringList ccAlgorithms = {"cubic", "new_reno", "bbr"};
     inline QStringList udpRelayModes = {"", "native", "quic"};
 
-    class tuic : public baseConfig, public outboundMeta
+    class tuic : public outbound
     {
         public:
-        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
         QString uuid;
         QString password;
         QString congestion_control;
@@ -34,5 +33,14 @@ namespace Configs
             _add(new configItem("heartbeat", &heartbeat, string));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
         }
+
+        // baseConfig overrides
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+
+        QString DisplayType() override;
     };
 }
