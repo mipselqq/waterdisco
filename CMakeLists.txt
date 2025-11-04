@@ -261,8 +261,12 @@ set(PROJECT_SOURCES
         src/configs/outbounds/vmess.cpp
         src/configs/outbounds/wireguard.cpp
         include/configs/generate.h
+        src/configs/generate.cpp
         include/configs/common/utils.h
         src/configs/common/utils.cpp
+        include/configs/outbounds/Custom.h
+        include/configs/outbounds/Chain.h
+        include/configs/outbounds/extracore.h
 )
 
 if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)

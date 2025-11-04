@@ -7,7 +7,6 @@ namespace Configs
     class OutboundCommons : public baseConfig
     {
         public:
-        virtual ~OutboundCommons() = default;
         QString name;
         QString server;
         int server_port = 0;
@@ -27,5 +26,40 @@ namespace Configs
         QString ExportToLink() override;
         QJsonObject ExportToJson() override;
         BuildResult Build() override;
+    };
+
+    class outbound : public baseConfig
+    {
+    public:
+        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
+
+        void ResolveDomainToIP(const std::function<void()> &onFinished);
+
+        virtual QString GetAddress()
+        {
+            return commons->server;
+        }
+
+        virtual QString DisplayAddress()
+        {
+            return ::DisplayAddress(commons->server, commons->server_port);
+        }
+
+        virtual QString DisplayName()
+        {
+            if (commons->name.isEmpty()) {
+                return DisplayAddress();
+            }
+            return commons->name;
+        }
+
+        virtual QString DisplayType() { return {}; };
+
+        QString DisplayTypeAndName()
+        {
+            return QString("[%1] %2").arg(DisplayType(), DisplayName());
+        }
+
+        virtual bool IsEndpoint() { return false; };
     };
 }

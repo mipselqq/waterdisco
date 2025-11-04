@@ -21,6 +21,26 @@ namespace Configs
         }
     };
 
+    ProxyEntity::ProxyEntity(Configs::outbound *outbound, const QString &type_)
+    {
+        if (type_ != nullptr) this->type = type_;
+
+        _add(new configItem("type", &type, itemType::string));
+        _add(new configItem("id", &id, itemType::integer));
+        _add(new configItem("gid", &gid, itemType::integer));
+        _add(new configItem("yc", &latency, itemType::integer));
+        _add(new configItem("dl", &dl_speed, itemType::string));
+        _add(new configItem("ul", &ul_speed, itemType::string));
+        _add(new configItem("report", &full_test_report, itemType::string));
+        _add(new configItem("country", &test_country, itemType::string));
+
+        if (outbound != nullptr) {
+            this->outbound = std::shared_ptr<Configs::outbound>(outbound);
+            _add(new configItem("outbound", dynamic_cast<JsonStore *>(outbound), itemType::jsonStore));
+            _add(new configItem("traffic", dynamic_cast<JsonStore *>(traffic_data.get()), itemType::jsonStore));
+        }
+    }
+
     QString ProxyEntity::DisplayTestResult() const {
         QString result;
         if (latency < 0) {
