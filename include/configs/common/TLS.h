@@ -14,7 +14,7 @@ namespace Configs
 
         uTLS()
         {
-            _add(new configItem("enabled", &enabled, boolean));
+            _add(new configItem("enabled", &enabled, itemType::boolean));
             _add(new configItem("fingerprint", &fingerPrint, string));
         }
 
@@ -35,7 +35,7 @@ namespace Configs
 
         ECH()
         {
-            _add(new configItem("enabled", &enabled, boolean));
+            _add(new configItem("enabled", &enabled, itemType::boolean));
             _add(new configItem("config", &config, stringList));
             _add(new configItem("config_path", &config_path, string));
         }
@@ -57,7 +57,7 @@ namespace Configs
 
         Reality()
         {
-            _add(new configItem("enabled", &enabled, boolean));
+            _add(new configItem("enabled", &enabled, itemType::boolean));
             _add(new configItem("public_key", &public_key, string));
             _add(new configItem("short_id", &short_id, string));
         }
@@ -98,10 +98,10 @@ namespace Configs
 
         TLS()
         {
-            _add(new configItem("enabled", &enabled, boolean));
-            _add(new configItem("disable_sni", &disable_sni, boolean));
+            _add(new configItem("enabled", &enabled, itemType::boolean));
+            _add(new configItem("disable_sni", &disable_sni, itemType::boolean));
             _add(new configItem("server_name", &server_name, string));
-            _add(new configItem("insecure", &insecure, boolean));
+            _add(new configItem("insecure", &insecure, itemType::boolean));
             _add(new configItem("alpn", &alpn, stringList));
             _add(new configItem("min_version", &min_version, string));
             _add(new configItem("max_version", &max_version, string));
@@ -114,9 +114,9 @@ namespace Configs
             _add(new configItem("client_certificate_path", &client_certificate_path, string));
             _add(new configItem("client_key", &client_key, stringList));
             _add(new configItem("client_key_path", &client_key_path, string));
-            _add(new configItem("fragment", &fragment, boolean));
+            _add(new configItem("fragment", &fragment, itemType::boolean));
             _add(new configItem("fragment_fallback_delay", &fragment_fallback_delay, string));
-            _add(new configItem("record_fragment", &record_fragment, boolean));
+            _add(new configItem("record_fragment", &record_fragment, itemType::boolean));
             _add(new configItem("ech", dynamic_cast<JsonStore *>(ech.get()), jsonStore));
             _add(new configItem("utls", dynamic_cast<JsonStore *>(utls.get()), jsonStore));
             _add(new configItem("reality", dynamic_cast<JsonStore *>(reality.get()), jsonStore));

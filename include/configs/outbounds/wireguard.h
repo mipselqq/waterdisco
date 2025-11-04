@@ -1,5 +1,4 @@
 #pragma once
-#include "include/configs/baseConfig.h"
 #include "include/configs/common/Outbound.h"
 
 namespace Configs
@@ -88,7 +87,7 @@ namespace Configs
 
         QString DisplayAddress() override;
         QString DisplayType() override;
-        static bool IsEndpoint();
+        bool IsEndpoint() override;
     };
 }
 
