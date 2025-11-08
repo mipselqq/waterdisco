@@ -63,7 +63,11 @@ namespace Configs {
         if (object.contains("hop_interval")) hop_interval = object["hop_interval"].toString();
         if (object.contains("up_mbps")) up_mbps = object["up_mbps"].toInt();
         if (object.contains("down_mbps")) down_mbps = object["down_mbps"].toInt();
-        if (object.contains("obfsType")) obfsType = object["obfsType"].toString();
+        if (object.contains("obfs")) {
+            auto obfsObj = object["obfs"].toObject();
+            if (obfsObj.contains("type")) obfsType = obfsObj["type"].toString();
+            if (obfsObj.contains("password")) obfsPassword = obfsObj["password"].toString();
+        }
         if (object.contains("obfsPassword")) obfsPassword = object["obfsPassword"].toString();
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
@@ -127,8 +131,10 @@ namespace Configs {
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
         if (down_mbps > 0) object["down_mbps"] = down_mbps;
-        if (!obfsType.isEmpty()) object["obfsType"] = obfsType;
-        if (!obfsPassword.isEmpty()) object["obfsPassword"] = obfsPassword;
+        QJsonObject obfsObj;
+        if (!obfsType.isEmpty()) obfsObj["type"] = obfsType;
+        if (!obfsPassword.isEmpty()) obfsObj["password"] = obfsPassword;
+        if (!obfsObj.isEmpty()) object["obfs"] = obfsObj;
         if (!password.isEmpty()) object["password"] = password;
         if (tls->enabled) object["tls"] = tls->ExportToJson();
         return object;
@@ -136,7 +142,20 @@ namespace Configs {
 
     BuildResult hysteria2::Build()
     {
-        return {ExportToJson(), ""};
+        QJsonObject object;
+        object["type"] = "hysteria2";
+        mergeJsonObjects(object, commons->Build().object);
+        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(server_ports);
+        if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
+        if (up_mbps > 0) object["up_mbps"] = up_mbps;
+        if (down_mbps > 0) object["down_mbps"] = down_mbps;
+        QJsonObject obfsObj;
+        obfsObj["type"] = obfsType;
+        obfsObj["password"] = obfsPassword;
+        if (!obfsObj.isEmpty()) object["obfs"] = obfsObj;
+        if (!password.isEmpty()) object["password"] = password;
+        if (tls->enabled) object["tls"] = tls->Build().object;
+        return {object, ""};
     }
 
     QString hysteria2::DisplayType()
