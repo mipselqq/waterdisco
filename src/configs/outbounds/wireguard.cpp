@@ -27,7 +27,7 @@ namespace Configs {
                 }
             }
         }
-        if (query.hasQueryItem("persistent_keepalive")) persistent_keepalive = query.queryItemValue("persistent_keepalive").toInt();
+        if (query.hasQueryItem("persistent_keepalive_interval")) persistent_keepalive = query.queryItemValue("persistent_keepalive").toInt();
         
         return true;
     }
@@ -42,7 +42,7 @@ namespace Configs {
         if (object.contains("reserved")) {
             reserved = QJsonArray2QListInt(object["reserved"].toArray());
         }
-        if (object.contains("persistent_keepalive")) persistent_keepalive = object["persistent_keepalive"].toInt();
+        if (object.contains("persistent_keepalive_interval")) persistent_keepalive = object["persistent_keepalive"].toInt();
         return true;
     }
 
@@ -60,7 +60,7 @@ namespace Configs {
             }
             query.addQueryItem("reserved", reservedStr.join("-"));
         }
-        if (persistent_keepalive > 0) query.addQueryItem("persistent_keepalive", QString::number(persistent_keepalive));
+        if (persistent_keepalive > 0) query.addQueryItem("persistent_keepalive_interval", QString::number(persistent_keepalive));
         return query.toString();
     }
 
@@ -72,13 +72,21 @@ namespace Configs {
         if (!public_key.isEmpty()) object["public_key"] = public_key;
         if (!pre_shared_key.isEmpty()) object["pre_shared_key"] = pre_shared_key;
         if (!reserved.isEmpty()) object["reserved"] = QListInt2QJsonArray(reserved);
-        if (persistent_keepalive > 0) object["persistent_keepalive"] = persistent_keepalive;
+        if (persistent_keepalive > 0) object["persistent_keepalive_interval"] = persistent_keepalive;
         return object;
     }
 
     BuildResult Peer::Build()
     {
-        return {ExportToJson(), ""};
+        QJsonObject object;
+        if (!address.isEmpty()) object["address"] = address;
+        if (port > 0) object["port"] = port;
+        if (!public_key.isEmpty()) object["public_key"] = public_key;
+        if (!pre_shared_key.isEmpty()) object["pre_shared_key"] = pre_shared_key;
+        if (!reserved.isEmpty()) object["reserved"] = QListInt2QJsonArray(reserved);
+        if (persistent_keepalive > 0) object["persistent_keepalive_interval"] = persistent_keepalive;
+        object["allowed_ips"] = QListStr2QJsonArray({"0.0.0.0/0", "::/0"});
+        return {object, ""};
     }
 
     bool wireguard::ParseFromLink(const QString& link)
@@ -98,7 +106,7 @@ namespace Configs {
                 QString value = trimmed.mid(eqIdx + 1).trimmed();
                 
                 if (key == "PrivateKey") private_key = value;
-                if (key == "Address") address = value.split(",");
+                if (key == "Address") address = value.replace(" ", "").split(",");
                 if (key == "MTU") mtu = value.toInt();
                 if (key == "PublicKey") peer->public_key = value;
                 if (key == "PresharedKey") peer->pre_shared_key = value;
@@ -216,7 +224,8 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "wireguard";
-        mergeJsonObjects(object, commons->ExportToJson());
+        if (!commons->name.isEmpty()) object["tag"] = commons->name;
+        mergeJsonObjects(object, commons->dialFields->ExportToJson());
         if (!private_key.isEmpty()) object["private_key"] = private_key;
         if (!address.isEmpty()) object["address"] = QListStr2QJsonArray(address);
         if (mtu > 0) object["mtu"] = mtu;
@@ -226,7 +235,7 @@ namespace Configs {
         
         auto peerObj = peer->ExportToJson();
         if (!peerObj.isEmpty()) {
-            object["peer"] = QJsonArray({peerObj});
+            object["peers"] = QJsonArray({peerObj});
         }
         
         return object;
@@ -234,7 +243,22 @@ namespace Configs {
 
     BuildResult wireguard::Build()
     {
-        return {ExportToJson(), ""};
+        QJsonObject object;
+        object["type"] = "wireguard";
+        if (!commons->name.isEmpty()) object["tag"] = commons->name;
+        mergeJsonObjects(object, commons->dialFields->Build().object);
+        if (!private_key.isEmpty()) object["private_key"] = private_key;
+        if (!address.isEmpty()) object["address"] = QListStr2QJsonArray(address);
+        if (mtu > 0) object["mtu"] = mtu;
+        if (system) object["system"] = system;
+        if (worker_count > 0) object["worker_count"] = worker_count;
+        if (!udp_timeout.isEmpty()) object["udp_timeout"] = udp_timeout;
+
+        auto peerObj = peer->Build().object;
+        if (!peerObj.isEmpty()) {
+            object["peers"] = QJsonArray({peerObj});
+        }
+        return {object, ""};
     }
 
     QString wireguard::DisplayAddress()
