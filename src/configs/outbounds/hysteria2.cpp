@@ -15,7 +15,7 @@ namespace Configs {
         {
             if(!url.errorString().startsWith("Invalid port"))
                 return false;
-            commons->server_port = 0;
+            server_port = 0;
             server_ports = QString::fromStdString(URLParser::Parse((link.split("?")[0] + "/").toStdString()).port).split(",");
             for (auto & serverPort : server_ports) {
                 serverPort.replace("-", ":");
@@ -23,7 +23,7 @@ namespace Configs {
         }
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         
         if (url.password().isEmpty()) {
             password = url.userName();
@@ -48,7 +48,7 @@ namespace Configs {
         
         tls->ParseFromLink(link);
         
-        if (commons->server_port == 0 && server_ports.isEmpty()) commons->server_port = 443;
+        if (server_port == 0 && server_ports.isEmpty()) server_port = 443;
 
         return true;
     }
@@ -56,7 +56,7 @@ namespace Configs {
     bool hysteria2::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "hysteria2") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("server_ports")) {
             server_ports = QJsonArray2QListString(object["server_ports"].toArray());
         }
@@ -79,7 +79,7 @@ namespace Configs {
         QUrl url;
         QUrlQuery query;
         url.setScheme("hy2");
-        url.setHost(commons->server);
+        url.setHost(server);
         
         if (password.contains(":")) {
             url.setUserName(SubStrBefore(password, ":"));
@@ -98,10 +98,10 @@ namespace Configs {
             url.setPort(0);
             query.addQueryItem("mport", portList.join(","));
         } else {
-            url.setPort(commons->server_port);
+            url.setPort(server_port);
         }
         
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        if (!name.isEmpty()) url.setFragment(name);
         
         if (!obfsPassword.isEmpty()) {
             query.addQueryItem("obfs-password", QUrl::toPercentEncoding(obfsPassword));
@@ -111,7 +111,7 @@ namespace Configs {
         if (!hop_interval.isEmpty()) query.addQueryItem("hop_interval", hop_interval);
         
         mergeUrlQuery(query, tls->ExportToLink());
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
         
@@ -126,7 +126,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "hysteria2";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(server_ports);
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
@@ -144,7 +144,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "hysteria2";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(server_ports);
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;

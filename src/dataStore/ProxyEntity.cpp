@@ -16,7 +16,7 @@ namespace Configs
         _add(new configItem("country", &test_country, itemType::string));
 
         if (bean != nullptr) {
-            this->bean = std::shared_ptr<Configs::AbstractBean>(bean);
+            this->_bean = std::shared_ptr<Configs::AbstractBean>(bean);
             _add(new configItem("bean", dynamic_cast<JsonStore *>(bean), itemType::jsonStore));
         }
 

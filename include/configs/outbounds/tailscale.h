@@ -20,7 +20,6 @@ namespace Configs
 
         tailscale() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("state_directory", &state_directory, itemType::string));
             _add(new configItem("auth_key", &auth_key, itemType::string));
             _add(new configItem("control_url", &control_url, itemType::string));

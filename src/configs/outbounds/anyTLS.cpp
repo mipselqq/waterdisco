@@ -12,10 +12,10 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         password = url.userName();
         
-        if (commons->server_port == 0) commons->server_port = 443;
+        if (server_port == 0) server_port = 443;
         
         if (query.hasQueryItem("idle_session_check_interval")) idle_session_check_interval = query.queryItemValue("idle_session_check_interval");
         if (query.hasQueryItem("idle_session_timeout")) idle_session_timeout = query.queryItemValue("idle_session_timeout");
@@ -30,7 +30,7 @@ namespace Configs {
     bool anyTLS::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "anytls") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("idle_session_check_interval")) idle_session_check_interval = object["idle_session_check_interval"].toString();
         if (object.contains("idle_session_timeout")) idle_session_timeout = object["idle_session_timeout"].toString();
@@ -45,16 +45,16 @@ namespace Configs {
         QUrlQuery query;
         url.setScheme("anytls");
         url.setUserName(password);
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
 
         if (!idle_session_check_interval.isEmpty()) query.addQueryItem("idle_session_check_interval", idle_session_check_interval);
         if (!idle_session_timeout.isEmpty()) query.addQueryItem("idle_session_timeout", idle_session_timeout);
         if (min_idle_session > 0) query.addQueryItem("min_idle_session", QString::number(min_idle_session));
         
         mergeUrlQuery(query, tls->ExportToLink());
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
         return url.toString();
@@ -64,7 +64,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "anytls";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!password.isEmpty()) object["password"] = password;
         if (!idle_session_check_interval.isEmpty()) object["idle_session_check_interval"] = idle_session_check_interval;
         if (!idle_session_timeout.isEmpty()) object["idle_session_timeout"] = idle_session_timeout;
@@ -77,7 +77,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "anytls";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!password.isEmpty()) object["password"] = password;
         if (!idle_session_check_interval.isEmpty()) object["idle_session_check_interval"] = idle_session_check_interval;
         if (!idle_session_timeout.isEmpty()) object["idle_session_timeout"] = idle_session_timeout;

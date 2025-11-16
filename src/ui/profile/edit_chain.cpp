@@ -4,7 +4,6 @@
 #include "include/ui/profile/ProxyItem.h"
 
 #include "include/dataStore/Database.hpp"
-#include "include/configs/proxy/ChainBean.hpp"
 
 EditChain::EditChain(QWidget *parent) : QWidget(parent), ui(new Ui::EditChain) {
     ui->setupUi(this);
@@ -16,9 +15,9 @@ EditChain::~EditChain() {
 
 void EditChain::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
     this->ent = _ent;
-    auto bean = this->ent->Chain();
+    auto outbound = this->ent->Chain();
 
-    for (auto id: bean->list) {
+    for (auto id: outbound->list) {
         AddProfileToListIfExist(id);
     }
 }
@@ -29,13 +28,13 @@ bool EditChain::onEnd() {
         return false;
     }
 
-    auto bean = this->ent->Chain();
+    auto outbound = this->ent->Chain();
 
     QList<int> idList;
     for (int i = 0; i < ui->listWidget->count(); i++) {
         idList << ui->listWidget->item(i)->data(114514).toInt();
     }
-    bean->list = idList;
+    outbound->list = idList;
 
     return true;
 }

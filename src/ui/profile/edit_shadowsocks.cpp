@@ -14,27 +14,27 @@ EditShadowSocks::~EditShadowSocks() {
 
 void EditShadowSocks::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
     this->ent = _ent;
-    auto bean = this->ent->ShadowSocks();
+    auto outbound = this->ent->ShadowSocks();
 
-    ui->method->setCurrentText(bean->method);
-    ui->uot->setCurrentIndex(bean->uot);
-    ui->password->setText(bean->password);
-    auto ssPlugin = bean->plugin.split(";");
+    ui->method->setCurrentText(outbound->method);
+    ui->uot->setCurrentIndex(outbound->uot);
+    ui->password->setText(outbound->password);
+    auto ssPlugin = outbound->plugin.split(";");
     if (!ssPlugin.empty()) {
         ui->plugin->setCurrentText(ssPlugin[0]);
-        ui->plugin_opts->setText(SubStrAfter(bean->plugin, ";"));
+        ui->plugin_opts->setText(SubStrAfter(outbound->plugin, ";"));
     }
 }
 
 bool EditShadowSocks::onEnd() {
-    auto bean = this->ent->ShadowSocks();
+    auto outbound = this->ent->ShadowSocks();
 
-    bean->method = ui->method->currentText();
-    bean->password = ui->password->text();
-    bean->uot = ui->uot->currentIndex();
-    bean->plugin = ui->plugin->currentText();
-    if (!bean->plugin.isEmpty()) {
-        bean->plugin += ";" + ui->plugin_opts->text();
+    outbound->method = ui->method->currentText();
+    outbound->password = ui->password->text();
+    outbound->uot = ui->uot->currentIndex();
+    outbound->plugin = ui->plugin->currentText();
+    if (!outbound->plugin.isEmpty()) {
+        outbound->plugin += ";" + ui->plugin_opts->text();
     }
 
     return true;

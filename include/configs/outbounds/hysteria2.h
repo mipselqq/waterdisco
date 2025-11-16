@@ -18,7 +18,6 @@ namespace Configs
 
         hysteria2() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("server_ports", &server_ports, stringList));
             _add(new configItem("hop_interval", &hop_interval, string));
             _add(new configItem("up_mbps", &up_mbps, integer));
@@ -27,6 +26,14 @@ namespace Configs
             _add(new configItem("obfsPassword", &obfsPassword, string));
             _add(new configItem("password", &password, string));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
+        }
+
+        bool HasTLS() override {
+            return true;
+        }
+
+        std::shared_ptr<TLS> GetTLS() override {
+            return tls;
         }
 
         // baseConfig overrides

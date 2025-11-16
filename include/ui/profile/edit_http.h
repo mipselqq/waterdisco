@@ -1,26 +1,29 @@
-#pragma once
+#ifndef EDIT_HTTP_H
+#define EDIT_HTTP_H
 
 #include <QWidget>
 #include "profile_editor.h"
-#include "ui_edit_socks_http.h"
+#include "ui_edit_http.h"
 
 namespace Ui {
-    class EditSocksHttp;
+    class EditHttp;
 }
 
-class EditSocksHttp : public QWidget, public ProfileEditor {
+class EditHttp : public QWidget, public ProfileEditor {
     Q_OBJECT
 
 public:
-    explicit EditSocksHttp(QWidget *parent = nullptr);
+    explicit EditHttp(QWidget *parent = nullptr);
 
-    ~EditSocksHttp() override;
+    ~EditHttp() override;
 
     void onStart(std::shared_ptr<Configs::ProxyEntity> _ent) override;
 
     bool onEnd() override;
 
 private:
-    Ui::EditSocksHttp *ui;
+    Ui::EditHttp *ui;
     std::shared_ptr<Configs::ProxyEntity> ent;
 };
+
+#endif

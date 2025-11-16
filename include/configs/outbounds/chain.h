@@ -10,7 +10,6 @@ namespace Configs
 
         chain() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("list", &list, integerList));
         }
 

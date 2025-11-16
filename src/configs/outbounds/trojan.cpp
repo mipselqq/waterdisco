@@ -11,7 +11,7 @@ namespace Configs {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         password = url.userName();
         tls->ParseFromLink(link);
         transport->ParseFromLink(link);
@@ -21,7 +21,7 @@ namespace Configs {
     bool Trojan::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "trojan") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
         if (object.contains("transport")) transport->ParseFromJson(object["transport"].toObject());
@@ -32,10 +32,10 @@ namespace Configs {
     {
         QUrl url;
         QUrlQuery query;
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
+        url.setHost(server);
+        url.setPort(server_port);
         url.setScheme("trojan");
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        if (!name.isEmpty()) url.setFragment(name);
         url.setUserName(password);
         if (tls->enabled) mergeUrlQuery(query, tls->ExportToLink());
         if (!transport->type.isEmpty()) mergeUrlQuery(query, transport->ExportToLink());
@@ -47,7 +47,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "trojan";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!password.isEmpty()) object["password"] = password;
         if (tls->enabled) object["tls"] = tls->ExportToJson();
         if (!transport->type.isEmpty()) object["transport"] = transport->ExportToJson();
@@ -58,7 +58,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "trojan";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!password.isEmpty()) object["password"] = password;
         if (tls->enabled) object["tls"] = tls->Build().object;
         if (!transport->type.isEmpty()) object["transport"] = transport->Build().object;

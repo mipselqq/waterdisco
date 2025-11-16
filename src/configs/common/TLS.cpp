@@ -137,7 +137,13 @@ namespace Configs {
     }
     BuildResult Reality::Build()
     {
-        return {ExportToJson(), ""};
+        QJsonObject object;
+        if (!public_key.isEmpty() || enabled) {
+            object["enabled"] = true;
+            object["public_key"] = public_key;
+            if (!short_id.isEmpty()) object["short_id"] = short_id;
+        }
+        return {object, ""};
     }
 
     bool TLS::ParseFromLink(const QString& link)

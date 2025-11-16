@@ -22,7 +22,6 @@ namespace Configs
 
         tuic() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("uuid", &uuid, string));
             _add(new configItem("password", &password, string));
             _add(new configItem("congestion_control", &congestion_control, string));
@@ -31,6 +30,14 @@ namespace Configs
             _add(new configItem("zero_rtt_handshake", &zero_rtt_handshake, boolean));
             _add(new configItem("heartbeat", &heartbeat, string));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
+        }
+
+        bool HasTLS() override {
+            return true;
+        }
+
+        std::shared_ptr<TLS> GetTLS() override {
+            return tls;
         }
 
         // baseConfig overrides

@@ -19,13 +19,20 @@ namespace Configs
 
         shadowsocks() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("method", &method, string));
             _add(new configItem("password", &password, string));
             _add(new configItem("plugin", &plugin, string));
             _add(new configItem("plugin_opts", &plugin_opts, string));
             _add(new configItem("uot", &uot, itemType::boolean));
             _add(new configItem("multiplex", dynamic_cast<JsonStore *>(multiplex.get()), jsonStore));
+        }
+
+        bool HasMux() override {
+            return true;
+        }
+
+        std::shared_ptr<Multiplex> GetMux() override {
+            return multiplex;
         }
 
         // baseConfig overrides

@@ -37,6 +37,10 @@ namespace Configs
             _add(new configItem("service_name", &service_name, string));
         }
 
+        QString getHeadersString();
+
+        static QStringList getHeaderPairs(QString rawHeader);
+
         // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;

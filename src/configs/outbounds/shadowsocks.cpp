@@ -12,7 +12,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
 
         if (SubStrBefore(link, "#").contains("@")) {
             // Traditional SS format
@@ -35,7 +35,7 @@ namespace Configs {
             url = QUrl("https://" + linkN);
             if (!url.isValid()) return false;
             query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
-            commons->ParseFromLink(url.toString());
+            outbound::ParseFromLink(url.toString());
             method = url.userName();
             password = url.password();
         }
@@ -45,13 +45,13 @@ namespace Configs {
         if (query.hasQueryItem("uot")) uot = query.queryItemValue("uot") == "true" || query.queryItemValue("uot").toInt() > 0;
         multiplex->ParseFromLink(link);
 
-        return !(commons->server.isEmpty() || method.isEmpty() || password.isEmpty());
+        return !(server.isEmpty() || method.isEmpty() || password.isEmpty());
     }
 
     bool shadowsocks::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "shadowsocks") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("method")) method = object["method"].toString();
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("plugin")) plugin = object["plugin"].toString();
@@ -81,16 +81,16 @@ namespace Configs {
             url.setUserName(method_password.toUtf8().toBase64(QByteArray::Base64Option::Base64UrlEncoding));
         }
         
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
         
         if (!plugin.isEmpty()) query.addQueryItem("plugin", plugin);
         if (!plugin_opts.isEmpty()) query.addQueryItem("plugin-opts", plugin_opts);
         if (uot) query.addQueryItem("uot", "true");
         
         mergeUrlQuery(query, multiplex->ExportToLink());
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
         return url.toString();
@@ -100,7 +100,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "shadowsocks";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!method.isEmpty()) object["method"] = method;
         if (!password.isEmpty()) object["password"] = password;
         if (!plugin.isEmpty()) object["plugin"] = plugin;
@@ -114,7 +114,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "shadowsocks";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!method.isEmpty()) object["method"] = method;
         if (!password.isEmpty()) object["password"] = password;
         if (!plugin.isEmpty()) object["plugin"] = plugin;

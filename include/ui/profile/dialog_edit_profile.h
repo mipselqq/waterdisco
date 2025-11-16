@@ -25,15 +25,7 @@ public slots:
     void accept() override;
 
 private slots:
-
-    void on_custom_outbound_edit_clicked();
-
-    void on_custom_config_edit_clicked();
-
     void on_certificate_edit_clicked();
-
-    void on_apply_to_group_clicked();
-
 private:
     Ui::DialogEditProfile *ui;
 
@@ -50,8 +42,6 @@ private:
     QString network_title_base;
 
     struct {
-        QString custom_outbound;
-        QString custom_config;
         QString certificate;
     } CACHE;
 
@@ -60,8 +50,6 @@ private:
     bool onEnd();
 
     void editor_cache_updated_impl();
-
-    void do_apply_to_group(const std::shared_ptr<Configs::Group> &group, QWidget *key);
 };
 
 #endif // DIALOG_EDIT_PROFILE_H

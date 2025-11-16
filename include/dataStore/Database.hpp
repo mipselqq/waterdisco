@@ -58,7 +58,7 @@ namespace Configs {
 
         void UpdateRouteChains(const QList<std::shared_ptr<RoutingChain>>& newChain);
 
-        QStringList GetExtraCorePaths() const;
+        [[nodiscard]] QStringList GetExtraCorePaths() const;
 
         bool AddExtraCorePath(const QString &path);
 

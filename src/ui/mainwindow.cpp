@@ -578,7 +578,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         auto selected = get_now_selected_list();
         if (!selected.isEmpty()) {
             auto ent = selected.first();
-            name = ent->bean->DisplayCoreType();
+            name = software_core_name;
         }
         ui->menu_export_config->setVisible(name == software_core_name);
         ui->menu_export_config->setText(tr("Export %1 config").arg(name));
@@ -1342,7 +1342,7 @@ QList<std::shared_ptr<Configs::ProxyEntity>> MainWindow::filterProfilesList(cons
             MW_show_log("Null profile, maybe data is corrupted");
             continue;
         }
-        if (searchString.isEmpty() || profile->bean->name.contains(searchString, Qt::CaseInsensitive) || profile->bean->serverAddress.contains(searchString, Qt::CaseInsensitive)
+        if (searchString.isEmpty() || profile->outbound->name.contains(searchString, Qt::CaseInsensitive) || profile->outbound->server.contains(searchString, Qt::CaseInsensitive)
             || (searchString.startsWith("CODE:") && searchString.mid(5) == profile->test_country))
             res.append(profile);
     }
@@ -1382,7 +1382,7 @@ void MainWindow::refresh_status(const QString &traffic_update) {
     }
 
     if (QDateTime::currentSecsSinceEpoch() - last_test_time > 2) {
-        ui->label_running->setText(running ? QString("[%1] %2").arg(group_name, running->bean->DisplayName()).left(30) : tr("Not Running"));
+        ui->label_running->setText(running ? QString("[%1] %2").arg(group_name, running->outbound->DisplayName()).left(30) : tr("Not Running"));
     }
     //
     auto display_socks = DisplayAddress(Configs::dataStore->inbound_address, Configs::dataStore->inbound_socks_port);
@@ -1411,7 +1411,7 @@ void MainWindow::refresh_status(const QString &traffic_update) {
         if (!Configs::dataStore->active_routing.isEmpty() && Configs::dataStore->active_routing != "Default") {
             tt << "[" + Configs::dataStore->active_routing + "]";
         }
-        if (running != nullptr) tt << running->bean->DisplayTypeAndName() + "@" + group_name;
+        if (running != nullptr) tt << running->outbound->DisplayTypeAndName() + "@" + group_name;
         return tt.join(isTray ? "\n" : " ");
     };
 
@@ -1527,14 +1527,14 @@ void MainWindow::refresh_proxy_list_impl(const int &id, GroupSortAction groupSor
                               QString ms_a;
                               QString ms_b;
                               if (groupSortAction.method == GroupSortMethod::ByType) {
-                                  ms_a = Configs::profileManager->GetProfile(a)->bean->DisplayType();
-                                  ms_b = Configs::profileManager->GetProfile(b)->bean->DisplayType();
+                                  ms_a = Configs::profileManager->GetProfile(a)->outbound->DisplayType();
+                                  ms_b = Configs::profileManager->GetProfile(b)->outbound->DisplayType();
                               } else if (groupSortAction.method == GroupSortMethod::ByName) {
-                                  ms_a = Configs::profileManager->GetProfile(a)->bean->name;
-                                  ms_b = Configs::profileManager->GetProfile(b)->bean->name;
+                                  ms_a = Configs::profileManager->GetProfile(a)->outbound->name;
+                                  ms_b = Configs::profileManager->GetProfile(b)->outbound->name;
                               } else if (groupSortAction.method == GroupSortMethod::ByAddress) {
-                                  ms_a = Configs::profileManager->GetProfile(a)->bean->DisplayAddress();
-                                  ms_b = Configs::profileManager->GetProfile(b)->bean->DisplayAddress();
+                                  ms_a = Configs::profileManager->GetProfile(a)->outbound->DisplayAddress();
+                                  ms_b = Configs::profileManager->GetProfile(b)->outbound->DisplayAddress();
                               } else if (groupSortAction.method == GroupSortMethod::ByLatency) {
                                   ms_a = Configs::profileManager->GetProfile(a)->full_test_report;
                                   ms_b = Configs::profileManager->GetProfile(b)->full_test_report;
@@ -1621,19 +1621,19 @@ void MainWindow::refresh_table_item(const int row, const std::shared_ptr<Configs
 
     // C0: Type
     auto f = f0->clone();
-    f->setText(profile->bean->DisplayType());
+    f->setText(profile->outbound->DisplayType());
     if (isRunning) f->setForeground(palette().link());
     ui->proxyListTable->setItem(row, 0, f);
 
     // C1: Address+Port
     f = f0->clone();
-    f->setText(profile->bean->DisplayAddress());
+    f->setText(profile->outbound->DisplayAddress());
     if (isRunning) f->setForeground(palette().link());
     ui->proxyListTable->setItem(row, 1, f);
 
     // C2: Name
     f = f0->clone();
-    f->setText(profile->bean->name);
+    f->setText(profile->outbound->name);
     if (isRunning) f->setForeground(palette().link());
     ui->proxyListTable->setItem(row, 2, f);
 
@@ -1678,6 +1678,7 @@ void MainWindow::on_menu_add_from_clipboard_triggered() {
     Subscription::groupUpdater->AsyncUpdate(clipboard);
 }
 
+// TODO fix full export
 void MainWindow::on_menu_clone_triggered() {
     auto ents = get_now_selected_list();
     if (ents.isEmpty()) return;
@@ -1687,7 +1688,7 @@ void MainWindow::on_menu_clone_triggered() {
 
     QStringList sls;
     for (const auto &ent: ents) {
-        sls << ent->bean->ToNekorayShareLink(ent->type);
+        sls << ent->outbound->ExportToLink();
     }
 
     Subscription::groupUpdater->AsyncUpdate(sls.join("\n"));
@@ -1703,7 +1704,7 @@ void  MainWindow::on_menu_delete_repeat_triggered () {
     int  remove_display_count =  0 ;
     QString remove_display;
     for  ( const  auto  &ent: out_del) {
-        remove_display += ent-> bean -> DisplayTypeAndName () +  " \n " ;
+        remove_display += ent-> outbound -> DisplayTypeAndName () +  " \n " ;
         if  (++remove_display_count ==  20 ) {
             remove_display +=  " ... " ;
             break ;
@@ -1753,7 +1754,7 @@ void MainWindow::on_menu_copy_links_triggered() {
     auto ents = get_now_selected_list();
     QStringList links;
     for (const auto &ent: ents) {
-        links += ent->bean->ToShareLink();
+        links += ent->outbound->ExportToLink();
     }
     if (links.length() == 0) return;
     QApplication::clipboard()->setText(links.join("\n"));
@@ -1764,7 +1765,7 @@ void MainWindow::on_menu_copy_links_nkr_triggered() {
     auto ents = get_now_selected_list();
     QStringList links;
     for (const auto &ent: ents) {
-        links += ent->bean->ToNekorayShareLink(ent->type);
+        links += ent->outbound->ExportToLink();
     }
     if (links.length() == 0) return;
     QApplication::clipboard()->setText(links.join("\n"));
@@ -1775,7 +1776,6 @@ void MainWindow::on_menu_export_config_triggered() {
     auto ents = get_now_selected_list();
     if (ents.count() != 1) return;
     auto ent = ents.first();
-    if (ent->bean->DisplayCoreType() != software_core_name) return;
 
     auto result = Configs::BuildSingBoxConfig(ent);
     QString config_core = QJsonObject2QString(result->coreConfig, true);
@@ -1875,10 +1875,10 @@ void MainWindow::display_qr_link(bool nkrFormat) {
         }
     };
 
-    auto link = ents.first()->bean->ToShareLink();
-    auto link_nk = ents.first()->bean->ToNekorayShareLink(ents.first()->type);
+    auto link = ents.first()->outbound->ExportToLink();
+    auto link_nk = ents.first()->outbound->ExportToLink();
     auto w = new W(link, link_nk);
-    w->setWindowTitle(ents.first()->bean->DisplayTypeAndName());
+    w->setWindowTitle(ents.first()->outbound->DisplayTypeAndName());
     w->exec();
     w->deleteLater();
 }
@@ -2029,7 +2029,7 @@ void MainWindow::on_menu_remove_unavailable_triggered() {
     int remove_display_count = 0;
     QString remove_display;
     for (const auto &ent: out_del) {
-        remove_display += ent->bean->DisplayTypeAndName() + "\n";
+        remove_display += ent->outbound->DisplayTypeAndName() + "\n";
         if (++remove_display_count == 20) {
             remove_display += "...";
             break;
@@ -2077,7 +2077,7 @@ void MainWindow::on_menu_remove_invalid_triggered() {
      int remove_display_count = 0;
      QString remove_display;
      for (const auto &ent: out_del) {
-         remove_display += ent->bean->DisplayTypeAndName() + "\n";
+         remove_display += ent->outbound->DisplayTypeAndName() + "\n";
          if (++remove_display_count == 20) {
              remove_display += "...";
              break;
@@ -2109,7 +2109,7 @@ void MainWindow::on_menu_resolve_selected_triggered() {
     Configs::dataStore->resolve_count = profiles.count();
 
     for (const auto &profile: profiles) {
-        profile->bean->ResolveDomainToIP([=,this] {
+        profile->outbound->ResolveDomainToIP([=,this] {
             profile->Save();
             if (--Configs::dataStore->resolve_count != 0) return;
             refresh_proxy_list();
@@ -2137,7 +2137,7 @@ void MainWindow::on_menu_resolve_domain_triggered() {
 
     for (const auto id: profiles) {
         auto profile = Configs::profileManager->GetProfile(id);
-        profile->bean->ResolveDomainToIP([=,this] {
+        profile->outbound->ResolveDomainToIP([=,this] {
             profile->Save();
             if (--Configs::dataStore->resolve_count != 0) return;
             refresh_proxy_list();
