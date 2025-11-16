@@ -16,12 +16,19 @@ namespace Configs
 
         http() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("username", &username, string));
             _add(new configItem("password", &password, string));
             _add(new configItem("path", &path, string));
             _add(new configItem("headers", &headers, stringList));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
+        }
+
+        bool HasTLS() override {
+            return true;
+        }
+
+        std::shared_ptr<TLS> GetTLS() override {
+            return tls;
         }
 
         // baseConfig overrides

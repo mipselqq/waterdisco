@@ -13,7 +13,6 @@ namespace Configs
         bool noLogs = false;
 
         extracore() : outbound() {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("socks_address", &socksAddress, itemType::string));
             _add(new configItem("socks_port", &socksPort, itemType::integer));
             _add(new configItem("extra_core_path", &extraCorePath, itemType::string));

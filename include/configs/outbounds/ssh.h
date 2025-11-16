@@ -17,7 +17,6 @@ namespace Configs
 
         ssh() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("user", &user, string));
             _add(new configItem("password", &password, string));
             _add(new configItem("private_key", &private_key, string));

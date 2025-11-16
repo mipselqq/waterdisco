@@ -438,9 +438,9 @@ namespace Subscription {
                 bool needFix = false;
 
                 // common
-                ent->outbound->commons->name = Node2QString(proxy["name"]);
-                ent->outbound->commons->server = Node2QString(proxy["server"]);
-                ent->outbound->commons->server_port = Node2Int(proxy["port"]);
+                ent->outbound->name = Node2QString(proxy["name"]);
+                ent->outbound->server = Node2QString(proxy["server"]);
+                ent->outbound->server_port = Node2Int(proxy["port"]);
 
                 if (type_clash == "ss") {
                     auto bean = ent->ShadowSocks();
@@ -810,8 +810,8 @@ namespace Subscription {
                     if (Node2Bool(proxy["udp-over-stream"])) bean->udp_over_stream = true;
 
                     if (!Node2QString(proxy["ip"]).isEmpty()) {
-                        if (bean->tls->server_name.isEmpty()) bean->tls->server_name = bean->commons->server;
-                        bean->commons->server = Node2QString(proxy["ip"]);
+                        if (bean->tls->server_name.isEmpty()) bean->tls->server_name = bean->server;
+                        bean->server = Node2QString(proxy["ip"]);
                     }
                 } else {
                     continue;

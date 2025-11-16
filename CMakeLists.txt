@@ -130,18 +130,15 @@ set(PROJECT_SOURCES
         include/ui/profile/edit_chain.h
         src/ui/profile/edit_chain.cpp
         include/ui/profile/edit_chain.ui
-        include/ui/profile/edit_socks_http.h
-        src/ui/profile/edit_socks_http.cpp
-        include/ui/profile/edit_socks_http.ui
         include/ui/profile/edit_shadowsocks.h
         src/ui/profile/edit_shadowsocks.cpp
         include/ui/profile/edit_shadowsocks.ui
         include/ui/profile/edit_vmess.h
         src/ui/profile/edit_vmess.cpp
         include/ui/profile/edit_vmess.ui
-        include/ui/profile/edit_trojan_vless.h
-        src/ui/profile/edit_trojan_vless.cpp
-        include/ui/profile/edit_trojan_vless.ui
+        include/ui/profile/edit_vless.h
+        src/ui/profile/edit_vless.cpp
+        include/ui/profile/edit_vless.ui
         include/ui/profile/edit_anytls.h
         src/ui/profile/edit_anytls.cpp
         include/ui/profile/edit_anytls.ui
@@ -149,10 +146,24 @@ set(PROJECT_SOURCES
         src/ui/profile/edit_tailscale.cpp
         include/ui/profile/edit_tailscale.ui
         include/configs/proxy/Tailscale.hpp
-
-        include/ui/profile/edit_quic.h
-        src/ui/profile/edit_quic.cpp
-        include/ui/profile/edit_quic.ui
+        include/ui/profile/edit_trojan.h
+        src/ui/profile/edit_trojan.cpp
+        include/ui/profile/edit_trojan.ui
+        include/ui/profile/edit_http.h
+        src/ui/profile/edit_http.cpp
+        include/ui/profile/edit_http.ui
+        include/ui/profile/edit_socks.h
+        src/ui/profile/edit_socks.cpp
+        include/ui/profile/edit_socks.ui
+        include/ui/profile/edit_hysteria.h
+        src/ui/profile/edit_hysteria.cpp
+        include/ui/profile/edit_hysteria.ui
+        include/ui/profile/edit_hysteria2.h
+        src/ui/profile/edit_hysteria2.cpp
+        include/ui/profile/edit_hysteria2.ui
+        include/ui/profile/edit_tuic.h
+        src/ui/profile/edit_tuic.cpp
+        include/ui/profile/edit_tuic.ui
 
         include/ui/profile/edit_custom.h
         src/ui/profile/edit_custom.cpp
@@ -279,6 +290,12 @@ endif ()
 qt_add_executable(Throne
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        include/ui/profile/edit_socks.h src/ui/profile/edit_socks.cpp include/ui/profile/edit_socks.ui
+        include/ui/profile/edit_http.h src/ui/profile/edit_http.cpp include/ui/profile/edit_http.ui
+        include/ui/profile/edit_trojan.h src/ui/profile/edit_trojan.cpp include/ui/profile/edit_trojan.ui
+        include/ui/profile/edit_hysteria.h src/ui/profile/edit_hysteria.cpp include/ui/profile/edit_hysteria.ui
+        include/ui/profile/edit_tuic.h src/ui/profile/edit_tuic.cpp include/ui/profile/edit_tuic.ui
+        include/ui/profile/edit_hysteria2.h src/ui/profile/edit_hysteria2.cpp include/ui/profile/edit_hysteria2.ui
 )
 
 # Target

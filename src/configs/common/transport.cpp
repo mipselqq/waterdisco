@@ -7,6 +7,57 @@
 #include "include/configs/common/utils.h"
 
 namespace Configs {
+
+    QString Transport::getHeadersString() {
+        QString result;
+        for (int i=0;i<headers.length();i+=2) {
+            result += headers[i]+"=";
+            result += "\""+headers[i+1]+"\" ";
+        }
+        return result;
+    }
+
+    QStringList Transport::getHeaderPairs(QString rawHeader) {
+        bool inQuote = false;
+        QString curr;
+        QStringList list;
+        for (const auto &ch: rawHeader) {
+            if (inQuote) {
+                if (ch == '"') {
+                    inQuote = false;
+                    list << curr;
+                    curr = "";
+                    continue;
+                } else {
+                    curr += ch;
+                    continue;
+                }
+            }
+            if (ch == '"') {
+                inQuote = true;
+                continue;
+            }
+            if (ch == ' ') {
+                if (!curr.isEmpty()) {
+                    list << curr;
+                    curr = "";
+                }
+                continue;
+            }
+            if (ch == '=') {
+                if (!curr.isEmpty()) {
+                    list << curr;
+                    curr = "";
+                }
+                continue;
+            }
+            curr+=ch;
+        }
+        if (!curr.isEmpty()) list<<curr;
+
+        return list;
+    }
+
     bool Transport::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);

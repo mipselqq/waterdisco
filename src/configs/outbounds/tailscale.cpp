@@ -13,7 +13,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
 
         if (query.hasQueryItem("state_directory")) state_directory = QUrl::fromPercentEncoding(query.queryItemValue("state_directory").toUtf8());
         if (query.hasQueryItem("auth_key")) auth_key = QUrl::fromPercentEncoding(query.queryItemValue("auth_key").toUtf8());
@@ -36,7 +36,7 @@ namespace Configs {
     bool tailscale::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "tailscale") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("state_directory")) state_directory = object["state_directory"].toString();
         if (object.contains("auth_key")) auth_key = object["auth_key"].toString();
         if (object.contains("control_url")) control_url = object["control_url"].toString();
@@ -59,7 +59,7 @@ namespace Configs {
         QUrlQuery query;
         url.setScheme("ts");
         url.setHost("tailscale");
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        if (!name.isEmpty()) url.setFragment(name);
 
         if (!state_directory.isEmpty()) query.addQueryItem("state_directory", QUrl::toPercentEncoding(state_directory));
         if (!auth_key.isEmpty()) query.addQueryItem("auth_key", QUrl::toPercentEncoding(auth_key));
@@ -81,7 +81,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "tailscale";
-        mergeJsonObjects(object, commons->ExportToJson());
+        object["tag"] = name;
         if (!state_directory.isEmpty()) object["state_directory"] = state_directory;
         if (!auth_key.isEmpty()) object["auth_key"] = auth_key;
         if (!control_url.isEmpty()) object["control_url"] = control_url;
@@ -100,7 +100,6 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "tailscale";
-        mergeJsonObjects(object, commons->Build().object);
         if (!state_directory.isEmpty()) object["state_directory"] = state_directory;
         if (!auth_key.isEmpty()) object["auth_key"] = auth_key;
         if (!control_url.isEmpty()) object["control_url"] = control_url;

@@ -44,7 +44,7 @@ namespace Configs {
         for (auto id: profilesIdOrder) {
             auto ent = LoadProxyEntity(QString("profiles/%1.json").arg(id));
             // Corrupted profile?
-            if (ent == nullptr || ent->bean == nullptr || ent->bean->version == -114514) {
+            if (ent == nullptr || ent->outbound == nullptr || ent->_bean->version == -114514) {
                 delProfile << id;
                 continue;
             }
@@ -121,7 +121,7 @@ namespace Configs {
     {
         if (ent->type == "chain")
         {
-            auto bean = dynamic_cast<Configs::ChainBean*>(ent->bean.get());
+            auto bean = dynamic_cast<Configs::ChainBean*>(ent->_bean.get());
             if (bean == nullptr)
             {
                 qDebug() << "Broken state in migrate for chain";
@@ -133,11 +133,11 @@ namespace Configs {
                 qDebug() << "Invalid state in migrate for chain";
                 return;
             }
-            chain->commons->name = bean->name;
+            chain->name = bean->name;
             chain->list = bean->list;
         } else if (ent->type == "custom")
         {
-            auto bean = dynamic_cast<Configs::CustomBean*>(ent->bean.get());
+            auto bean = dynamic_cast<Configs::CustomBean*>(ent->_bean.get());
             if (bean == nullptr)
             {
                 qDebug() << "Broken state in migrate for custom";
@@ -149,12 +149,12 @@ namespace Configs {
                 qDebug() << "Invalid state in migrate for custom";
                 return;
             }
-            custom->commons->name = bean->name;
+            custom->name = bean->name;
             custom->config = bean->config_simple;
             custom->type = bean->core == "internal" ? "outbound" : "fullconfig";
         } else if (ent->type == "extracore")
         {
-            auto bean = dynamic_cast<Configs::ExtraCoreBean*>(ent->bean.get());
+            auto bean = dynamic_cast<Configs::ExtraCoreBean*>(ent->_bean.get());
             if (bean == nullptr)
             {
                 qDebug() << "Broken state in migrate for extracore";
@@ -166,7 +166,7 @@ namespace Configs {
                 qDebug() << "Invalid state in migrate for extracore";
                 return;
             }
-            extraCore->commons->name = bean->name;
+            extraCore->name = bean->name;
             extraCore->socksAddress = bean->socksAddress;
             extraCore->socksPort = bean->socksPort;
             extraCore->extraCorePath = bean->extraCorePath;
@@ -175,13 +175,13 @@ namespace Configs {
             extraCore->noLogs = bean->noLogs;
         } else
         {
-            auto beanJson = ent->bean->BuildCoreObjSingBox();
+            auto beanJson = ent->_bean->BuildCoreObjSingBox();
             auto obj = beanJson.outbound;
-            if (ent->bean->mux_state == 0) obj["multiplex"] = QJsonObject{};
-            else if (ent->bean->mux_state == 1) obj["multiplex"] = QJsonObject{{"enabled", true}};
-            else if (ent->bean->mux_state == 2) obj["multiplex"] = QJsonObject{{"enabled", false}};
+            if (ent->_bean->mux_state == 0) obj["multiplex"] = QJsonObject{};
+            else if (ent->_bean->mux_state == 1) obj["multiplex"] = QJsonObject{{"enabled", true}};
+            else if (ent->_bean->mux_state == 2) obj["multiplex"] = QJsonObject{{"enabled", false}};
             ent->outbound->ParseFromJson(obj);
-            ent->outbound->commons->name = ent->bean->name;
+            ent->outbound->name = ent->_bean->name;
         }
     }
 
@@ -198,7 +198,7 @@ namespace Configs {
 
         if (validType) {
             ent = NewProxyEntity(type);
-            validType = ent->bean->version != -114514;
+            validType = ent->_bean->version != -114514;
         }
 
         if (validType) {

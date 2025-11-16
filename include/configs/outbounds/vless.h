@@ -20,13 +20,36 @@ namespace Configs
 
         vless() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("uuid", &uuid, string));
             _add(new configItem("flow", &flow, string));
             _add(new configItem("tls", dynamic_cast<JsonStore *>(tls.get()), jsonStore));
             _add(new configItem("packet_encoding", &packet_encoding, string));
             _add(new configItem("multiplex", dynamic_cast<JsonStore *>(multiplex.get()), jsonStore));
             _add(new configItem("transport", dynamic_cast<JsonStore *>(transport.get()), jsonStore));
+        }
+
+        bool HasTLS() override {
+            return true;
+        }
+
+        bool HasMux() override {
+            return true;
+        }
+
+        bool HasTransport() override {
+            return true;
+        }
+
+        std::shared_ptr<TLS> GetTLS() override {
+            return tls;
+        }
+
+        std::shared_ptr<Multiplex> GetMux() override {
+            return multiplex;
+        }
+
+        std::shared_ptr<Transport> GetTransport() override {
+            return transport;
         }
 
         // baseConfig overrides

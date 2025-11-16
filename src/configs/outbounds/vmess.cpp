@@ -14,9 +14,9 @@ namespace Configs {
             auto objN = QString2QJsonObject(linkN);
             if (!objN.isEmpty()) {
                 uuid = objN["id"].toString();
-                commons->server = objN["add"].toString();
-                commons->server_port = objN["port"].toVariant().toInt();
-                commons->name = objN["ps"].toString();
+                server = objN["add"].toString();
+                server_port = objN["port"].toVariant().toInt();
+                name = objN["ps"].toString();
                 alter_id = objN["aid"].toVariant().toInt();
                 
                 QString net = objN["net"].toString();
@@ -34,7 +34,7 @@ namespace Configs {
                     tls->server_name = objN["sni"].toString();
                 }
                 
-                return !(uuid.isEmpty() || commons->server.isEmpty());
+                return !(uuid.isEmpty() || server.isEmpty());
             }
         }
         
@@ -43,9 +43,9 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         uuid = url.userName();
-        if (commons->server_port == 0) commons->server_port = 443;
+        if (server_port == 0) server_port = 443;
 
         security = GetQueryValue(query, "encryption", "auto");
 
@@ -63,13 +63,13 @@ namespace Configs {
         if (query.hasQueryItem("authenticatedLength")) authenticated_length = query.queryItemValue("authenticatedLength") == "true";
         if (query.hasQueryItem("packetEncoding")) packet_encoding = query.queryItemValue("packetEncoding");
 
-        return !(uuid.isEmpty() || commons->server.isEmpty());
+        return !(uuid.isEmpty() || server.isEmpty());
     }
 
     bool vmess::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "vmess") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("uuid")) uuid = object["uuid"].toString();
         if (object.contains("security")) security = object["security"].toString();
         if (object.contains("alter_id")) alter_id = object["alter_id"].toInt();
@@ -90,9 +90,9 @@ namespace Configs {
         QUrlQuery query;
         url.setScheme("vmess");
         url.setUserName(uuid);
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
 
         if (security != "auto") query.addQueryItem("encryption", security);
 
@@ -113,7 +113,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "vmess";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (security != "auto") object["security"] = security;
         if (alter_id > 0) object["alter_id"] = alter_id;
@@ -130,7 +130,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "vmess";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (security != "auto") object["security"] = security;
         if (alter_id > 0) object["alter_id"] = alter_id;

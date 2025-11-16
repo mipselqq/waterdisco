@@ -2,7 +2,7 @@
 #include "include/configs/common/utils.h"
 
 namespace Configs {
-    bool OutboundCommons::ParseFromLink(const QString& link)
+    bool outbound::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
@@ -13,7 +13,7 @@ namespace Configs {
         dialFields->ParseFromLink(link);
         return true;
     }
-    bool OutboundCommons::ParseFromJson(const QJsonObject& object)
+    bool outbound::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty()) return false;
         if (object.contains("tag")) name = object["tag"].toString();
@@ -22,13 +22,13 @@ namespace Configs {
         dialFields->ParseFromJson(object);
         return true;
     }
-    QString OutboundCommons::ExportToLink()
+    QString outbound::ExportToLink()
     {
         QUrlQuery query;
         mergeUrlQuery(query, dialFields->ExportToLink());
         return query.toString();
     }
-    QJsonObject OutboundCommons::ExportToJson()
+    QJsonObject outbound::ExportToJson()
     {
         QJsonObject object;
         if (!name.isEmpty()) object["tag"] = name;
@@ -38,7 +38,7 @@ namespace Configs {
         mergeJsonObjects(object, dialFieldsObj);
         return object;
     }
-    BuildResult OutboundCommons::Build()
+    BuildResult outbound::Build()
     {
         return {ExportToJson(), ""};
     }

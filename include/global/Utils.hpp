@@ -57,6 +57,8 @@ QStringList SplitLines(const QString &_string);
 
 QStringList SplitLinesSkipSharp(const QString &_string, int maxLine = 0);
 
+QStringList SplitAndTrim(QString raw, QString seperator);
+
 // Base64
 
 QByteArray DecodeB64IfValid(const QString &input, QByteArray::Base64Options options = QByteArray::Base64Option::Base64Encoding);

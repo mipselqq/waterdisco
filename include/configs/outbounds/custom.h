@@ -11,7 +11,6 @@ namespace Configs
 
         Custom() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("config", &config, string));
             _add(new configItem("type", &type, string));
         }

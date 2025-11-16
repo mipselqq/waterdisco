@@ -12,7 +12,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         if (query.hasQueryItem("version"))
         {
             version = query.queryItemValue("version").toInt();
@@ -40,15 +40,15 @@ namespace Configs {
         if (query.hasQueryItem("uot")) uot = query.queryItemValue("uot") == "true" || query.queryItemValue("uot").toInt() > 0;
         
         // Default port
-        if (commons->server_port == 0) commons->server_port = 1080;
+        if (server_port == 0) server_port = 1080;
 
-        return !commons->server.isEmpty();
+        return !server.isEmpty();
     }
 
     bool socks::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "socks") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("username")) username = object["username"].toString();
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("version")) version = object["version"].toInt();
@@ -68,15 +68,15 @@ namespace Configs {
         }
         url.setScheme(scheme);
         
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
         
         if (!username.isEmpty()) url.setUserName(username);
         if (!password.isEmpty()) url.setPassword(password);
         if (uot) query.addQueryItem("uot", "1");
         
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         if (!query.isEmpty()) url.setQuery(query);
         return url.toString();
     }
@@ -85,7 +85,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "socks";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!username.isEmpty()) object["username"] = username;
         if (!password.isEmpty()) object["password"] = password;
         if (version == 4) object["version"] = "4";
@@ -97,7 +97,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "socks";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!username.isEmpty()) object["username"] = username;
         if (!password.isEmpty()) object["password"] = password;
         if (version == 4) object["version"] = "4";

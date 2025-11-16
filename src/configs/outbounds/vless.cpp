@@ -12,9 +12,9 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         uuid = url.userName();
-        if (commons->server_port == 0) commons->server_port = 443;
+        if (server_port == 0) server_port = 443;
 
         flow = GetQueryValue(query, "flow", "");
 
@@ -28,13 +28,13 @@ namespace Configs {
         packet_encoding = GetQueryValue(query, "packetEncoding", "");
         multiplex->ParseFromLink(link);
 
-        return !(uuid.isEmpty() || commons->server.isEmpty());
+        return !(uuid.isEmpty() || server.isEmpty());
     }
 
     bool vless::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "vless") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("uuid")) uuid = object["uuid"].toString();
         if (object.contains("flow")) flow = object["flow"].toString();
         if (object.contains("packet_encoding")) packet_encoding = object["packet_encoding"].toString();
@@ -50,9 +50,9 @@ namespace Configs {
         QUrlQuery query;
         url.setScheme("vless");
         url.setUserName(uuid);
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
 
         query.addQueryItem("encryption", "none");
         if (!flow.isEmpty()) query.addQueryItem("flow", flow);
@@ -71,7 +71,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "vless";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (!flow.isEmpty()) object["flow"] = flow;
         if (!packet_encoding.isEmpty()) object["packet_encoding"] = packet_encoding;
@@ -85,7 +85,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "vless";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (!flow.isEmpty()) object["flow"] = flow;
         if (!packet_encoding.isEmpty()) object["packet_encoding"] = packet_encoding;

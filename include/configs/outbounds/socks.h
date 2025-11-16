@@ -14,7 +14,6 @@ namespace Configs
 
         socks() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
             _add(new configItem("username", &username, string));
             _add(new configItem("password", &password, string));
             _add(new configItem("version", &version, integer));

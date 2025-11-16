@@ -141,8 +141,28 @@
         <layout class="QVBoxLayout" name="verticalLayout">
          <item>
           <layout class="QGridLayout" name="_2">
-           <item row="2" column="1">
-            <widget class="QComboBox" name="packet_encoding">
+           <item row="2" column="0">
+            <widget class="QLabel" name="multiplex_l">
+             <property name="toolTip">
+              <string>Server support is required</string>
+             </property>
+             <property name="text">
+              <string>Multiplex</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="security_l">
+             <property name="toolTip">
+              <string>Transport Layer Security. It must be consistent with the server, otherwise, the connection cannot be established.</string>
+             </property>
+             <property name="text">
+              <string>Security</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QComboBox" name="security">
              <item>
               <property name="text">
                <string notr="true"/>
@@ -150,12 +170,7 @@
              </item>
              <item>
               <property name="text">
-               <string notr="true">packetaddr</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string notr="true">xudp</string>
+               <string notr="true">tls</string>
               </property>
              </item>
             </widget>
@@ -168,6 +183,25 @@
              <property name="text">
               <string>Network</string>
              </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QComboBox" name="multiplex">
+             <item>
+              <property name="text">
+               <string>Keep Default</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>On</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Off</string>
+              </property>
+             </item>
             </widget>
            </item>
            <item row="0" column="1">
@@ -211,69 +245,6 @@
              <item>
               <property name="text">
                <string notr="true">quic</string>
-              </property>
-             </item>
-            </widget>
-           </item>
-           <item row="3" column="0">
-            <widget class="QLabel" name="multiplex_l">
-             <property name="toolTip">
-              <string>Server support is required</string>
-             </property>
-             <property name="text">
-              <string>Multiplex</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="security_l">
-             <property name="toolTip">
-              <string>Transport Layer Security. It must be consistent with the server, otherwise, the connection cannot be established.</string>
-             </property>
-             <property name="text">
-              <string>Security</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1">
-            <widget class="QComboBox" name="security">
-             <item>
-              <property name="text">
-               <string notr="true"/>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string notr="true">tls</string>
-              </property>
-             </item>
-            </widget>
-           </item>
-           <item row="2" column="0">
-            <widget class="QLabel" name="packet_encoding_l">
-             <property name="toolTip">
-              <string>UDP FullCone Packet encoding for implementing features such as UDP FullCone. Server support is required, if the wrong selection is made, the connection cannot be made. Please leave it blank.</string>
-             </property>
-             <property name="text">
-              <string>Packet Encoding</string>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="1">
-            <widget class="QComboBox" name="multiplex">
-             <item>
-              <property name="text">
-               <string>Keep Default</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>On</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Off</string>
               </property>
              </item>
             </widget>
@@ -327,56 +298,7 @@
        </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_2">
-        <item>
-         <widget class="QGroupBox" name="custom_box">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="title">
-           <string>Custom Outbound Settings</string>
-          </property>
-          <layout class="QVBoxLayout" name="verticalLayout_5">
-           <item>
-            <widget class="QPushButton" name="custom_outbound_edit">
-             <property name="text">
-              <string notr="true">Edit</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="custom_global_box">
-          <property name="title">
-           <string>Custom Config Settings</string>
-          </property>
-          <layout class="QHBoxLayout" name="horizontalLayout_3">
-           <item>
-            <widget class="QPushButton" name="custom_config_edit">
-             <property name="text">
-              <string notr="true">Edit</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item>
        <layout class="QHBoxLayout" name="horizontalLayout_4">
-        <item>
-         <widget class="QPushButton" name="apply_to_group">
-          <property name="text">
-           <string>Apply settings to this group</string>
-          </property>
-         </widget>
-        </item>
         <item>
          <widget class="QDialogButtonBox" name="buttonBox">
           <property name="sizePolicy">
@@ -431,14 +353,36 @@
          <string>Network Settings (%1)</string>
         </property>
         <layout class="QGridLayout" name="gridLayout">
-         <item row="6" column="0">
+         <item row="2" column="1">
+          <widget class="MyLineEdit" name="path"/>
+         </item>
+         <item row="4" column="1">
+          <widget class="MyLineEdit" name="ws_early_data_length"/>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="path_l">
+           <property name="toolTip">
+            <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;http path (ws/http/httpUpgrade)&lt;/p&gt;&lt;p&gt;serviceName (gRPC)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string notr="true">Path</string>
+           </property>
+          </widget>
+         </item>
+         <item row="5" column="0">
           <widget class="QLabel" name="ws_early_data_name_l">
            <property name="text">
             <string notr="true">EarlyData Name</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="headers"/>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="method"/>
+         </item>
+         <item row="0" column="0">
           <widget class="QLabel" name="headers_l">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
@@ -457,49 +401,14 @@
            </property>
           </widget>
          </item>
-         <item row="5" column="0">
+         <item row="4" column="0">
           <widget class="QLabel" name="ws_early_data_length_l">
            <property name="text">
             <string notr="true">EarlyData Length</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="1">
-          <widget class="QLineEdit" name="method"/>
-         </item>
          <item row="3" column="0">
-          <widget class="QLabel" name="path_l">
-           <property name="toolTip">
-            <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;http path (ws/http/httpUpgrade)&lt;/p&gt;&lt;p&gt;serviceName (gRPC)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string notr="true">Path</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="MyLineEdit" name="path"/>
-         </item>
-         <item row="6" column="1">
-          <widget class="MyLineEdit" name="ws_early_data_name"/>
-         </item>
-         <item row="5" column="1">
-          <widget class="MyLineEdit" name="ws_early_data_length"/>
-         </item>
-         <item row="4" column="1">
-          <widget class="MyLineEdit" name="host"/>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="method_l">
-           <property name="toolTip">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Method of http request, will be converted to uppercase&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string>Method</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0">
           <widget class="QLabel" name="host_l">
            <property name="toolTip">
             <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;http host (ws/http/httpUpgrade)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -509,29 +418,21 @@
            </property>
           </widget>
          </item>
-         <item row="1" column="1">
-          <widget class="QLineEdit" name="headers"/>
+         <item row="3" column="1">
+          <widget class="MyLineEdit" name="host"/>
          </item>
-         <item row="0" column="1">
-          <widget class="QComboBox" name="header_type">
-           <item>
-            <property name="text">
-             <string/>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string notr="true">http</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-         <item row="0" column="0">
-          <widget class="QLabel" name="header_type_l">
+         <item row="1" column="0">
+          <widget class="QLabel" name="method_l">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Method of http request, will be converted to uppercase&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
-            <string>header type</string>
+            <string>Method</string>
            </property>
           </widget>
+         </item>
+         <item row="5" column="1">
+          <widget class="MyLineEdit" name="ws_early_data_name"/>
          </item>
         </layout>
        </widget>
@@ -805,12 +706,8 @@
   <tabstop>name</tabstop>
   <tabstop>address</tabstop>
   <tabstop>port</tabstop>
-  <tabstop>custom_outbound_edit</tabstop>
-  <tabstop>custom_config_edit</tabstop>
-  <tabstop>apply_to_group</tabstop>
   <tabstop>network</tabstop>
   <tabstop>security</tabstop>
-  <tabstop>packet_encoding</tabstop>
   <tabstop>multiplex</tabstop>
   <tabstop>path</tabstop>
   <tabstop>host</tabstop>

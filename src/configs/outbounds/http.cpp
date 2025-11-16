@@ -12,7 +12,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         username = url.userName();
         password = url.password();
         if (query.hasQueryItem("path")) path = query.queryItemValue("path");
@@ -22,13 +22,13 @@ namespace Configs {
             tls->ParseFromLink(link);
             tls->enabled = true; // force enable in case scheme is https and no security queryValue is set
         }
-        if (commons->server_port == 0) commons->server_port = 443;
+        if (server_port == 0) server_port = 443;
         return true;
     }
     bool http::ParseFromJson(const QJsonObject& object)
     {
         if (object.empty() || object["type"] != "http") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("username")) username = object["username"].toString();
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("path")) path = object["path"].toString();
@@ -41,15 +41,15 @@ namespace Configs {
         QUrl url;
         QUrlQuery query;
         url.setScheme(tls->enabled ? "https" : "http");
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
         if (!username.isEmpty()) url.setUserName(username);
         if (!password.isEmpty()) url.setPassword(password);
         if (!path.isEmpty()) query.addQueryItem("path", path);
         if (!headers.empty()) query.addQueryItem("headers", headers.join(","));
         mergeUrlQuery(query, tls->ExportToLink());
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         if (!query.isEmpty()) url.setQuery(query);
         return url.toString();
     }
@@ -57,7 +57,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "http";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!username.isEmpty()) object["username"] = username;
         if (!password.isEmpty()) object["password"] = password;
         if (!path.isEmpty()) object["path"] = path;
@@ -69,7 +69,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "http";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!username.isEmpty()) object["username"] = username;
         if (!password.isEmpty()) object["password"] = password;
         if (!path.isEmpty()) object["path"] = path;

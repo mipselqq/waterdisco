@@ -56,8 +56,6 @@ namespace Configs
 
         wireguard() : outbound()
         {
-            _add(new configItem("commons", dynamic_cast<JsonStore *>(commons.get()), jsonStore));
-
             _add(new configItem("private_key", &private_key, itemType::string));
             _add(new configItem("peer", dynamic_cast<JsonStore *>(peer.get()), jsonStore));
             _add(new configItem("address", &address, itemType::stringList));

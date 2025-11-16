@@ -116,8 +116,8 @@ namespace Configs {
                     if (parts.size() >= 2) {
                         peer->address = parts[0].trimmed();
                         peer->port = parts.last().trimmed().toInt();
-                        commons->server = peer->address;
-                        commons->server_port = peer->port;
+                        server = peer->address;
+                        server_port = peer->port;
                     }
                 }
                 if (key == "S1") enable_amnezia = true, init_packet_junk_size = value.toInt();
@@ -138,7 +138,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
 
         if (query.hasQueryItem("private_key")) private_key = query.queryItemValue("private_key");
         peer->ParseFromLink(link);
@@ -166,13 +166,13 @@ namespace Configs {
             if (query.hasQueryItem("transport_packet_magic_header")) transport_packet_magic_header = query.queryItemValue("transport_packet_magic_header").toInt();
         }
 
-        return !(private_key.isEmpty() || peer->public_key.isEmpty() || commons->server.isEmpty());
+        return !(private_key.isEmpty() || peer->public_key.isEmpty() || server.isEmpty());
     }
 
     bool wireguard::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "wireguard") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("private_key")) private_key = object["private_key"].toString();
         if (object.contains("peer") && object["peer"].isObject()) peer->ParseFromJson(object["peer"].toObject());
         if (object.contains("address")) address = QJsonArray2QListString(object["address"].toArray());
@@ -190,7 +190,7 @@ namespace Configs {
         url.setScheme("wg");
         url.setHost(peer->address);
         url.setPort(peer->port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        if (!name.isEmpty()) url.setFragment(name);
 
         if (!private_key.isEmpty()) query.addQueryItem("private_key", private_key);
         
@@ -213,7 +213,7 @@ namespace Configs {
             if (transport_packet_magic_header > 0) query.addQueryItem("transport_packet_magic_header", QString::number(transport_packet_magic_header));
         }
         
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         mergeUrlQuery(query, peer->ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
@@ -224,8 +224,8 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "wireguard";
-        if (!commons->name.isEmpty()) object["tag"] = commons->name;
-        mergeJsonObjects(object, commons->dialFields->ExportToJson());
+        if (!name.isEmpty()) object["tag"] = name;
+        mergeJsonObjects(object, dialFields->ExportToJson());
         if (!private_key.isEmpty()) object["private_key"] = private_key;
         if (!address.isEmpty()) object["address"] = QListStr2QJsonArray(address);
         if (mtu > 0) object["mtu"] = mtu;
@@ -245,8 +245,8 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "wireguard";
-        if (!commons->name.isEmpty()) object["tag"] = commons->name;
-        mergeJsonObjects(object, commons->dialFields->Build().object);
+        if (!name.isEmpty()) object["tag"] = name;
+        mergeJsonObjects(object, dialFields->Build().object);
         if (!private_key.isEmpty()) object["private_key"] = private_key;
         if (!address.isEmpty()) object["address"] = QListStr2QJsonArray(address);
         if (mtu > 0) object["mtu"] = mtu;

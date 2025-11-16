@@ -36,7 +36,7 @@ namespace Configs {
         QString dl_speed;
         QString ul_speed;
         QString test_country;
-        std::shared_ptr<Configs::AbstractBean> bean;
+        std::shared_ptr<Configs::AbstractBean> _bean;
         std::shared_ptr<Configs::outbound> outbound;
         std::shared_ptr<Stats::TrafficData> traffic_data = std::make_shared<Stats::TrafficData>("");
 

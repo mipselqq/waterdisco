@@ -23,7 +23,7 @@ EditCustom::~EditCustom() {
 
 void EditCustom::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
     this->ent = _ent;
-    auto bean = this->ent->Custom();
+    auto outbound = this->ent->Custom();
 
     if (preset_core == "outbound") {
         preset_command = preset_config = "";
@@ -42,7 +42,7 @@ void EditCustom::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
     }
 
     // load core ui
-    ui->config_simple->setPlainText(bean->config);
+    ui->config_simple->setPlainText(outbound->config);
 
     // custom internal
     if (preset_core == "outbound") {
@@ -60,10 +60,10 @@ bool EditCustom::onEnd() {
         return false;
     }
 
-    auto bean = this->ent->Custom();
+    auto outbound = this->ent->Custom();
 
-    bean->config = ui->config_simple->toPlainText();
-    bean->type = preset_core;
+    outbound->config = ui->config_simple->toPlainText();
+    outbound->type = preset_core;
 
     return true;
 }

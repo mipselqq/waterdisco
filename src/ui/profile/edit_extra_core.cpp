@@ -18,14 +18,14 @@ EditExtraCore::~EditExtraCore() {
 void EditExtraCore::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
     this->ent = _ent;
 
-    auto bean = ent->ExtraCore();
-    ui->socks_address->setText(bean->socksAddress);
+    auto outbound = ent->ExtraCore();
+    ui->socks_address->setText(outbound->socksAddress);
     ui->socks_port->setValidator(new QIntValidator(1, 65534));
-    ui->socks_port->setText(Int2String(bean->socksPort));
-    ui->config->setPlainText(bean->extraCoreConf);
-    ui->args->setText(bean->extraCoreArgs);
+    ui->socks_port->setText(Int2String(outbound->socksPort));
+    ui->config->setPlainText(outbound->extraCoreConf);
+    ui->args->setText(outbound->extraCoreArgs);
     ui->path_combo->addItems(Configs::profileManager->GetExtraCorePaths());
-    ui->path_combo->setCurrentText(bean->extraCorePath);
+    ui->path_combo->setCurrentText(outbound->extraCorePath);
 
     connect(ui->path_button, &QPushButton::pressed, this, [=,this]
     {
@@ -46,12 +46,12 @@ void EditExtraCore::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
 }
 
 bool EditExtraCore::onEnd() {
-    auto bean = ent->ExtraCore();
-    bean->socksAddress = ui->socks_address->text();
-    bean->socksPort = ui->socks_port->text().toInt();
-    bean->extraCoreConf = ui->config->toPlainText();
-    bean->extraCorePath = ui->path_combo->currentText();
-    bean->extraCoreArgs = ui->args->text();
+    auto outbound = ent->ExtraCore();
+    outbound->socksAddress = ui->socks_address->text();
+    outbound->socksPort = ui->socks_port->text().toInt();
+    outbound->extraCoreConf = ui->config->toPlainText();
+    outbound->extraCorePath = ui->path_combo->currentText();
+    outbound->extraCoreArgs = ui->args->text();
 
     return true;
 }

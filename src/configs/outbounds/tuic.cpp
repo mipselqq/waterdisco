@@ -12,7 +12,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
         uuid = url.userName();
         password = url.password();
         
@@ -24,15 +24,15 @@ namespace Configs {
         
         tls->ParseFromLink(link);
         
-        if (commons->server_port == 0) commons->server_port = 443;
+        if (server_port == 0) server_port = 443;
 
-        return !(uuid.isEmpty() || password.isEmpty() || commons->server.isEmpty());
+        return !(uuid.isEmpty() || password.isEmpty() || server.isEmpty());
     }
 
     bool tuic::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "tuic") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("uuid")) uuid = object["uuid"].toString();
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("congestion_control")) congestion_control = object["congestion_control"].toString();
@@ -51,9 +51,9 @@ namespace Configs {
         url.setScheme("tuic");
         url.setUserName(uuid);
         url.setPassword(password);
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
 
         if (!congestion_control.isEmpty()) query.addQueryItem("congestion_control", congestion_control);
         if (!udp_relay_mode.isEmpty()) query.addQueryItem("udp_relay_mode", udp_relay_mode);
@@ -62,7 +62,7 @@ namespace Configs {
         if (!heartbeat.isEmpty()) query.addQueryItem("heartbeat", heartbeat);
         
         mergeUrlQuery(query, tls->ExportToLink());
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
         return url.toString();
@@ -72,7 +72,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "tuic";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (!password.isEmpty()) object["password"] = password;
         if (!congestion_control.isEmpty()) object["congestion_control"] = congestion_control;
@@ -88,7 +88,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "tuic";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (!password.isEmpty()) object["password"] = password;
         if (!congestion_control.isEmpty()) object["congestion_control"] = congestion_control;

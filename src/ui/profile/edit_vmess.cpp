@@ -1,12 +1,11 @@
 #include "include/ui/profile/edit_vmess.h"
 
-#include "include/configs/proxy/VMessBean.hpp"
-
 #include <QUuid>
 
 EditVMess::EditVMess(QWidget *parent) : QWidget(parent), ui(new Ui::EditVMess) {
     ui->setupUi(this);
     connect(ui->uuidgen, &QPushButton::clicked, this, [=,this] { ui->uuid->setText(QUuid::createUuid().toString().remove("{").remove("}")); });
+    ui->packet_encoding->addItems(Configs::vPacketEncoding);
 }
 
 EditVMess::~EditVMess() {
@@ -15,19 +14,21 @@ EditVMess::~EditVMess() {
 
 void EditVMess::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
     this->ent = _ent;
-    auto bean = this->ent->VMess();
+    auto outbound = this->ent->VMess();
 
-    ui->uuid->setText(bean->uuid);
-    ui->aid->setText(Int2String(bean->alter_id));
-    ui->security->setCurrentText(bean->security);
+    ui->uuid->setText(outbound->uuid);
+    ui->aid->setText(Int2String(outbound->alter_id));
+    ui->packet_encoding->setCurrentText(outbound->packet_encoding);
+    ui->security->setCurrentText(outbound->security);
 }
 
 bool EditVMess::onEnd() {
-    auto bean = this->ent->VMess();
+    auto outbound = this->ent->VMess();
 
-    bean->uuid = ui->uuid->text();
-    bean->alter_id = ui->aid->text().toInt();
-    bean->security = ui->security->currentText();
+    outbound->uuid = ui->uuid->text();
+    outbound->alter_id = ui->aid->text().toInt();
+    outbound->packet_encoding = ui->packet_encoding->currentText();
+    outbound->security = ui->security->currentText();
 
     return true;
 }

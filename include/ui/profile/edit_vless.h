@@ -2,29 +2,28 @@
 
 #include <QWidget>
 #include "profile_editor.h"
-#include "ui_edit_trojan_vless.h"
+#include "ui_edit_vless.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
-    class EditTrojanVLESS;
+    class EditVless;
 }
 QT_END_NAMESPACE
 
-class EditTrojanVLESS : public QWidget, public ProfileEditor {
+class EditVless : public QWidget, public ProfileEditor {
     Q_OBJECT
 
 public:
-    explicit EditTrojanVLESS(QWidget *parent = nullptr);
+    explicit EditVless(QWidget *parent = nullptr);
 
-    ~EditTrojanVLESS() override;
+    ~EditVless() override;
 
     void onStart(std::shared_ptr<Configs::ProxyEntity> _ent) override;
 
     bool onEnd() override;
 
-    QComboBox* flow_;
-
+    QComboBox *_flow;
 private:
-    Ui::EditTrojanVLESS *ui;
+    Ui::EditVless *ui;
     std::shared_ptr<Configs::ProxyEntity> ent;
 };

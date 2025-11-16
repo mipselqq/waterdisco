@@ -13,7 +13,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        commons->ParseFromLink(link);
+        outbound::ParseFromLink(link);
 
         if (query.hasQueryItem("user")) user = query.queryItemValue("user");
         if (query.hasQueryItem("password")) password = query.queryItemValue("password");
@@ -43,13 +43,13 @@ namespace Configs {
         
         if (query.hasQueryItem("client_version")) client_version = query.queryItemValue("client_version");
 
-        return !commons->server.isEmpty();
+        return !server.isEmpty();
     }
 
     bool ssh::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty() || object["type"].toString() != "ssh") return false;
-        commons->ParseFromJson(object);
+        outbound::ParseFromJson(object);
         if (object.contains("user")) user = object["user"].toString();
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("private_key")) private_key = object["private_key"].toString();
@@ -70,9 +70,9 @@ namespace Configs {
         QUrl url;
         QUrlQuery query;
         url.setScheme("ssh");
-        url.setHost(commons->server);
-        url.setPort(commons->server_port);
-        if (!commons->name.isEmpty()) url.setFragment(commons->name);
+        url.setHost(server);
+        url.setPort(server_port);
+        if (!name.isEmpty()) url.setFragment(name);
 
         if (!user.isEmpty()) query.addQueryItem("user", user);
         if (!password.isEmpty()) query.addQueryItem("password", password);
@@ -100,7 +100,7 @@ namespace Configs {
         
         if (!client_version.isEmpty()) query.addQueryItem("client_version", client_version);
         
-        mergeUrlQuery(query, commons->ExportToLink());
+        mergeUrlQuery(query, outbound::ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
         return url.toString();
@@ -110,7 +110,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "ssh";
-        mergeJsonObjects(object, commons->ExportToJson());
+        mergeJsonObjects(object, outbound::ExportToJson());
         if (!user.isEmpty()) object["user"] = user;
         if (!password.isEmpty()) object["password"] = password;
         if (!private_key.isEmpty()) object["private_key"] = private_key;
@@ -126,7 +126,7 @@ namespace Configs {
     {
         QJsonObject object;
         object["type"] = "ssh";
-        mergeJsonObjects(object, commons->Build().object);
+        mergeJsonObjects(object, outbound::Build().object);
         if (!user.isEmpty()) object["user"] = user;
         if (!password.isEmpty()) object["password"] = password;
         if (!private_key.isEmpty()) object["private_key"] = private_key;

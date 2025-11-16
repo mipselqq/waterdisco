@@ -886,7 +886,7 @@ namespace Configs {
         }
         if (resp.isEmpty()) return true;
         // else
-        MW_show_log("Invalid ent " + ent->outbound->commons->name + ": " + resp);
+        MW_show_log("Invalid ent " + ent->outbound->name + ": " + resp);
         return false;
     }
 
@@ -921,7 +921,7 @@ namespace Configs {
                 continue;
             }
             if (!IsValid(item)) {
-                MW_show_log("Skipping invalid config: " + item->outbound->commons->name);
+                MW_show_log("Skipping invalid config: " + item->outbound->name);
                 item->latency = -1;
                 continue;
             }

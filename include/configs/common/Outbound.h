@@ -1,18 +1,21 @@
 #pragma once
 #include "DialFields.h"
+#include "multiplex.h"
+#include "TLS.h"
+#include "transport.h"
 #include "include/configs/baseConfig.h"
 
 namespace Configs
 {
-    class OutboundCommons : public baseConfig
+    class outbound : public baseConfig
     {
-        public:
+    public:
         QString name;
         QString server;
         int server_port = 0;
         std::shared_ptr<DialFields> dialFields = std::make_shared<DialFields>();
 
-        OutboundCommons()
+        outbound()
         {
             _add(new configItem("name", &name, string));
             _add(new configItem("server", &server, string));
@@ -20,37 +23,24 @@ namespace Configs
             _add(new configItem("dial_fields", dynamic_cast<JsonStore *>(dialFields.get()), jsonStore));
         }
 
-        // baseConfig overrides
-        bool ParseFromLink(const QString& link) override;
-        bool ParseFromJson(const QJsonObject& object) override;
-        QString ExportToLink() override;
-        QJsonObject ExportToJson() override;
-        BuildResult Build() override;
-    };
-
-    class outbound : public baseConfig
-    {
-    public:
-        std::shared_ptr<OutboundCommons> commons = std::make_shared<OutboundCommons>();
-
         void ResolveDomainToIP(const std::function<void()> &onFinished);
 
         virtual QString GetAddress()
         {
-            return commons->server;
+            return server;
         }
 
         virtual QString DisplayAddress()
         {
-            return ::DisplayAddress(commons->server, commons->server_port);
+            return ::DisplayAddress(server, server_port);
         }
 
         virtual QString DisplayName()
         {
-            if (commons->name.isEmpty()) {
+            if (name.isEmpty()) {
                 return DisplayAddress();
             }
-            return commons->name;
+            return name;
         }
 
         virtual QString DisplayType() { return {}; };
@@ -60,6 +50,25 @@ namespace Configs
             return QString("[%1] %2").arg(DisplayType(), DisplayName());
         }
 
+        virtual bool HasMux() { return false; }
+
+        virtual bool HasTransport() { return false; }
+
+        virtual bool HasTLS() { return false; }
+
+        virtual std::shared_ptr<TLS> GetTLS() { return std::make_shared<TLS>(); }
+
+        virtual std::shared_ptr<Transport> GetTransport() { return std::make_shared<Transport>(); }
+
+        virtual std::shared_ptr<Multiplex> GetMux() { return std::make_shared<Multiplex>(); }
+
         virtual bool IsEndpoint() { return false; };
+
+        // baseConfig overrides
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
     };
 }
