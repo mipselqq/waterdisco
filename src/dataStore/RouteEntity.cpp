@@ -191,7 +191,7 @@ namespace Configs {
                             MW_show_log("The outbound described in the rule chain is missing, maybe your data is corrupted");
                             return {};
                         }
-                        obj["outbound"] = prof->bean->DisplayName();
+                        obj["outbound"] = prof->outbound->DisplayName();
                     }
                 } else {
                     if (!outboundTag.isEmpty()) obj["outbound"] = outboundTag;
@@ -511,7 +511,7 @@ namespace Configs {
         if (name == "proxy") return -1;
         if (name == "direct") return -2;
         for (const auto& item: profileManager->profiles) {
-            if (item.second->bean->name == name) return item.first;
+            if (item.second->outbound->name == name) return item.first;
         }
 
         return INVALID_ID;

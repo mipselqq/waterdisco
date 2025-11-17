@@ -274,8 +274,8 @@ set(PROJECT_SOURCES
         src/configs/generate.cpp
         include/configs/common/utils.h
         src/configs/common/utils.cpp
-        include/configs/outbounds/Custom.h
-        include/configs/outbounds/Chain.h
+        include/configs/outbounds/custom.h
+        include/configs/outbounds/chain.h
         include/configs/outbounds/extracore.h
 )
 

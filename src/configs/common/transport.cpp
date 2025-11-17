@@ -67,7 +67,10 @@ namespace Configs {
         if (query.hasQueryItem("type"))
         {
             type = query.queryItemValue("type");
-            if ((type == "tcp" && query.queryItemValue("headerType") == "http") || type == "h2") type = "http";
+            if ((type == "tcp" && query.queryItemValue("headerType") == "http") || type == "h2") {
+                type = "http";
+                method = "GET";
+            }
         }
         if (query.hasQueryItem("host")) host = query.queryItemValue("host");
         if (query.hasQueryItem("path")) path = query.queryItemValue("path");

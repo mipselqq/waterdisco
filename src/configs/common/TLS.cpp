@@ -152,7 +152,13 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        if (query.hasQueryItem("security")) enabled = query.queryItemValue("security").replace("reality", "tls").replace("none", "") == "tls";
+        if (query.hasQueryItem("security")) enabled = query.queryItemValue("security")
+        .replace("reality", "tls")
+        .replace("none", "")
+        .replace("0", "")
+        .replace("false", "tls")
+        .replace("1", "tls")
+        .replace("true", "tls") == "tls";
         if (query.hasQueryItem("disable_sni")) disable_sni = query.queryItemValue("disable_sni").replace("1", "true") == "true";
         if (query.hasQueryItem("sni")) server_name = query.queryItemValue("sni");
         if (query.hasQueryItem("peer")) server_name = query.queryItemValue("peer");

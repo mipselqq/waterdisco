@@ -39,20 +39,7 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
     network_title_base = ui->network_box->title();
     connect(ui->network, &QComboBox::currentTextChanged, this, [=,this](const QString &txt) {
         ui->network_box->setTitle(network_title_base.arg(txt));
-        if (txt == "tcp") {
-            ui->header_type->setVisible(true);
-            ui->header_type_l->setVisible(true);
-            ui->headers->setVisible(false);
-            ui->headers_l->setVisible(false);
-            ui->method->setVisible(false);
-            ui->method_l->setVisible(false);
-            ui->path->setVisible(true);
-            ui->path_l->setVisible(true);
-            ui->host->setVisible(true);
-            ui->host_l->setVisible(true);
-        } else if (txt == "grpc") {
-            ui->header_type->setVisible(false);
-            ui->header_type_l->setVisible(false);
+        if (txt == "grpc") {
             ui->headers->setVisible(false);
             ui->headers_l->setVisible(false);
             ui->method->setVisible(false);
@@ -62,8 +49,6 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
             ui->host->setVisible(false);
             ui->host_l->setVisible(false);
         } else if (txt == "ws" || txt == "httpupgrade") {
-            ui->header_type->setVisible(false);
-            ui->header_type_l->setVisible(false);
             ui->headers->setVisible(true);
             ui->headers_l->setVisible(true);
             ui->method->setVisible(false);
@@ -73,8 +58,6 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
             ui->host->setVisible(true);
             ui->host_l->setVisible(true);
         } else if (txt == "http") {
-            ui->header_type->setVisible(false);
-            ui->header_type_l->setVisible(false);
             ui->headers->setVisible(true);
             ui->headers_l->setVisible(true);
             ui->method->setVisible(true);
@@ -84,8 +67,6 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
             ui->host->setVisible(true);
             ui->host_l->setVisible(true);
         } else {
-            ui->header_type->setVisible(false);
-            ui->header_type_l->setVisible(false);
             ui->headers->setVisible(false);
             ui->headers_l->setVisible(false);
             ui->method->setVisible(false);
@@ -164,8 +145,8 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
         LOAD_TYPE("wireguard")
         LOAD_TYPE("tailscale")
         LOAD_TYPE("ssh")
-        ui->type->addItem(tr("Custom (%1 outbound)").arg(software_core_name), "internal");
-        ui->type->addItem(tr("Custom (%1 config)").arg(software_core_name), "internal-full");
+        ui->type->addItem(tr("Custom (%1 outbound)").arg(software_core_name), "outbound");
+        ui->type->addItem(tr("Custom (%1 config)").arg(software_core_name), "fullconfig");
         ui->type->addItem(tr("Extra Core"), "extracore");
         LOAD_TYPE("chain")
 
@@ -259,7 +240,7 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         auto _innerWidget = new EditSSH(this);
         innerWidget = _innerWidget;
         innerEditor = _innerWidget;
-    } else if (type == "internal" || type == "internal-full" || type == "custom") {
+    } else if (type == "outbound" || type == "fullconfig" || type == "custom") {
         auto _innerWidget = new EditCustom(this);
         innerWidget = _innerWidget;
         innerEditor = _innerWidget;
@@ -286,7 +267,7 @@ void DialogEditProfile::typeSelected(const QString &newType) {
     }
 
     // hide some widget
-    auto showAddressPort = type != "chain" && customType != "internal" && customType != "internal-full" && type != "extracore" && type != "tailscale";
+    auto showAddressPort = type != "chain" && customType != "outbound" && customType != "fullconfig" && type != "extracore" && type != "tailscale";
     ui->address->setVisible(showAddressPort);
     ui->address_l->setVisible(showAddressPort);
     ui->port->setVisible(showAddressPort);
@@ -296,8 +277,13 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         ui->right_all_w->setVisible(true);
         auto tls = ent->outbound->GetTLS();
         auto transport = ent->outbound->GetTransport();
+        if (ent->outbound->MustTLS()) {
+            ui->security->setCurrentText("tls");
+            ui->security->setEnabled(false);
+        } else {
+            ui->security->setCurrentText(tls->enabled ? "tls" : "");
+        }
         ui->network->setCurrentText(transport->type);
-        ui->security->setCurrentText(tls->enabled ? "tls" : "");
         ui->path->setText(transport->path);
         ui->host->setText(transport->host);
         ui->method->setText(transport->method);
@@ -357,11 +343,9 @@ void DialogEditProfile::typeSelected(const QString &newType) {
     if (ent->outbound->HasTransport()) {
         ui->network_l->setVisible(true);
         ui->network->setVisible(true);
-        ui->network_box->setVisible(true);
     } else {
         ui->network_l->setVisible(false);
         ui->network->setVisible(false);
-        ui->network_box->setVisible(false);
     }
     if (ent->outbound->HasTLS()) {
         ui->security->setVisible(true);
@@ -385,7 +369,7 @@ void DialogEditProfile::typeSelected(const QString &newType) {
     }
     ui->stream_box->setVisible(streamBoxVisible);
 
-    auto rightNoBox = (ui->stream_box->isHidden() && ui->network_box->isHidden() && ui->security_box->isHidden());
+    auto rightNoBox = (ui->security_box->isHidden() && ui->network_box->isHidden() && ui->tls_camouflage_box->isHidden());
     if (rightNoBox && !ui->right_all_w->isHidden()) {
         ui->right_all_w->setVisible(false);
     }

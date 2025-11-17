@@ -283,6 +283,7 @@ namespace Configs {
         } else {
             bean = new Configs::AbstractBean(-114514);
             outbound = new Configs::outbound();
+            outbound->invalid = true;
         }
 
         auto ent = std::make_shared<ProxyEntity>(outbound, bean, type);

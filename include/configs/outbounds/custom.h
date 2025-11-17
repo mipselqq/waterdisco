@@ -15,6 +15,23 @@ namespace Configs
             _add(new configItem("type", &type, string));
         }
 
+        bool ParseFromJson(const QJsonObject &object) override {
+            if (object.isEmpty()) return false;
+            if (object.contains("name")) name = object["name"].toString();
+            if (object.contains("subtype")) type = object["subtype"].toString();
+            if (object.contains("config")) config = object["config"].toString();
+            return true;
+        }
+
+        QJsonObject ExportToJson() override {
+            QJsonObject object;
+            object["name"] = name;
+            object["type"] = "custom";
+            object["subtype"] = type;
+            object["config"] = config;
+            return object;
+        }
+
         QString GetAddress() override
         {
             if (type == "outbound") {

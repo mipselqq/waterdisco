@@ -58,7 +58,10 @@ namespace Configs
         }
 
         void saveMuxState(int state) {
-            if (state == 1) enabled = true;
+            if (state == 1) {
+                enabled = true;
+                return;
+            }
             enabled = false;
             if (state == 0) unspecified = true;
         }

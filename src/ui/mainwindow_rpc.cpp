@@ -83,7 +83,7 @@ void MainWindow::runURLTest(const QString& config, bool useDefault, const QStrin
                         QString::fromStdString(res.error.value()).contains("context canceled")) ent->latency=0;
                     else {
                         ent->latency = -1;
-                        MW_show_log(tr("[%1] test error: %2").arg(ent->bean->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
+                        MW_show_log(tr("[%1] test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
                     }
                 }
                 ent->Save();
@@ -127,7 +127,7 @@ void MainWindow::runURLTest(const QString& config, bool useDefault, const QStrin
                 QString::fromStdString(res.error.value()).contains("context canceled")) ent->latency=0;
             else {
                 ent->latency = -1;
-                MW_show_log(tr("[%1] test error: %2").arg(ent->bean->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
+                MW_show_log(tr("[%1] test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
             }
         }
         ent->Save();
@@ -285,7 +285,7 @@ void MainWindow::querySpeedtest(QDateTime lastProxyListUpdate, const QMap<QStrin
     runOnUiThread([=, this, &lastProxyListUpdate]
     {
         showSpeedtestData = true;
-        currentSptProfileName = profile->bean->name;
+        currentSptProfileName = profile->outbound->name;
         currentTestResult = res.result.value();
         UpdateDataView();
 
@@ -414,7 +414,7 @@ void MainWindow::runSpeedTest(const QString& config, bool useDefault, bool testC
             ent->ul_speed = "N/A";
             ent->latency = -1;
             ent->test_country = "";
-            MW_show_log(tr("[%1] speed test error: %2").arg(ent->bean->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
+            MW_show_log(tr("[%1] speed test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
         }
         ent->Save();
     }
@@ -578,9 +578,9 @@ void MainWindow::profile_start(int _id) {
             }, true);
         }
         // do start
-        MW_show_log(">>>>>>>> " + tr("Starting profile %1").arg(ent->bean->DisplayTypeAndName()));
+        MW_show_log(">>>>>>>> " + tr("Starting profile %1").arg(ent->outbound->DisplayTypeAndName()));
         if (!profile_start_stage2()) {
-            MW_show_log("<<<<<<<< " + tr("Failed to start profile %1").arg(ent->bean->DisplayTypeAndName()));
+            MW_show_log("<<<<<<<< " + tr("Failed to start profile %1").arg(ent->outbound->DisplayTypeAndName()));
         }
         mu_starting.unlock();
         // cancel timeout
@@ -664,7 +664,7 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
 
     runOnNewThread([=, this, &blocker] {
         // do stop
-        MW_show_log(">>>>>>>> " + tr("Stopping profile %1").arg(running->bean->DisplayTypeAndName()));
+        MW_show_log(">>>>>>>> " + tr("Stopping profile %1").arg(running->outbound->DisplayTypeAndName()));
         if (!profile_stop_stage2()) {
             MW_show_log("<<<<<<<< " + tr("Failed to stop, please restart the program."));
         }
