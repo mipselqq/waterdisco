@@ -77,6 +77,7 @@ namespace Configs {
         // Saved
 
         // Misc
+        QString mainWindowGeometry;
         QString log_level = "info";
         QString test_latency_url = "http://cp.cloudflare.com/";
         int url_test_timeout_ms = 3000;

@@ -90,6 +90,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setActionsData();
     loadShortcuts();
 
+    // geometry remembering
+    if (!Configs::dataStore->mainWindowGeometry.isEmpty()) {
+        auto geo = DecodeB64IfValid(Configs::dataStore->mainWindowGeometry);
+        this->restoreGeometry(geo);
+    }
+
     // setup log
     ui->splitter->restoreState(DecodeB64IfValid(Configs::dataStore->splitter_state));
     new SyntaxHighlighter(isDarkMode() || Configs::dataStore->theme.toLower() == "qdarkstyle", qvLogDocument);
@@ -928,6 +934,7 @@ void MainWindow::on_menu_hotkey_settings_triggered() {
 void MainWindow::on_commitDataRequest() {
     qDebug() << "Start of data save";
     //
+    Configs::dataStore->mainWindowGeometry = this->saveGeometry().toBase64(QByteArray::Base64Encoding);
     if (!isMaximized()) {
         auto olds = Configs::dataStore->mw_size;
         auto news = QString("%1x%2").arg(size().width()).arg(size().height());

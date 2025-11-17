@@ -277,6 +277,24 @@ set(PROJECT_SOURCES
         include/configs/outbounds/custom.h
         include/configs/outbounds/chain.h
         include/configs/outbounds/extracore.h
+        include/ui/profile/edit_socks.h
+        src/ui/profile/edit_socks.cpp
+        include/ui/profile/edit_socks.ui
+        include/ui/profile/edit_http.h
+        src/ui/profile/edit_http.cpp
+        include/ui/profile/edit_http.ui
+        include/ui/profile/edit_trojan.h
+        src/ui/profile/edit_trojan.cpp
+        include/ui/profile/edit_trojan.ui
+        include/ui/profile/edit_hysteria.h
+        src/ui/profile/edit_hysteria.cpp
+        include/ui/profile/edit_hysteria.ui
+        include/ui/profile/edit_tuic.h
+        src/ui/profile/edit_tuic.cpp
+        include/ui/profile/edit_tuic.ui
+        include/ui/profile/edit_hysteria2.h
+        src/ui/profile/edit_hysteria2.cpp
+        include/ui/profile/edit_hysteria2.ui
 )
 
 if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)
@@ -290,12 +308,6 @@ endif ()
 qt_add_executable(Throne
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        include/ui/profile/edit_socks.h src/ui/profile/edit_socks.cpp include/ui/profile/edit_socks.ui
-        include/ui/profile/edit_http.h src/ui/profile/edit_http.cpp include/ui/profile/edit_http.ui
-        include/ui/profile/edit_trojan.h src/ui/profile/edit_trojan.cpp include/ui/profile/edit_trojan.ui
-        include/ui/profile/edit_hysteria.h src/ui/profile/edit_hysteria.cpp include/ui/profile/edit_hysteria.ui
-        include/ui/profile/edit_tuic.h src/ui/profile/edit_tuic.cpp include/ui/profile/edit_tuic.ui
-        include/ui/profile/edit_hysteria2.h src/ui/profile/edit_hysteria2.cpp include/ui/profile/edit_hysteria2.ui
 )
 
 # Target
@@ -319,7 +331,6 @@ set_target_properties(Throne PROPERTIES
         MACOSX_BUNDLE_GUI_IDENTIFIER moe.Throne.macosx
         MACOSX_BUNDLE TRUE
         WIN32_EXECUTABLE TRUE
-
 )
 
 # Target Source Translations
