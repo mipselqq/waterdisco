@@ -137,7 +137,7 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 				}
 				client := &http.Client{
 					Transport: &http.Transport{
-						DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
+						DialContext: func(_ context.Context, network string, addr string) (net.Conn, error) {
 							return outbound.DialContext(ctx, "tcp", metadata.ParseSocksaddr(addr))
 						},
 					},

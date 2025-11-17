@@ -261,9 +261,18 @@ namespace Configs {
         return {object, ""};
     }
 
+    void wireguard::SetAddress(QString newAddr) {
+        peer->address = newAddr;
+    }
+
+    QString wireguard::GetAddress() {
+        return peer->address;
+    }
+
+
     QString wireguard::DisplayAddress()
     {
-        return ::DisplayAddress(peer->address, peer->port > 0);
+        return ::DisplayAddress(peer->address, peer->port);
     }
 
     QString wireguard::DisplayType()

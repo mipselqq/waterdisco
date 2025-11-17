@@ -83,6 +83,8 @@ namespace Configs
         QJsonObject ExportToJson() override;
         BuildResult Build() override;
 
+        void SetAddress(QString newAddr) override;
+        QString GetAddress() override;
         QString DisplayAddress() override;
         QString DisplayType() override;
         bool IsEndpoint() override;

@@ -529,7 +529,7 @@ namespace Configs {
         ctx->buildConfigResult->coreConfig["inbounds"] = inbounds;
     }
 
-    void unwrapChain(const QList<int>& entIDs, QList<std::shared_ptr<ProxyEntity>> &ents, QString& error)
+    void entIDListtoEntList(const QList<int>& entIDs, QList<std::shared_ptr<ProxyEntity>> &ents, QString& error)
     {
         bool hasExtracore = false;
         bool hasCustom = false;
@@ -556,10 +556,24 @@ namespace Configs {
         }
     }
 
+    QList<int> unwrapChain(int entID) {
+        auto ent = profileManager->GetProfile(entID);
+        if (ent == nullptr)
+        {
+            return {};
+        }
+        if (ent->type == "chain") {
+            auto chain = ent->Chain();
+            if (chain == nullptr) return {};
+            return chain->list;
+        }
+        return {entID};
+    }
+
     void buildOutboundChain(std::shared_ptr<BuildSingBoxConfigContext> &ctx, const QList<int>& entIDs, const QString& prefix, bool includeProxy, bool link)
     {
         QList<std::shared_ptr<ProxyEntity>> ents;
-        unwrapChain(entIDs, ents, ctx->error);
+        entIDListtoEntList(entIDs, ents, ctx->error);
         for (int idx = 0; idx < ents.size(); idx++)
         {
             auto tag = prefix + "-" + Int2String(idx);
@@ -898,6 +912,7 @@ namespace Configs {
         QList<int> entIDs;
         for (const auto& proxy : profiles) entIDs << proxy->id;
         ctx->buildPrerequisities->dnsDeps->directDomains = QListStr2QJsonArray(getEntDomains(entIDs, ctx->error));
+        if (!ctx->buildPrerequisities->dnsDeps->directDomains.isEmpty()) ctx->buildPrerequisities->dnsDeps->needDirectDnsRules = true;
         buildDNSSection(ctx);
         if (!ctx->error.isEmpty())
         {
@@ -942,7 +957,11 @@ namespace Configs {
                     continue;
                 }
             }
-            buildOutboundChain(ctx, {item->id}, "proxy-" + Int2String(suffix), false, true);
+            buildOutboundChain(ctx, unwrapChain(item->id), "proxy-" + Int2String(suffix), false, true);
+            if (!ctx->error.isEmpty()) {
+                res->error = ctx->error;
+                return res;
+            }
             auto tag = "proxy-" + Int2String(suffix) + "-0";
             res->outboundTags << tag;
             res->tag2entID.insert(tag, item->id);

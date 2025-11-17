@@ -1,5 +1,6 @@
 #pragma once
 #include <QHostInfo>
+#include <utility>
 #include "DialFields.h"
 #include "multiplex.h"
 #include "TLS.h"
@@ -27,16 +28,21 @@ namespace Configs
 
         void ResolveDomainToIP(const std::function<void()> &onFinished) {
             bool noResolve = false;
-            if (IsIpAddress(server) || server.isEmpty()) noResolve = true;
+            auto serverAddr = GetAddress();
+            if (IsIpAddress(serverAddr) || serverAddr.isEmpty()) noResolve = true;
             if (noResolve) {
                 onFinished();
                 return;
             }
-            QHostInfo::lookupHost(server, QApplication::instance(), [=, this](const QHostInfo &host) {
+            QHostInfo::lookupHost(serverAddr, QApplication::instance(), [=, this](const QHostInfo &host) {
                 auto addrs = host.addresses();
-                if (!addrs.isEmpty()) server = addrs.first().toString();
+                if (!addrs.isEmpty()) SetAddress(addrs.first().toString());
                 onFinished();
             });
+        }
+
+        virtual void SetAddress(QString newAddr) {
+            server = std::move(newAddr);
         }
 
         virtual QString GetAddress()

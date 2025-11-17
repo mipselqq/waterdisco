@@ -114,6 +114,14 @@ namespace Configs {
         return {object, ""};
     }
 
+    void tailscale::SetAddress(QString newAddr) {
+        control_url = newAddr;
+    }
+
+    QString tailscale::GetAddress() {
+        return control_url;
+    }
+
     QString tailscale::DisplayAddress()
     {
         return control_url;
