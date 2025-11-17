@@ -40,7 +40,11 @@ namespace Configs {
     }
     BuildResult outbound::Build()
     {
-        return {ExportToJson(), ""};
+        QJsonObject object;
+        if (!server.isEmpty()) object["server"] = server;
+        if (server_port > 0) object["server_port"] = server_port;
+        mergeJsonObjects(object, dialFields->Build().object);
+        return {object, ""};
     }
 }
 

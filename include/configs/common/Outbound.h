@@ -1,4 +1,5 @@
 #pragma once
+#include <QHostInfo>
 #include "DialFields.h"
 #include "multiplex.h"
 #include "TLS.h"
@@ -13,6 +14,7 @@ namespace Configs
         QString name;
         QString server;
         int server_port = 0;
+        bool invalid = false;
         std::shared_ptr<DialFields> dialFields = std::make_shared<DialFields>();
 
         outbound()
@@ -23,7 +25,19 @@ namespace Configs
             _add(new configItem("dial_fields", dynamic_cast<JsonStore *>(dialFields.get()), jsonStore));
         }
 
-        void ResolveDomainToIP(const std::function<void()> &onFinished);
+        void ResolveDomainToIP(const std::function<void()> &onFinished) {
+            bool noResolve = false;
+            if (IsIpAddress(server) || server.isEmpty()) noResolve = true;
+            if (noResolve) {
+                onFinished();
+                return;
+            }
+            QHostInfo::lookupHost(server, QApplication::instance(), [=, this](const QHostInfo &host) {
+                auto addrs = host.addresses();
+                if (!addrs.isEmpty()) server = addrs.first().toString();
+                onFinished();
+            });
+        }
 
         virtual QString GetAddress()
         {
@@ -56,6 +70,8 @@ namespace Configs
 
         virtual bool HasTLS() { return false; }
 
+        virtual bool MustTLS() { return false; }
+
         virtual std::shared_ptr<TLS> GetTLS() { return std::make_shared<TLS>(); }
 
         virtual std::shared_ptr<Transport> GetTransport() { return std::make_shared<Transport>(); }
@@ -63,6 +79,17 @@ namespace Configs
         virtual std::shared_ptr<Multiplex> GetMux() { return std::make_shared<Multiplex>(); }
 
         virtual bool IsEndpoint() { return false; };
+
+        QString ExportJsonLink() {
+            auto json = ExportToJson();
+            QUrl url;
+            url.setScheme("json");
+            url.setHost("throne");
+            url.setFragment(QJsonObject2QString(json, true)
+                                .toUtf8()
+                                .toBase64(QByteArray::Base64UrlEncoding));
+            return url.toString();
+        }
 
         // baseConfig overrides
         bool ParseFromLink(const QString& link) override;

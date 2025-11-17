@@ -6,28 +6,13 @@
 
 #include <QInputDialog>
 #include <QUrlQuery>
+#include <QJsonDocument>
 
 #include "3rdparty/fkYAML/node.hpp"
 
 namespace Subscription {
 
     GroupUpdater *groupUpdater = new GroupUpdater;
-
-    void RawUpdater_FixEnt(const std::shared_ptr<Configs::ProxyEntity> &ent) {
-        if (ent == nullptr) return;
-        auto stream = Configs::GetStreamSettings(ent->bean.get());
-        if (stream == nullptr) return;
-        // 1. "security"
-        if (stream->security == "none" || stream->security == "0" || stream->security == "false") {
-            stream->security = "";
-        } else if (stream->security == "1" || stream->security == "true") {
-            stream->security = "tls";
-        }
-        // 2. TLS SNI: v2rayN config builder generate sni like this, so set sni here for their format.
-        if (stream->security == "tls" && IsIpAddress(ent->bean->serverAddress) && (!stream->host.isEmpty()) && stream->sni.isEmpty()) {
-            stream->sni = stream->host;
-        }
-    }
 
     int JsonEndIdx(const QString &str, int begin) {
         int sz = str.length();
@@ -106,18 +91,18 @@ namespace Subscription {
         }
 
         std::shared_ptr<Configs::ProxyEntity> ent;
-        bool needFix = true;
 
-        // Nekoray format
-        if (str.startsWith("nekoray://")) {
-            needFix = false;
+        // Json base64 link format
+        if (str.startsWith("json://")) {
             auto link = QUrl(str);
             if (!link.isValid()) return;
-            ent = Configs::ProfileManager::NewProxyEntity(link.host());
-            if (ent->bean->version == -114514) return;
-            auto j = DecodeB64IfValid(link.fragment().toUtf8(), QByteArray::Base64UrlEncoding);
-            if (j.isEmpty()) return;
-            ent->bean->FromJsonBytes(j);
+            auto dataBytes = DecodeB64IfValid(link.fragment().toUtf8(), QByteArray::Base64UrlEncoding);
+            if (dataBytes.isEmpty()) return;
+            auto data = QJsonDocument::fromJson(dataBytes).object();
+            if (data.isEmpty()) return;
+            ent = Configs::ProfileManager::NewProxyEntity(data["type"].toString());
+            if (ent->outbound->invalid) return;
+            ent->outbound->ParseFromJson(data);
         }
 
         // Json
@@ -188,7 +173,6 @@ namespace Subscription {
 
         // Hysteria1
         if (str.startsWith("hysteria://")) {
-            needFix = false;
             ent = Configs::ProfileManager::NewProxyEntity("hysteria");
             auto ok = ent->Hysteria()->ParseFromLink(str);
             if (!ok) return;
@@ -196,7 +180,6 @@ namespace Subscription {
 
         // Hysteria2
         if (str.startsWith("hysteria2://") || str.startsWith("hy2://")) {
-            needFix = false;
             ent = Configs::ProfileManager::NewProxyEntity("hysteria2");
             auto ok = ent->Hysteria2()->ParseFromLink(str);
             if (!ok) return;
@@ -204,7 +187,6 @@ namespace Subscription {
 
         // TUIC
         if (str.startsWith("tuic://")) {
-            needFix = false;
             ent = Configs::ProfileManager::NewProxyEntity("tuic");
             auto ok = ent->TUIC()->ParseFromLink(str);
             if (!ok) return;
@@ -212,7 +194,6 @@ namespace Subscription {
 
         // Wireguard
         if (str.startsWith("wg://")) {
-            needFix = false;
             ent = Configs::ProfileManager::NewProxyEntity("wireguard");
             auto ok = ent->Wireguard()->ParseFromLink(str);
             if (!ok) return;
@@ -220,16 +201,12 @@ namespace Subscription {
 
         // SSH
         if (str.startsWith("ssh://")) {
-            needFix = false;
             ent = Configs::ProfileManager::NewProxyEntity("ssh");
             auto ok = ent->SSH()->ParseFromLink(str);
             if (!ok) return;
         }
 
         if (ent == nullptr) return;
-
-        // Fix
-        if (needFix) RawUpdater_FixEnt(ent);
 
         // End
         updated_order += ent;
@@ -817,7 +794,7 @@ namespace Subscription {
                     continue;
                 }
 
-                if (needFix) RawUpdater_FixEnt(ent);
+                // if (needFix) RawUpdater_FixEnt(ent); TODO
                 updated_order += ent;
             }
         } catch (const fkyaml::exception &ex) {
@@ -927,7 +904,7 @@ namespace Subscription {
             if (Configs::dataStore->sub_clear) {
                 // all is new profile
                 for (const auto &ent: out_all) {
-                    change_text += "[+] " + ent->bean->DisplayTypeAndName() + "\n";
+                    change_text += "[+] " + ent->outbound->DisplayTypeAndName() + "\n";
                 }
             } else {
                 // find and delete not updated profile by ProfileFilter
@@ -940,7 +917,7 @@ namespace Subscription {
                 if (only_out.size() < 1000)
                 {
                     for (const auto &ent: only_out) {
-                        notice_added += "[+] " + ent->bean->DisplayTypeAndName() + "\n";
+                        notice_added += "[+] " + ent->outbound->DisplayTypeAndName() + "\n";
                     }
                 } else
                 {
@@ -949,7 +926,7 @@ namespace Subscription {
                 if (only_in.size() < 1000)
                 {
                     for (const auto &ent: only_in) {
-                        notice_deleted += "[-] " + ent->bean->DisplayTypeAndName() + "\n";
+                        notice_deleted += "[-] " + ent->outbound->DisplayTypeAndName() + "\n";
                     }
                 } else
                 {

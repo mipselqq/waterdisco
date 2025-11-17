@@ -38,6 +38,10 @@ namespace Configs
             return true;
         }
 
+        bool MustTLS() override {
+            return true;
+        }
+
         std::shared_ptr<TLS> GetTLS() override {
             return tls;
         }

@@ -77,7 +77,7 @@ DialogEditGroup::DialogEditGroup(const std::shared_ptr<Configs::Group> &ent, QWi
         QStringList links;
         for (const auto &[_, profile]: Configs::profileManager->profiles) {
             if (profile->gid != ent->id) continue;
-            links += profile->bean->ToShareLink();
+            links += profile->outbound->ExportToLink();
         }
         QApplication::clipboard()->setText(links.join("\n"));
         MessageBoxInfo(software_name, tr("Copied"));
@@ -86,7 +86,7 @@ DialogEditGroup::DialogEditGroup(const std::shared_ptr<Configs::Group> &ent, QWi
         QStringList links;
         for (const auto &[_, profile]: Configs::profileManager->profiles) {
             if (profile->gid != ent->id) continue;
-            links += profile->bean->ToNekorayShareLink(profile->type);
+            links += profile->outbound->ExportToLink(); // TODO FIX neko link
         }
         QApplication::clipboard()->setText(links.join("\n"));
         MessageBoxInfo(software_name, tr("Copied"));
@@ -122,7 +122,7 @@ QStringList DialogEditGroup::load_proxy_items() {
     QStringList res = QStringList();
     auto profiles = Configs::profileManager->profiles;
     for (const auto &item: profiles) {
-        res.push_back(item.second->bean->DisplayName());
+        res.push_back(item.second->outbound->DisplayName());
     }
 
     return res;
@@ -131,7 +131,7 @@ QStringList DialogEditGroup::load_proxy_items() {
 int DialogEditGroup::get_proxy_id(QString name) {
     auto profiles = Configs::profileManager->profiles;
     for (const auto &item: profiles) {
-        if (item.second->bean->DisplayName() == name) return item.first;
+        if (item.second->outbound->DisplayName() == name) return item.first;
     }
 
     return -1;
@@ -139,5 +139,5 @@ int DialogEditGroup::get_proxy_id(QString name) {
 
 QString DialogEditGroup::get_proxy_name(int id) {
     auto profiles = Configs::profileManager->profiles;
-    return profiles.count(id) == 0 ? "None" : profiles[id]->bean->DisplayName();
+    return profiles.count(id) == 0 ? "None" : profiles[id]->outbound->DisplayName();
 }

@@ -3,6 +3,7 @@
 EditTrojan::EditTrojan(QWidget *parent)
     : QWidget(parent),
       ui(new Ui::EditTrojan) {
+    ui->setupUi(this);
 }
 
 EditTrojan::~EditTrojan() {

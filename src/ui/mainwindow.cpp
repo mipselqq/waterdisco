@@ -1678,7 +1678,6 @@ void MainWindow::on_menu_add_from_clipboard_triggered() {
     Subscription::groupUpdater->AsyncUpdate(clipboard);
 }
 
-// TODO fix full export
 void MainWindow::on_menu_clone_triggered() {
     auto ents = get_now_selected_list();
     if (ents.isEmpty()) return;
@@ -1688,7 +1687,7 @@ void MainWindow::on_menu_clone_triggered() {
 
     QStringList sls;
     for (const auto &ent: ents) {
-        sls << ent->outbound->ExportToLink();
+        sls << ent->outbound->ExportJsonLink();
     }
 
     Subscription::groupUpdater->AsyncUpdate(sls.join("\n"));
@@ -1765,7 +1764,7 @@ void MainWindow::on_menu_copy_links_nkr_triggered() {
     auto ents = get_now_selected_list();
     QStringList links;
     for (const auto &ent: ents) {
-        links += ent->outbound->ExportToLink();
+        links += ent->outbound->ExportJsonLink();
     }
     if (links.length() == 0) return;
     QApplication::clipboard()->setText(links.join("\n"));
