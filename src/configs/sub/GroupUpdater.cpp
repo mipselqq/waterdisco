@@ -521,6 +521,9 @@ namespace Subscription {
                         bean->transport->path = Node2QString(ws["path"]);
                         bean->transport->max_early_data = Node2Int(ws["max-early-data"]);
                         bean->transport->early_data_header_name = Node2QString(ws["early-data-header-name"]);
+                        if (Node2Bool(ws["v2ray-http-upgrade"])) {
+                            bean->transport->type = "httpupgrade";
+                        }
                     }
 
                     auto grpc = NodeChild(proxy, {"grpc-opts", "grpc-opt"});
@@ -581,6 +584,9 @@ namespace Subscription {
                         bean->transport->path = Node2QString(ws["path"]);
                         bean->transport->max_early_data = Node2Int(ws["max-early-data"]);
                         bean->transport->early_data_header_name = Node2QString(ws["early-data-header-name"]);
+                        if (Node2Bool(ws["v2ray-http-upgrade"])) {
+                            bean->transport->type = "httpupgrade";
+                        }
                     }
 
                     auto grpc = NodeChild(proxy, {"grpc-opts", "grpc-opt"});
@@ -634,6 +640,9 @@ namespace Subscription {
                         bean->transport->path = Node2QString(ws["path"]);
                         bean->transport->max_early_data = Node2Int(ws["max-early-data"]);
                         bean->transport->early_data_header_name = Node2QString(ws["early-data-header-name"]);
+                        if (Node2Bool(ws["v2ray-http-upgrade"])) {
+                            bean->transport->type = "httpupgrade";
+                        }
                         // for Xray
                         if (Node2QString(ws["early-data-header-name"]) == "Sec-WebSocket-Protocol") {
                             bean->transport->path += "?ed=" + Node2QString(ws["max-early-data"]);
