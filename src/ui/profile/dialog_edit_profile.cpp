@@ -39,7 +39,16 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
     network_title_base = ui->network_box->title();
     connect(ui->network, &QComboBox::currentTextChanged, this, [=,this](const QString &txt) {
         ui->network_box->setTitle(network_title_base.arg(txt));
-        if (txt == "grpc") {
+        if (txt == "tcp") {
+            ui->headers->setVisible(false);
+            ui->headers_l->setVisible(false);
+            ui->method->setVisible(false);
+            ui->method_l->setVisible(false);
+            ui->path->setVisible(true);
+            ui->path_l->setVisible(true);
+            ui->host->setVisible(true);
+            ui->host_l->setVisible(true);
+        } else if (txt == "grpc") {
             ui->headers->setVisible(false);
             ui->headers_l->setVisible(false);
             ui->method->setVisible(false);
