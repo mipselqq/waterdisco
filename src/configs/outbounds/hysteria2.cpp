@@ -65,7 +65,6 @@ namespace Configs {
         if (object.contains("down_mbps")) down_mbps = object["down_mbps"].toInt();
         if (object.contains("obfs")) {
             auto obfsObj = object["obfs"].toObject();
-            if (obfsObj.contains("type")) obfsType = obfsObj["type"].toString();
             if (obfsObj.contains("password")) obfsPassword = obfsObj["password"].toString();
         }
         if (object.contains("obfsPassword")) obfsPassword = object["obfsPassword"].toString();
@@ -131,10 +130,12 @@ namespace Configs {
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
         if (down_mbps > 0) object["down_mbps"] = down_mbps;
-        QJsonObject obfsObj;
-        if (!obfsType.isEmpty()) obfsObj["type"] = obfsType;
-        if (!obfsPassword.isEmpty()) obfsObj["password"] = obfsPassword;
-        if (!obfsObj.isEmpty()) object["obfs"] = obfsObj;
+        if (!obfsPassword.isEmpty()) {
+            QJsonObject obfsObj;
+            obfsObj["type"] = "salamander";
+            obfsObj["password"] = obfsPassword;
+            object["obfs"] = obfsObj;
+        }
         if (!password.isEmpty()) object["password"] = password;
         if (tls->enabled) object["tls"] = tls->ExportToJson();
         return object;
@@ -149,10 +150,12 @@ namespace Configs {
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
         if (down_mbps > 0) object["down_mbps"] = down_mbps;
-        QJsonObject obfsObj;
-        obfsObj["type"] = obfsType;
-        obfsObj["password"] = obfsPassword;
-        if (!obfsObj.isEmpty()) object["obfs"] = obfsObj;
+        if (!obfsPassword.isEmpty()) {
+            QJsonObject obfsObj;
+            obfsObj["type"] = "salamander";
+            obfsObj["password"] = obfsPassword;
+            object["obfs"] = obfsObj;
+        }
         if (!password.isEmpty()) object["password"] = password;
         if (tls->enabled) object["tls"] = tls->Build().object;
         return {object, ""};
