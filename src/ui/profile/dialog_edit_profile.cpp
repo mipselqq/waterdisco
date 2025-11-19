@@ -353,9 +353,11 @@ void DialogEditProfile::typeSelected(const QString &newType) {
     if (ent->outbound->HasTransport()) {
         ui->network_l->setVisible(true);
         ui->network->setVisible(true);
+        ui->network_box->setVisible(true);
     } else {
         ui->network_l->setVisible(false);
         ui->network->setVisible(false);
+        ui->network_box->setVisible(false);
     }
     if (ent->outbound->HasTLS()) {
         ui->security->setVisible(true);
