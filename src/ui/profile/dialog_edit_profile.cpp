@@ -291,6 +291,7 @@ void DialogEditProfile::typeSelected(const QString &newType) {
             ui->security->setEnabled(false);
         } else {
             ui->security->setCurrentText(tls->enabled ? "tls" : "");
+            ui->security->setEnabled(true);
         }
         ui->network->setCurrentText(transport->type);
         ui->path->setText(transport->path);
