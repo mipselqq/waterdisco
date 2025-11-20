@@ -4,6 +4,8 @@ EditHysteria::EditHysteria(QWidget *parent)
     : QWidget(parent),
       ui(new Ui::EditHysteria) {
     ui->setupUi(this);
+
+    _protocol_version = ui->protocol_version;
 }
 
 EditHysteria::~EditHysteria() {
@@ -26,8 +28,28 @@ void EditHysteria::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
     ui->recv_window_conn->setText(Int2String(outbound->recv_window_conn));
     ui->disable_mtu_discovery->setChecked(outbound->disable_mtu_discovery);
     ui->password->setText(outbound->password);
+    editHysteriaLayout(outbound->protocol_version);
+}
 
-    if (outbound->protocol_version == "1")
+bool EditHysteria::onEnd() {
+    auto outbound = ent->Hysteria();
+    outbound->protocol_version = ui->protocol_version->currentText();
+    outbound->server_ports = SplitAndTrim(ui->server_ports->text(), ",");
+    outbound->hop_interval = ui->hop_interval->text();
+    outbound->up_mbps = ui->up_mbps->text().toInt();
+    outbound->down_mbps = ui->down_mbps->text().toInt();
+    outbound->obfs = ui->obfs->text();
+    outbound->auth_type = ui->auth_type->currentText();
+    outbound->auth = ui->auth->text();
+    outbound->recv_window = ui->recv_window->text().toInt();
+    outbound->recv_window_conn = ui->recv_window_conn->text().toInt();
+    outbound->disable_mtu_discovery = ui->disable_mtu_discovery->isChecked();
+    outbound->password = ui->password->text();
+    return true;
+}
+
+void EditHysteria::editHysteriaLayout(const QString& version) {
+    if (version == "1")
     {
         ui->auth_type->setVisible(true);
         ui->auth_type_l->setVisible(true);
@@ -55,21 +77,3 @@ void EditHysteria::onStart(std::shared_ptr<Configs::ProxyEntity> _ent) {
         ui->password_l->setVisible(true);
     }
 }
-
-bool EditHysteria::onEnd() {
-    auto outbound = ent->Hysteria();
-    outbound->protocol_version = ui->protocol_version->currentText();
-    outbound->server_ports = SplitAndTrim(ui->server_ports->text(), ",");
-    outbound->hop_interval = ui->hop_interval->text();
-    outbound->up_mbps = ui->up_mbps->text().toInt();
-    outbound->down_mbps = ui->down_mbps->text().toInt();
-    outbound->obfs = ui->obfs->text();
-    outbound->auth_type = ui->auth_type->currentText();
-    outbound->auth = ui->auth->text();
-    outbound->recv_window = ui->recv_window->text().toInt();
-    outbound->recv_window_conn = ui->recv_window_conn->text().toInt();
-    outbound->disable_mtu_discovery = ui->disable_mtu_discovery->isChecked();
-    outbound->password = ui->password->text();
-    return true;
-}
-

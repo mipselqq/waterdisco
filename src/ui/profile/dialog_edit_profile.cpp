@@ -214,35 +214,9 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         auto _innerWidget = new EditHysteria(this);
         innerWidget = _innerWidget;
         innerEditor = _innerWidget;
-        connect(_innerWidget->ui->protocol_version, &QComboBox::currentTextChanged, _innerWidget, [=,this](const QString &txt)
+        connect(_innerWidget->_protocol_version, &QComboBox::currentTextChanged, _innerWidget, [=,this](const QString &txt)
         {
-            if (txt == "1")
-            {
-                _innerWidget->ui->auth_type->setVisible(true);
-                _innerWidget->ui->auth_type_l->setVisible(true);
-                _innerWidget->ui->auth->setVisible(true);
-                _innerWidget->ui->auth_l->setVisible(true);
-                _innerWidget->ui->recv_window_conn->setVisible(true);
-                _innerWidget->ui->recv_window_conn_l->setVisible(true);
-                _innerWidget->ui->recv_window->setVisible(true);
-                _innerWidget->ui->recv_window_l->setVisible(true);
-                _innerWidget->ui->disable_mtu_discovery->setVisible(true);
-                _innerWidget->ui->password->setVisible(false);
-                _innerWidget->ui->password_l->setVisible(false);
-            } else
-            {
-                _innerWidget->ui->auth_type->setVisible(false);
-                _innerWidget->ui->auth_type_l->setVisible(false);
-                _innerWidget->ui->auth->setVisible(false);
-                _innerWidget->ui->auth_l->setVisible(false);
-                _innerWidget->ui->recv_window_conn->setVisible(false);
-                _innerWidget->ui->recv_window_conn_l->setVisible(false);
-                _innerWidget->ui->recv_window->setVisible(false);
-                _innerWidget->ui->recv_window_l->setVisible(false);
-                _innerWidget->ui->disable_mtu_discovery->setVisible(false);
-                _innerWidget->ui->password->setVisible(true);
-                _innerWidget->ui->password_l->setVisible(true);
-            }
+            _innerWidget->editHysteriaLayout(txt);
             ADJUST_SIZE
         });
     } else if (type == "tuic") {
