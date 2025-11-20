@@ -256,9 +256,6 @@ namespace Configs {
         } else if (type == "hysteria") {
             bean = new Configs::QUICBean(Configs::QUICBean::proxy_Hysteria);
             outbound = new Configs::hysteria();
-        } else if (type == "hysteria2") {
-            bean = new Configs::QUICBean(Configs::QUICBean::proxy_Hysteria2);
-            outbound = new Configs::hysteria2();
         } else if (type == "tuic") {
             bean = new Configs::QUICBean(Configs::QUICBean::proxy_TUIC);
             outbound = new Configs::tuic();

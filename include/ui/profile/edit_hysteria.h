@@ -21,8 +21,8 @@ public:
 
     bool onEnd() override;
 
-private:
     Ui::EditHysteria *ui;
+private:
     std::shared_ptr<Configs::ProxyEntity> ent;
 };
 
