@@ -287,6 +287,9 @@ set(PROJECT_SOURCES
         include/ui/profile/edit_tuic.h
         src/ui/profile/edit_tuic.cpp
         include/ui/profile/edit_tuic.ui
+        include/ui/profile/edit_advanced.h
+        src/ui/profile/edit_advanced.cpp
+        include/ui/profile/edit_advanced.ui
 )
 
 if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)
