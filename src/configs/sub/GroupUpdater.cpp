@@ -282,7 +282,7 @@ namespace Subscription {
             }
 
             // Hysteria
-            if (out["type"] == "hysteria") {
+            if (out["type"] == "hysteria" || out["type"] == "hysteria2") {
                 ent = Configs::ProfileManager::NewProxyEntity("hysteria");
                 auto ok = ent->Hysteria()->ParseFromJson(out);
                 if (!ok) continue;
