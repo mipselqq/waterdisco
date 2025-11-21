@@ -693,7 +693,7 @@ namespace Subscription {
                     bean->tls->enabled = true;
                     bean->tls->insecure = Node2Bool(proxy["skip-cert-verify"]);
                     auto alpn = Node2QStringList(proxy["alpn"]);
-                    bean->tls->certificate = Node2QString(proxy["ca-str"]);
+                    bean->tls->certificate = Node2QString(proxy["ca-str"]).split("\n", Qt::SkipEmptyParts);
                     if (!alpn.isEmpty()) bean->tls->alpn = {alpn[0]};
                     bean->tls->server_name = Node2QString(proxy["sni"]);
 
@@ -755,7 +755,7 @@ namespace Subscription {
                     bean->zero_rtt_handshake = Node2Bool(proxy["reduce-rtt"]);
                     bean->tls->insecure = Node2Bool(proxy["skip-cert-verify"]);
                     bean->tls->alpn = Node2QStringList(proxy["alpn"]);
-                    bean->tls->certificate = Node2QString(proxy["ca-str"]);
+                    bean->tls->certificate = Node2QString(proxy["ca-str"]).split("\n", Qt::SkipEmptyParts);
                     bean->tls->server_name = Node2QString(proxy["sni"]);
 
                     if (Node2Bool(proxy["udp-over-stream"])) bean->udp_over_stream = true;

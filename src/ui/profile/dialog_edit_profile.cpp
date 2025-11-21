@@ -20,6 +20,7 @@
 
 #include <QInputDialog>
 
+#include "include/ui/profile/edit_advanced.h"
 #include "include/ui/profile/edit_hysteria.h"
 #include "include/ui/profile/edit_socks.h"
 #include "include/ui/profile/edit_trojan.h"
@@ -123,6 +124,12 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
         } else {
             ui->brutal_box->setEnabled(true);
         }
+    });
+
+    // Advanced options
+    connect(ui->advanced_button, &QPushButton::clicked, this, [=,this]() {
+        auto advancedWidget = new EditAdvanced(this, ent);
+        advancedWidget->show();
     });
 
     newEnt = _type != "";
@@ -476,9 +483,9 @@ void DialogEditProfile::editor_cache_updated_impl() {
 
 void DialogEditProfile::on_certificate_edit_clicked() {
     bool ok;
-    auto txt = QInputDialog::getMultiLineText(this, tr("Certificate"), "", CACHE.certificate, &ok);
+    auto txt = QInputDialog::getMultiLineText(this, tr("Certificate"), "", CACHE.certificate.join("\n"), &ok);
     if (ok) {
-        CACHE.certificate = txt;
+        CACHE.certificate = txt.split("\n", Qt::SkipEmptyParts);
         editor_cache_updated_impl();
     }
 }
