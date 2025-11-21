@@ -21,7 +21,6 @@
 #include <QInputDialog>
 
 #include "include/ui/profile/edit_hysteria.h"
-#include "include/ui/profile/edit_hysteria2.h"
 #include "include/ui/profile/edit_socks.h"
 #include "include/ui/profile/edit_trojan.h"
 #include "include/ui/profile/edit_tuic.h"
@@ -139,7 +138,6 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
         LOAD_TYPE("vmess")
         LOAD_TYPE("vless")
         LOAD_TYPE("hysteria")
-        LOAD_TYPE("hysteria2")
         LOAD_TYPE("tuic")
         LOAD_TYPE("anytls")
         LOAD_TYPE("wireguard")
@@ -216,10 +214,11 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         auto _innerWidget = new EditHysteria(this);
         innerWidget = _innerWidget;
         innerEditor = _innerWidget;
-    } else if (type == "hysteria2") {
-        auto _innerWidget = new EditHysteria2(this);
-        innerWidget = _innerWidget;
-        innerEditor = _innerWidget;
+        connect(_innerWidget->_protocol_version, &QComboBox::currentTextChanged, _innerWidget, [=,this](const QString &txt)
+        {
+            _innerWidget->editHysteriaLayout(txt);
+            ADJUST_SIZE
+        });
     } else if (type == "tuic") {
         auto _innerWidget = new EditTuic(this);
         innerWidget = _innerWidget;
