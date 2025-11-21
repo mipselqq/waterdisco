@@ -177,7 +177,7 @@ jobs:
           cd build
           curl -fLso srslist.h "https://raw.githubusercontent.com/throneproj/routeprofiles/rule-set/srslist.h"
           cmake -GNinja -DCMAKE_CXX_FLAGS="-static" -DCMAKE_BUILD_TYPE=Debug ..
-          ninja -j2
+          ninja
           cd ..
           ./script/deploy_windows.sh
       - name: Legacy Windows - Generate MakeFile and Build
