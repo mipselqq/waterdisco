@@ -258,7 +258,7 @@ namespace Configs {
             bean = new Configs::TrojanVLESSBean(Configs::TrojanVLESSBean::proxy_VLESS);
             outbound = new Configs::vless();
         } else if (type == "hysteria" || type == "hysteria2") {
-            bean = new Configs::QUICBean(Configs::QUICBean::proxy_Hysteria);
+            bean = new Configs::QUICBean(type == "hysteria" ? Configs::QUICBean::proxy_Hysteria : Configs::QUICBean::proxy_Hysteria2);
             outbound = new Configs::hysteria();
         } else if (type == "tuic") {
             bean = new Configs::QUICBean(Configs::QUICBean::proxy_TUIC);
