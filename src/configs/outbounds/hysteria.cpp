@@ -94,14 +94,15 @@ namespace Configs {
             if (object.contains("recv_window_conn")) recv_window_conn = object["recv_window_conn"].toInt();
             if (object.contains("recv_window")) recv_window = object["recv_window"].toInt();
             if (object.contains("disable_mtu_discovery")) disable_mtu_discovery = object["disable_mtu_discovery"].toBool();
-            if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
         } else {
             if (object.contains("obfs")) {
                 auto obfsObj = object["obfs"].toObject();
                 if (obfsObj.contains("password")) obfs = obfsObj["password"].toString();
             }
             if (object.contains("obfsPassword")) obfs = object["obfsPassword"].toString();
+            if (object.contains("password")) password = object["password"].toString();
         }
+        if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
         return true;
     }
 
@@ -185,10 +186,10 @@ namespace Configs {
             if (disable_mtu_discovery) object["disable_mtu_discovery"] = disable_mtu_discovery;
         } else {
             if (!obfs.isEmpty()) {
-                QJsonObject obfsObj;
-                obfsObj["type"] = "salamander";
-                obfsObj["password"] = obfs;
-                object["obfs"] = obfsObj;
+                object["obfs"] = QJsonObject{
+                    {"type", "salamander"},
+                    {"password", obfs},
+                };
             }
             if (!password.isEmpty()) object["password"] = password;
         }
@@ -216,10 +217,10 @@ namespace Configs {
             if (disable_mtu_discovery) object["disable_mtu_discovery"] = disable_mtu_discovery;
         } else {
             if (!obfs.isEmpty()) {
-                QJsonObject obfsObj;
-                obfsObj["type"] = "salamander";
-                obfsObj["password"] = obfs;
-                object["obfs"] = obfsObj;
+                object["obfs"] = QJsonObject{
+                    {"type", "salamander"},
+                    {"password", obfs},
+                };
             }
             if (!password.isEmpty()) object["password"] = password;
         }
