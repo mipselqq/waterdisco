@@ -341,8 +341,8 @@ void DialogEditProfile::typeSelected(const QString &newType) {
 
     // 左边 common
     ui->name->setText(ent->outbound->name);
-    ui->address->setText(ent->outbound->server);
-    ui->port->setText(Int2String(ent->outbound->server_port));
+    ui->address->setText(ent->outbound->GetAddress());
+    ui->port->setText(ent->outbound->GetPort());
     ui->port->setValidator(QRegExpValidator_Number);
 
     // 星号
@@ -403,8 +403,8 @@ bool DialogEditProfile::onEnd() {
     }
 
     ent->outbound->name = ui->name->text();
-    ent->outbound->server = ui->address->text().remove(' ');
-    ent->outbound->server_port = ui->port->text().toInt();
+    ent->outbound->SetAddress(ui->address->text().remove(' '));
+    ent->outbound->SetPort(ui->port->text().toInt());
 
     if (ent->outbound->HasTLS() || ent->outbound->HasTransport()) {
         auto tls = ent->outbound->GetTLS();
