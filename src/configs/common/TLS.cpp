@@ -42,7 +42,7 @@ namespace Configs {
     BuildResult uTLS::Build()
     {
         auto obj = ExportToJson();
-        if ((obj.isEmpty() || obj["enabled"].toBool() == false) && !dataStore->utlsFingerprint.isEmpty()) {
+        if ((obj.isEmpty() || obj["enabled"].toBool() == false || fingerPrint.isEmpty()) && !dataStore->utlsFingerprint.isEmpty()) {
             obj["enabled"] = true;
             obj["fingerprint"] = dataStore->utlsFingerprint;
         }
