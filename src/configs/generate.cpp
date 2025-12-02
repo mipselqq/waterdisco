@@ -224,11 +224,11 @@ namespace Configs {
                 ctx->error = "failed to cast to extracore, type is: " + ctx->ent->type;
                 return;
             }
-            preReqs->extraCoreData->path = QFileInfo(outbound->extraCorePath).canonicalFilePath();
-            preReqs->extraCoreData->args = outbound->extraCoreArgs;
-            preReqs->extraCoreData->config = outbound->extraCoreConf;
-            preReqs->extraCoreData->configDir = GetBasePath();
-            preReqs->extraCoreData->noLog = outbound->noLogs;
+            ctx->buildConfigResult->extraCoreData->path = QFileInfo(outbound->extraCorePath).canonicalFilePath();
+            ctx->buildConfigResult->extraCoreData->args = outbound->extraCoreArgs;
+            ctx->buildConfigResult->extraCoreData->config = outbound->extraCoreConf;
+            ctx->buildConfigResult->extraCoreData->configDir = GetBasePath();
+            ctx->buildConfigResult->extraCoreData->noLog = outbound->noLogs;
         }
     }
 
