@@ -46,7 +46,7 @@ namespace Configs {
             obj["enabled"] = true;
             obj["fingerprint"] = dataStore->utlsFingerprint;
         }
-        return {ExportToJson(), ""};
+        return {obj, ""};
     }
 
     bool ECH::ParseFromLink(const QString& link)
