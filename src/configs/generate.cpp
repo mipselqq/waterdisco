@@ -789,6 +789,7 @@ namespace Configs {
 
         auto ctx = std::make_shared<BuildSingBoxConfigContext>();
         ctx->ent = ent;
+        ctx->buildConfigResult->outboundStats << std::make_shared<Stats::TrafficData>("direct");
 
         CalculatePrerequisities(ctx);
 
