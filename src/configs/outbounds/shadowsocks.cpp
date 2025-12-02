@@ -109,6 +109,10 @@ namespace Configs {
 
     BuildResult shadowsocks::Build()
     {
+        if (plugin.contains(";")) {
+            plugin_opts = SubStrAfter(plugin, ";");
+            plugin = SubStrBefore(plugin, ";");
+        }
         QJsonObject object;
         object["type"] = "shadowsocks";
         mergeJsonObjects(object, outbound::Build().object);
