@@ -1,0 +1,253 @@
+#include "include/configs/common/xrayStreamSetting.h"
+
+#include <QUrlQuery>
+#include <QJsonArray>
+
+#include "include/configs/common/utils.h"
+
+namespace Configs {
+    bool xrayTLS::ParseFromLink(const QString &link) {
+        auto url = QUrl(link);
+        if (!url.isValid()) return false;
+        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+
+        if (query.hasQueryItem("sni")) serverName = query.queryItemValue("sni");
+        if (query.hasQueryItem("peer")) serverName = query.queryItemValue("peer");
+        if (query.hasQueryItem("server_name")) serverName = query.queryItemValue("server_name");
+        if (query.hasQueryItem("allowInsecure")) allowInsecure = query.queryItemValue("allowInsecure").replace("1", "true") == "true";
+        if (query.hasQueryItem("allow_insecure")) allowInsecure = query.queryItemValue("allow_insecure").replace("1", "true") == "true";
+        if (query.hasQueryItem("insecure")) allowInsecure = query.queryItemValue("insecure").replace("1", "true") == "true";
+        if (query.hasQueryItem("alpn")) alpn = query.queryItemValue("alpn").split(",");
+        if (query.hasQueryItem("fp")) fingerprint = query.queryItemValue("fp");
+        return true;
+    }
+
+    bool xrayTLS::ParseFromJson(const QJsonObject &object) {
+        if (object.isEmpty()) return false;
+        if (object.contains("serverName")) serverName = object["serverName"].toString();
+        if (object.contains("allowInsecure")) allowInsecure = object["allowInsecure"].toBool();
+        if (object.contains("alpn")) QJsonArray2QListString(object["alpn"].toArray());
+        if (object.contains("fingerprint")) fingerprint = object["fingerprint"].toString();
+        return true;
+    }
+
+    QString xrayTLS::ExportToLink() {
+        QUrlQuery query;
+        query.addQueryItem("sni", serverName);
+        if (allowInsecure) query.addQueryItem("allowInsecure", "1");
+        if (!alpn.isEmpty()) query.addQueryItem("alpn", alpn.join(","));
+        if (!fingerprint.isEmpty()) query.addQueryItem("fp", fingerprint);
+        return query.toString();
+    }
+
+    QJsonObject xrayTLS::ExportToJson() {
+        QJsonObject object;
+        object["serverName"] = serverName;
+        if (allowInsecure) object["allowInsecure"] = allowInsecure;
+        if (!alpn.isEmpty()) {
+            object["alpn"] = QListStr2QJsonArray(alpn);
+        }
+        if (!fingerprint.isEmpty()) object["fingerprint"] = fingerprint;
+        return object;
+    }
+
+    BuildResult xrayTLS::Build() {
+        // TODO add xray default fp, and use it here
+        return {ExportToJson(), ""};
+    }
+
+    bool xrayReality::ParseFromLink(const QString &link) {
+        auto url = QUrl(link);
+        if (!url.isValid()) return false;
+        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+
+        if (query.hasQueryItem("sni")) serverName = query.queryItemValue("sni");
+        if (query.hasQueryItem("peer")) serverName = query.queryItemValue("peer");
+        if (query.hasQueryItem("pbk")) password = query.queryItemValue("pbk");
+        if (query.hasQueryItem("fp")) fingerprint = query.queryItemValue("fp");
+        if (query.hasQueryItem("sid")) shortId = query.queryItemValue("sid");
+        if (query.hasQueryItem("spiderx")) spiderX = query.queryItemValue("spiderx");
+        return true;
+
+    }
+
+    bool xrayReality::ParseFromJson(const QJsonObject &object) {
+        if (object.isEmpty()) return false;
+        if (object.contains("serverName")) serverName = object["serverName"].toString();
+        if (object.contains("fingerprint")) fingerprint = object["fingerprint"].toString();
+        if (object.contains("password")) password = object["password"].toString();
+        if (object.contains("shortId")) shortId = object["shortId"].toString();
+        if (object.contains("shortId")) shortId = object["shortId"].toString();
+        if (object.contains("spiderX")) spiderX = object["spiderX"].toString();
+        return true;
+    }
+
+    QString xrayReality::ExportToLink() {
+        QUrlQuery query;
+        query.addQueryItem("sni", serverName);
+        if (!fingerprint.isEmpty()) query.addQueryItem("fp", fingerprint);
+        if (!password.isEmpty()) query.addQueryItem("pbk", password);
+        if (!shortId.isEmpty()) query.addQueryItem("sid", shortId);
+        if (!spiderX.isEmpty()) query.addQueryItem("spiderx", spiderX);
+        return query.toString();
+    }
+
+    QJsonObject xrayReality::ExportToJson() {
+        QJsonObject object;
+        object["serverName"] = serverName;
+        if (!fingerprint.isEmpty()) object["fingerprint"] = fingerprint;
+        if (!password.isEmpty()) object["password"] = password;
+        if (!shortId.isEmpty()) object["shortId"] = shortId;
+        if (!spiderX.isEmpty()) object["spiderX"] = spiderX;
+        return object;
+    }
+
+    BuildResult xrayReality::Build() {
+        // TODO handle default fingerprint here too
+        return {ExportToJson(), ""};
+    }
+
+    bool xrayXHTTP::ParseFromLink(const QString &link) {
+        auto url = QUrl(link);
+        if (!url.isValid()) return false;
+        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+
+        if (query.hasQueryItem("host")) host = query.queryItemValue("host");
+        if (query.hasQueryItem("path")) path = query.queryItemValue("path");
+        if (query.hasQueryItem("mode")) mode = query.queryItemValue("mode");
+        if (query.hasQueryItem("headers")) headers = query.queryItemValue("headers").split(",");
+        if (query.hasQueryItem("x_padding_bytes")) xPaddingBytes = query.queryItemValue("xpaddingbytes");
+        if (query.hasQueryItem("no_grpc_header")) noGRPCHeader = query.queryItemValue("nogrpcheader").replace("1", "true") == "true";
+        if (query.hasQueryItem("sc_max_each_post_bytes")) scMaxEachPostBytes = query.queryItemValue("sc_max_each_post_bytes").toInt();
+        if (query.hasQueryItem("sc_min_posts_interval_ms")) scMinPostsIntervalMs = query.queryItemValue("sc_min_posts_interval_ms").toInt();
+        if (query.hasQueryItem("max_concurrency")) maxConcurrency = query.queryItemValue("max_concurrency");
+        if (query.hasQueryItem("max_connections")) maxConnections = query.queryItemValue("max_connections").toInt();
+        if (query.hasQueryItem("max_reuse_times")) cMaxReuseTimes = query.queryItemValue("max_reuse_times").toInt();
+        if (query.hasQueryItem("max_request_times")) hMaxRequestTimes = query.queryItemValue("max_request_times");
+        if (query.hasQueryItem("max_reusable_secs")) hMaxReusableSecs = query.queryItemValue("max_reusable_secs");
+        if (query.hasQueryItem("keep_alive_period")) hKeepAlivePeriod = query.queryItemValue("keep_alive_period").toInt();
+        return true;
+    }
+
+    bool xrayXHTTP::ParseFromJson(const QJsonObject &object) {
+        if (object.isEmpty()) return false;
+        if (object.contains("host")) host = object["host"].toString();
+        if (object.contains("path")) path = object["path"].toString();
+        if (object.contains("mode")) mode = object["mode"].toString();
+        if (auto exObj = object["ex"].toObject(); !exObj.isEmpty()) {
+            if (exObj.contains("headers") && exObj["headers"].isArray()) {
+                headers = QJsonArray2QListString(exObj["headers"].toArray());
+            }
+            if (exObj.contains("xPaddingBytes")) xPaddingBytes = exObj["xPaddingBytes"].toString();
+            if (exObj.contains("noGRPCHeader")) noGRPCHeader = exObj["noGRPCHeader"].toBool();
+            if (exObj.contains("scMaxEachPostBytes")) scMaxEachPostBytes = exObj["scMaxEachPostBytes"].toInt();
+            if (exObj.contains("scMinPostsIntervalMs")) scMinPostsIntervalMs = exObj["scMinPostsIntervalMs"].toInt();
+            if (auto xmuxObj = exObj["xmux"].toObject(); !xmuxObj.isEmpty()) {
+                if (xmuxObj.contains("maxConcurrency")) maxConcurrency = xmuxObj["maxConcurrency"].toString();
+                if (xmuxObj.contains("maxConnections")) maxConnections = xmuxObj["maxConnections"].toInt();
+                if (xmuxObj.contains("cMaxReuseTimes")) cMaxReuseTimes = xmuxObj["cMaxReuseTimes"].toInt();
+                if (xmuxObj.contains("hMaxRequestTimes")) hMaxRequestTimes = xmuxObj["hMaxRequestTimes"].toString();
+                if (xmuxObj.contains("hMaxReusableSecs")) hMaxReusableSecs = xmuxObj["hMaxReusableSecs"].toString();
+                if (xmuxObj.contains("hKeepAlivePeriod")) hKeepAlivePeriod = xmuxObj["hKeepAlivePeriod"].toInt();
+            }
+        }
+        return true;
+    }
+
+    QString xrayXHTTP::ExportToLink() {
+        QUrlQuery query;
+        if (!host.isEmpty()) query.addQueryItem("host", host);
+        if (!path.isEmpty()) query.addQueryItem("path", path);
+        if (!mode.isEmpty()) query.addQueryItem("mode", mode);
+        if (!headers.isEmpty()) query.addQueryItem("headers", headers.join(","));
+        if (!xPaddingBytes.isEmpty()) query.addQueryItem("x_padding_bytes", xPaddingBytes);
+        if (noGRPCHeader) query.addQueryItem("no_grpc_header", "true");
+        if (scMaxEachPostBytes > 0) query.addQueryItem("sc_max_each_post_bytes", QString::number(scMaxEachPostBytes));
+        if (scMinPostsIntervalMs > 0) query.addQueryItem("sc_min_posts_interval_ms", QString::number(scMinPostsIntervalMs));
+        if (!maxConcurrency.isEmpty()) query.addQueryItem("max_concurrency", maxConcurrency);
+        if (maxConnections > 0) query.addQueryItem("max_connections", QString::number(maxConnections));
+        if (cMaxReuseTimes > 0) query.addQueryItem("max_reuse_times", QString::number(cMaxReuseTimes));
+        if (!hMaxRequestTimes.isEmpty()) query.addQueryItem("max_request_times", hMaxRequestTimes);
+        if (!hMaxReusableSecs.isEmpty()) query.addQueryItem("max_reusable_secs", hMaxReusableSecs);
+        if (hKeepAlivePeriod > 0) query.addQueryItem("keep_alive_period", QString::number(hKeepAlivePeriod));
+        return query.toString();
+    }
+
+    QJsonObject xrayXHTTP::ExportToJson() {
+        QJsonObject obj;
+        if (!host.isEmpty()) obj["host"] = host;
+        if (!path.isEmpty()) obj["path"] = path;
+        if (!mode.isEmpty()) obj["mode"] = mode;
+        QJsonObject extraObj;
+        if (!headers.isEmpty()) extraObj["headers"] = qStringListToJsonObject(headers);
+        if (!xPaddingBytes.isEmpty()) extraObj["xPaddingBytes"] = xPaddingBytes;
+        if (noGRPCHeader) extraObj["noGRPCHeader"] = true;
+        if (scMaxEachPostBytes > 0) extraObj["scMaxEachPostBytes"] = scMaxEachPostBytes;
+        if (scMinPostsIntervalMs > 0) extraObj["scMinPostsIntervalMs"] = scMinPostsIntervalMs;
+        QJsonObject xmuxObj;
+        if (!maxConcurrency.isEmpty()) xmuxObj["maxConcurrency"] = maxConcurrency;
+        if (maxConnections > 0) xmuxObj["maxConnections"] = maxConnections;
+        if (cMaxReuseTimes > 0) xmuxObj["cMaxReuseTimes"] = cMaxReuseTimes;
+        if (!hMaxRequestTimes.isEmpty()) xmuxObj["hMaxRequestTimes"] = hMaxRequestTimes;
+        if (!hMaxReusableSecs.isEmpty()) xmuxObj["hMaxReusableSecs"] = hMaxReusableSecs;
+        if (hKeepAlivePeriod > 0) xmuxObj["hMaxReusableSecs"] = hMaxReusableSecs;
+        if (!xmuxObj.isEmpty()) extraObj["xmux"] = xmuxObj;
+        if (!extraObj.isEmpty()) obj["extra"] = extraObj;
+        return obj;
+    }
+
+    BuildResult xrayXHTTP::Build() {
+        return {ExportToJson(), ""};
+    }
+
+    bool xrayStreamSetting::ParseFromLink(const QString &link) {
+        auto url = QUrl(link);
+        if (!url.isValid()) return false;
+        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+
+        if (query.hasQueryItem("network")) network = query.queryItemValue("network");
+        if (network != "raw" && network != "xhttp") return false;
+        if (query.hasQueryItem("security")) security = query.queryItemValue("security");
+        if (security == "tls") TLS->ParseFromLink(link);
+        else if (security == "reality") reality->ParseFromLink(link);
+        xhttp->ParseFromLink(link);
+
+        return true;
+    }
+
+    bool xrayStreamSetting::ParseFromJson(const QJsonObject &object) {
+        if (object.isEmpty()) return false;
+
+        if (object.contains("network")) network = object.value("network").toString();
+        if (network != "raw" && network != "xhttp") return false;
+        if (object.contains("security")) security = object.value("security").toString();
+        if (security == "tls" && object["tlsSettings"].isObject()) TLS->ParseFromJson(object["tlsSettings"].toObject());
+        else if (security == "reality" && object["realitySettings"].isObject()) reality->ParseFromJson(object["realitySettings"].toObject());
+        if (network == "xhttp" && object["xhttpSettings"].isObject()) xhttp->ParseFromJson(object["xhttpSettings"].toObject());
+        return true;
+    }
+
+    QString xrayStreamSetting::ExportToLink() {
+        QUrlQuery query;
+        if (!network.isEmpty()) query.addQueryItem("network", network);
+        if (!security.isEmpty()) query.addQueryItem("security", security);
+        mergeUrlQuery(query, TLS->ExportToLink());
+        mergeUrlQuery(query, reality->ExportToLink());
+        mergeUrlQuery(query, xhttp->ExportToLink());
+        return query.toString();
+    }
+
+    QJsonObject xrayStreamSetting::ExportToJson() {
+        QJsonObject object;
+        object["network"] = network;
+        object["security"] = security;
+        if (security == "tls") object["tlsSettings"] = TLS->ExportToJson();
+        else if (security == "reality") object["realitySettings"] = reality->ExportToJson();
+        if (network == "xhttp") object["xhttpSettings"] = xhttp->ExportToJson();
+        return object;
+    }
+
+    BuildResult xrayStreamSetting::Build() {
+        return {ExportToJson(), ""};
+    }
+}

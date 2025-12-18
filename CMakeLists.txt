@@ -293,6 +293,9 @@ set(PROJECT_SOURCES
         include/configs/common/xrayStreamSetting.h
         include/configs/outbounds/xrayVless.h
         include/configs/common/xrayMultiplex.h
+        src/configs/common/xrayMultiplex.cpp
+        src/configs/common/xrayStreamSetting.cpp
+        src/configs/outbounds/xrayVless.cpp
 )
 
 if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)
