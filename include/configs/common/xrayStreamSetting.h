@@ -28,17 +28,14 @@ namespace Configs {
 
     class xrayReality : public baseConfig {
         public:
-        QString target;
-        QString privateKey;
-        QString fingerprint;
         QString serverName;
+        QString fingerprint;
         QString password;
         QString shortId;
         QString spiderX;
 
         xrayReality() {
-            _add(new configItem("target", &target, string));
-            _add(new configItem("privateKey", &privateKey, string));
+            _add(new configItem("serverName", &serverName, string));
             _add(new configItem("fingerprint", &fingerprint, string));
             _add(new configItem("serverName", &serverName, string));
             _add(new configItem("password", &password, string));
@@ -57,19 +54,19 @@ namespace Configs {
         public:
         QString host;
         QString path;
-        QString mode;
+        QString mode = "auto";
         // extra
         QStringList headers;
-        QString xPaddingBytes;
+        QString xPaddingBytes = "100-1000";
         bool noGRPCHeader = false;
         int scMaxEachPostBytes = 1000000; // packet-up only
         int scMinPostsIntervalMs = 30; // packet-up only
         // extra/xmux
-        QString maxConcurrency;
+        QString maxConcurrency = "16-32";
         int maxConnections;
         int cMaxReuseTimes;
-        QString hMaxRequestTimes;
-        QString hMaxReusableSecs;
+        QString hMaxRequestTimes = "600-900";
+        QString hMaxReusableSecs = "1800-3000";
         int hKeepAlivePeriod;
         // todo do we need to add downloadsettings or is it useless?
 
