@@ -27,6 +27,7 @@ namespace Configs {
         QString ExportToLink() override;
         QJsonObject ExportToJson() override;
         BuildResult Build() override;
+        BuildResult BuildXray() override;
 
         std::shared_ptr<xrayStreamSetting> GetXrayStream() override { return streamSetting; }
 
