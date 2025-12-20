@@ -102,6 +102,8 @@ namespace Configs
 
         virtual bool IsEndpoint() { return false; };
 
+        virtual BuildResult BuildXray() { return {}; }
+
         QString ExportJsonLink() {
             auto json = ExportToJson();
             QUrl url;

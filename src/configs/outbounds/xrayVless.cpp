@@ -71,6 +71,13 @@ namespace Configs {
 
     BuildResult xrayVless::Build() {
         QJsonObject object;
+        object["type"] = "socks";
+        object["server"] = "127.0.0.1";
+        return {object, ""};
+    }
+
+    BuildResult xrayVless::BuildXray() {
+        QJsonObject object;
         object["protocol"] = "vless";
         QJsonObject settings;
         settings["address"] = server;
