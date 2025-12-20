@@ -8,7 +8,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        if (query.hasQueryItem("mux")) enabled = query.queryItemValue("mux").replace("1", "true") == "true";
+        if (query.hasQueryItem("mux")) enabled = query.queryItemValue("mux").replace("1", "true") == "true", useDefault = false;
         if (query.hasQueryItem("mux_concurrency")) concurrency = query.queryItemValue("mux_concurrency").toInt();
         if (query.hasQueryItem("mux_xudp_concurrency")) xudpConcurrency = query.queryItemValue("mux_xudp_concurrency").toInt();
         return true;
@@ -16,7 +16,7 @@ namespace Configs {
 
     bool xrayMultiplex::ParseFromJson(const QJsonObject &object) {
         if (object.isEmpty()) return false;
-        if (object.contains("enabled")) enabled = object["enabled"].toBool();
+        if (object.contains("enabled")) enabled = object["enabled"].toBool(), useDefault = false;
         if (object.contains("concurrency")) concurrency = object["concurrency"].toInt();
         if (object.contains("xudpConcurrency")) xudpConcurrency = object["xudpConcurrency"].toInt();
         return true;

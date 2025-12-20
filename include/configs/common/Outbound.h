@@ -5,6 +5,8 @@
 #include "multiplex.h"
 #include "TLS.h"
 #include "transport.h"
+#include "xrayMultiplex.h"
+#include "xrayStreamSetting.h"
 #include "include/configs/baseConfig.h"
 
 namespace Configs
@@ -93,6 +95,10 @@ namespace Configs
         virtual std::shared_ptr<Transport> GetTransport() { return std::make_shared<Transport>(); }
 
         virtual std::shared_ptr<Multiplex> GetMux() { return std::make_shared<Multiplex>(); }
+
+        virtual std::shared_ptr<xrayStreamSetting> GetXrayStream() { return std::make_shared<xrayStreamSetting>(); }
+
+        virtual std::shared_ptr<xrayMultiplex> GetXrayMultiplex() { return std::make_shared<xrayMultiplex>(); }
 
         virtual bool IsEndpoint() { return false; };
 

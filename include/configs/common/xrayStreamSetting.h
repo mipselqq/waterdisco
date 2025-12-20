@@ -63,11 +63,11 @@ namespace Configs {
         int scMinPostsIntervalMs = 30; // packet-up only
         // extra/xmux
         QString maxConcurrency = "16-32";
-        int maxConnections;
-        int cMaxReuseTimes;
+        int maxConnections = 0;
+        int cMaxReuseTimes = 0;
         QString hMaxRequestTimes = "600-900";
         QString hMaxReusableSecs = "1800-3000";
-        int hKeepAlivePeriod;
+        int hKeepAlivePeriod = 0;
         // todo do we need to add downloadsettings or is it useless?
 
         xrayXHTTP() {
@@ -86,6 +86,10 @@ namespace Configs {
             _add(new configItem("hMaxReusableSecs", &hMaxReusableSecs, string));
             _add(new configItem("hKeepAlivePeriod", &hKeepAlivePeriod, integer));
         }
+
+        QString getHeadersString();
+
+        QStringList getHeaderPairs(QString rawHeader);
 
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
