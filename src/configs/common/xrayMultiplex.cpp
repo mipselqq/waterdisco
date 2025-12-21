@@ -28,7 +28,7 @@ namespace Configs {
         query.addQueryItem("mux", "true");
         if (concurrency > 0) query.addQueryItem("mux_concurrency", QString::number(concurrency));
         if (xudpConcurrency > 0) query.addQueryItem("mux_xudp_concurrency", QString::number(xudpConcurrency));
-        return QUrlQuery(query).toString();
+        return query.toString(QUrl::FullyEncoded);
     }
 
     QJsonObject xrayMultiplex::ExportToJson() {
