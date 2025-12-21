@@ -57,16 +57,16 @@ namespace Configs {
         QString mode = "auto";
         // extra
         QStringList headers;
-        QString xPaddingBytes = "100-1000";
+        QString xPaddingBytes;
         bool noGRPCHeader = false;
-        int scMaxEachPostBytes = 1000000; // packet-up only
-        int scMinPostsIntervalMs = 30; // packet-up only
+        int scMaxEachPostBytes = 0; // packet-up only
+        int scMinPostsIntervalMs = 0; // packet-up only
         // extra/xmux
-        QString maxConcurrency = "16-32";
+        QString maxConcurrency;
         int maxConnections = 0;
         int cMaxReuseTimes = 0;
-        QString hMaxRequestTimes = "600-900";
-        QString hMaxReusableSecs = "1800-3000";
+        QString hMaxRequestTimes;
+        QString hMaxReusableSecs;
         int hKeepAlivePeriod = 0;
         // todo do we need to add downloadsettings or is it useless?
 
@@ -91,6 +91,7 @@ namespace Configs {
 
         QStringList getHeaderPairs(QString rawHeader);
 
+        bool ParseExtraJson(QString str);
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         QString ExportToLink() override;

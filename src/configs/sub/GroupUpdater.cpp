@@ -9,6 +9,8 @@
 #include <QUrlQuery>
 #include <QJsonDocument>
 
+#include "include/configs/common/utils.h"
+
 namespace Subscription {
 
     GroupUpdater *groupUpdater = new GroupUpdater;
@@ -170,9 +172,15 @@ namespace Subscription {
 
         // VLESS
         if (str.startsWith("vless://")) {
-            ent = Configs::ProfileManager::NewProxyEntity("vless");
-            auto ok = ent->VLESS()->ParseFromLink(str);
-            if (!ok) return;
+            if (Configs::useXrayVless(str)) {
+                ent = Configs::ProfileManager::NewProxyEntity("xrayvless");
+                auto ok = ent->XrayVLESS()->ParseFromLink(str);
+                if (!ok) return;
+            } else {
+                ent = Configs::ProfileManager::NewProxyEntity("vless");
+                auto ok = ent->VLESS()->ParseFromLink(str);
+                if (!ok) return;
+            }
         }
 
         // Trojan

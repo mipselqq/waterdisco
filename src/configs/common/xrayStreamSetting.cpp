@@ -87,7 +87,7 @@ namespace Configs {
         if (allowInsecure) query.addQueryItem("allowInsecure", "1");
         if (!alpn.isEmpty()) query.addQueryItem("alpn", alpn.join(","));
         if (!fingerprint.isEmpty()) query.addQueryItem("fp", fingerprint);
-        return query.toString();
+        return query.toString(QUrl::FullyEncoded);
     }
 
     QJsonObject xrayTLS::ExportToJson() {
@@ -139,7 +139,7 @@ namespace Configs {
         if (!password.isEmpty()) query.addQueryItem("pbk", password);
         if (!shortId.isEmpty()) query.addQueryItem("sid", shortId);
         if (!spiderX.isEmpty()) query.addQueryItem("spiderx", spiderX);
-        return query.toString();
+        return query.toString(QUrl::FullyEncoded);
     }
 
     QJsonObject xrayReality::ExportToJson() {
@@ -157,14 +157,55 @@ namespace Configs {
         return {ExportToJson(), ""};
     }
 
+    bool xrayXHTTP::ParseExtraJson(QString str) {
+        str = str.replace('\'', '"').replace("True", "true").replace("False", "false");
+        MW_show_log(str);
+        auto obj = QString2QJsonObject(str);
+        if (obj.isEmpty()) return false;
+
+        if (obj.contains("headers") && obj["headers"].isArray()) {
+            headers = QJsonArray2QListString(obj["headers"].toArray());
+        }
+        if (obj.contains("xPaddingBytes")) xPaddingBytes = obj["xPaddingBytes"].toString();
+        if (obj.contains("noGRPCHeader")) noGRPCHeader = obj["noGRPCHeader"].toBool();
+        if (obj.contains("scMaxEachPostBytes")) {
+            if (obj["scMaxEachPostBytes"].isString()) scMaxEachPostBytes = obj["scMaxEachPostBytes"].toString().toInt();
+            else scMaxEachPostBytes = obj["scMaxEachPostBytes"].toInt();
+        }
+        if (obj.contains("scMinPostsIntervalMs")) {
+            if (obj["scMinPostsIntervalMs"].isString()) scMinPostsIntervalMs = obj["scMinPostsIntervalMs"].toString().toInt();
+            else scMinPostsIntervalMs = obj["scMinPostsIntervalMs"].toInt();
+        }
+        if (auto xmuxObj = obj["xmux"].toObject(); !xmuxObj.isEmpty()) {
+            if (xmuxObj.contains("maxConcurrency")) maxConcurrency = xmuxObj["maxConcurrency"].toString();
+            if (xmuxObj.contains("maxConnections")) {
+                if (xmuxObj["maxConnections"].isString()) maxConnections = xmuxObj["maxConnections"].toString().toInt();
+                else maxConnections = xmuxObj["maxConnections"].toInt();
+            }
+            if (xmuxObj.contains("cMaxReuseTimes")) {
+                if (xmuxObj["cMaxReuseTimes"].isString()) cMaxReuseTimes = xmuxObj["cMaxReuseTimes"].toString().toInt();
+                else cMaxReuseTimes = xmuxObj["cMaxReuseTimes"].toInt();
+            }
+            if (xmuxObj.contains("hMaxRequestTimes")) hMaxRequestTimes = xmuxObj["hMaxRequestTimes"].toString();
+            if (xmuxObj.contains("hMaxReusableSecs")) hMaxReusableSecs = xmuxObj["hMaxReusableSecs"].toString();
+            if (xmuxObj.contains("hKeepAlivePeriod")) {
+                if (xmuxObj["hKeepAlivePeriod"].isString()) hKeepAlivePeriod = xmuxObj["hKeepAlivePeriod"].toString().toInt();
+                else hKeepAlivePeriod = xmuxObj["hKeepAlivePeriod"].toInt();
+            }
+        }
+        return true;
+    }
+
+
     bool xrayXHTTP::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("host")) host = query.queryItemValue("host");
         if (query.hasQueryItem("path")) path = query.queryItemValue("path");
         if (query.hasQueryItem("mode")) mode = query.queryItemValue("mode");
+        if (query.hasQueryItem("extra")) ParseExtraJson(query.queryItemValue("extra", QUrl::FullyDecoded));
         if (query.hasQueryItem("headers")) headers = query.queryItemValue("headers").split(",");
         if (query.hasQueryItem("x_padding_bytes")) xPaddingBytes = query.queryItemValue("xpaddingbytes");
         if (query.hasQueryItem("no_grpc_header")) noGRPCHeader = query.queryItemValue("nogrpcheader").replace("1", "true") == "true";
@@ -184,22 +225,8 @@ namespace Configs {
         if (object.contains("host")) host = object["host"].toString();
         if (object.contains("path")) path = object["path"].toString();
         if (object.contains("mode")) mode = object["mode"].toString();
-        if (auto exObj = object["ex"].toObject(); !exObj.isEmpty()) {
-            if (exObj.contains("headers") && exObj["headers"].isArray()) {
-                headers = QJsonArray2QListString(exObj["headers"].toArray());
-            }
-            if (exObj.contains("xPaddingBytes")) xPaddingBytes = exObj["xPaddingBytes"].toString();
-            if (exObj.contains("noGRPCHeader")) noGRPCHeader = exObj["noGRPCHeader"].toBool();
-            if (exObj.contains("scMaxEachPostBytes")) scMaxEachPostBytes = exObj["scMaxEachPostBytes"].toInt();
-            if (exObj.contains("scMinPostsIntervalMs")) scMinPostsIntervalMs = exObj["scMinPostsIntervalMs"].toInt();
-            if (auto xmuxObj = exObj["xmux"].toObject(); !xmuxObj.isEmpty()) {
-                if (xmuxObj.contains("maxConcurrency")) maxConcurrency = xmuxObj["maxConcurrency"].toString();
-                if (xmuxObj.contains("maxConnections")) maxConnections = xmuxObj["maxConnections"].toInt();
-                if (xmuxObj.contains("cMaxReuseTimes")) cMaxReuseTimes = xmuxObj["cMaxReuseTimes"].toInt();
-                if (xmuxObj.contains("hMaxRequestTimes")) hMaxRequestTimes = xmuxObj["hMaxRequestTimes"].toString();
-                if (xmuxObj.contains("hMaxReusableSecs")) hMaxReusableSecs = xmuxObj["hMaxReusableSecs"].toString();
-                if (xmuxObj.contains("hKeepAlivePeriod")) hKeepAlivePeriod = xmuxObj["hKeepAlivePeriod"].toInt();
-            }
+        if (auto exObj = object["extra"].toObject(); !exObj.isEmpty()) {
+            ParseExtraJson(QJsonObject2QString(exObj, true));
         }
         return true;
     }
@@ -209,18 +236,14 @@ namespace Configs {
         if (!host.isEmpty()) query.addQueryItem("host", host);
         if (!path.isEmpty()) query.addQueryItem("path", path);
         if (!mode.isEmpty()) query.addQueryItem("mode", mode);
-        if (!headers.isEmpty()) query.addQueryItem("headers", headers.join(","));
-        if (!xPaddingBytes.isEmpty()) query.addQueryItem("x_padding_bytes", xPaddingBytes);
-        if (noGRPCHeader) query.addQueryItem("no_grpc_header", "true");
-        if (scMaxEachPostBytes > 0) query.addQueryItem("sc_max_each_post_bytes", QString::number(scMaxEachPostBytes));
-        if (scMinPostsIntervalMs > 0) query.addQueryItem("sc_min_posts_interval_ms", QString::number(scMinPostsIntervalMs));
-        if (!maxConcurrency.isEmpty()) query.addQueryItem("max_concurrency", maxConcurrency);
-        if (maxConnections > 0) query.addQueryItem("max_connections", QString::number(maxConnections));
-        if (cMaxReuseTimes > 0) query.addQueryItem("max_reuse_times", QString::number(cMaxReuseTimes));
-        if (!hMaxRequestTimes.isEmpty()) query.addQueryItem("max_request_times", hMaxRequestTimes);
-        if (!hMaxReusableSecs.isEmpty()) query.addQueryItem("max_reusable_secs", hMaxReusableSecs);
-        if (hKeepAlivePeriod > 0) query.addQueryItem("keep_alive_period", QString::number(hKeepAlivePeriod));
-        return query.toString();
+        auto jsonExport = ExportToJson();
+        if (jsonExport.contains("extra") && !jsonExport["extra"].isObject()) {
+            auto exObj = jsonExport["extra"].toObject();
+            if (!exObj.isEmpty()) {
+                query.addQueryItem("extra", QJsonObject2QString(exObj, true));
+            }
+        }
+        return query.toString(QUrl::FullyEncoded);
     }
 
     QJsonObject xrayXHTTP::ExportToJson() {
@@ -255,7 +278,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        if (query.hasQueryItem("network")) network = query.queryItemValue("network");
+        if (query.hasQueryItem("type")) network = query.queryItemValue("type");
         if (network != "raw" && network != "xhttp") return false;
         if (query.hasQueryItem("security")) security = query.queryItemValue("security");
         if (security == "tls") TLS->ParseFromLink(link);
@@ -279,12 +302,12 @@ namespace Configs {
 
     QString xrayStreamSetting::ExportToLink() {
         QUrlQuery query;
-        if (!network.isEmpty()) query.addQueryItem("network", network);
+        if (!network.isEmpty()) query.addQueryItem("type", network);
         if (!security.isEmpty()) query.addQueryItem("security", security);
-        mergeUrlQuery(query, TLS->ExportToLink());
-        mergeUrlQuery(query, reality->ExportToLink());
-        mergeUrlQuery(query, xhttp->ExportToLink());
-        return query.toString();
+        if (security == "tls") mergeUrlQuery(query, TLS->ExportToLink());
+        if (security == "reality") mergeUrlQuery(query, reality->ExportToLink());
+        if (network == "xhttp") mergeUrlQuery(query, xhttp->ExportToLink());
+        return query.toString(QUrl::FullyEncoded);
     }
 
     QJsonObject xrayStreamSetting::ExportToJson() {
