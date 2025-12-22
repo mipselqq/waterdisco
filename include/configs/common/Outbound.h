@@ -112,7 +112,7 @@ namespace Configs
             url.setFragment(QJsonObject2QString(json, true)
                                 .toUtf8()
                                 .toBase64(QByteArray::Base64UrlEncoding));
-            return url.toString();
+            return url.toString(QUrl::FullyEncoded);
         }
 
         // baseConfig overrides
