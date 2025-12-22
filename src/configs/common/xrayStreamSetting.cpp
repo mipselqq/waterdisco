@@ -76,7 +76,7 @@ namespace Configs {
         if (object.isEmpty()) return false;
         if (object.contains("serverName")) serverName = object["serverName"].toString();
         if (object.contains("allowInsecure")) allowInsecure = object["allowInsecure"].toBool();
-        if (object.contains("alpn")) QJsonArray2QListString(object["alpn"].toArray());
+        if (object.contains("alpn")) alpn = QJsonArray2QListString(object["alpn"].toArray());
         if (object.contains("fingerprint")) fingerprint = object["fingerprint"].toString();
         return true;
     }

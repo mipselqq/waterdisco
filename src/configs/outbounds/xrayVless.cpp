@@ -20,10 +20,13 @@ namespace Configs {
 
     bool xrayVless::ParseFromJson(const QJsonObject &object) {
         if (object.isEmpty() || object["protocol"].toString() != "vless") return false;
+        if (object.contains("tag")) name = object["tag"].toString();
         if (auto settingsObj = object["settings"].toObject(); !settingsObj.isEmpty()) {
-            uuid = settingsObj["uuid"].toString();
-            if (settingsObj.contains("encryption")) encryption = settingsObj["encryption"].toString();
+            if (settingsObj.contains("address")) server = settingsObj["address"].toString();
+            if (settingsObj.contains("port")) server_port = settingsObj["port"].toInt();
             if (settingsObj.contains("flow")) flow = settingsObj["flow"].toString();
+            if (settingsObj.contains("id")) uuid = settingsObj["id"].toString();
+            if (settingsObj.contains("encryption")) encryption = settingsObj["encryption"].toString();
         }
         if (auto streamSettings = object["streamSettings"].toObject(); !streamSettings.isEmpty()) {
             streamSetting->ParseFromJson(streamSettings);
