@@ -41,7 +41,11 @@ namespace Configs {
     }
 
     BuildResult xrayMultiplex::Build() {
-        // TODO add xray default enable mux to settings and use it here
-        return {ExportToJson(), ""};
+        auto obj = ExportToJson();
+        if (useDefault && dataStore->xray_mux_default_on) obj["enabled"] = true;
+        if (!obj["enabled"].toBool()) return {{}, ""};
+        if (dataStore->xray_mux_concurrency > 0 && concurrency <= 0) obj["concurrency"] = concurrency;
+        if (xudpConcurrency > 0) obj["xudpConcurrency"] = xudpConcurrency;
+        return {obj, ""};
     }
 }

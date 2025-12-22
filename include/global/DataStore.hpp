@@ -190,6 +190,11 @@ namespace Configs {
         QString core_box_clash_api_secret = "";
         QString core_box_underlying_dns = "";
 
+        // Xray
+        QString xray_log_level = "warning";
+        int xray_mux_concurrency = 8;
+        bool xray_mux_default_on = false;
+
         // Methods
 
         DataStore();

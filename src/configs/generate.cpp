@@ -814,7 +814,7 @@ namespace Configs {
         }
 
         ctx->buildConfigResult->xrayConfig["log"] = QJsonObject{
-        {"loglevel", "info"}
+        {"loglevel", dataStore->xray_log_level}
         };
         ctx->buildConfigResult->xrayConfig["inbounds"] = inbounds;
         ctx->buildConfigResult->xrayConfig["outbounds"] = outbounds;

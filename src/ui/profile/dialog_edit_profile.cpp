@@ -388,7 +388,6 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         ui->xray_network->setCurrentText(xrayStream->network);
         ui->xray_security->setCurrentText(xrayStream->security);
         ui->xray_mux->setCurrentIndex(xrayMux->getMuxState());
-        ui->xray_mux_concurrency->setText(Int2String(xrayMux->concurrency));
 
         ui->xray_sni->setText(xrayStream->security == "tls" ? xrayStream->TLS->serverName : xrayStream->reality->serverName);
         ui->xray_fp->setCurrentText(xrayStream->security == "tls" ? xrayStream->TLS->fingerprint : xrayStream->reality->fingerprint);
@@ -550,7 +549,6 @@ bool DialogEditProfile::onEnd() {
         xrayStream->network = ui->xray_network->currentText();
         xrayStream->security = ui->xray_security->currentText();
         xrayMux->saveMuxState(ui->xray_mux->currentIndex());
-        xrayMux->concurrency = ui->xray_mux_concurrency->text().toInt();
 
         auto sni = ui->xray_sni->text();
         if (xrayStream->security == "tls") xrayStream->TLS->serverName = sni;

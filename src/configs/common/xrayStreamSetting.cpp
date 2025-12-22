@@ -102,8 +102,9 @@ namespace Configs {
     }
 
     BuildResult xrayTLS::Build() {
-        // TODO add xray default fp, and use it here
-        return {ExportToJson(), ""};
+        auto obj = ExportToJson();
+        if (fingerprint.isEmpty() && !dataStore->utlsFingerprint.isEmpty()) obj["fingerprint"] = dataStore->utlsFingerprint;
+        return {obj, ""};
     }
 
     bool xrayReality::ParseFromLink(const QString &link) {
@@ -153,8 +154,9 @@ namespace Configs {
     }
 
     BuildResult xrayReality::Build() {
-        // TODO handle default fingerprint here too
-        return {ExportToJson(), ""};
+        auto obj = ExportToJson();
+        if (fingerprint.isEmpty() && !dataStore->utlsFingerprint.isEmpty()) obj["fingerprint"] = dataStore->utlsFingerprint;
+        return {obj, ""};
     }
 
     bool xrayXHTTP::ParseExtraJson(QString str) {
