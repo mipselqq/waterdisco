@@ -239,7 +239,7 @@ namespace Configs {
         if (!path.isEmpty()) query.addQueryItem("path", path);
         if (!mode.isEmpty()) query.addQueryItem("mode", mode);
         auto jsonExport = ExportToJson();
-        if (jsonExport.contains("extra") && !jsonExport["extra"].isObject()) {
+        if (jsonExport.contains("extra") && jsonExport["extra"].isObject()) {
             auto exObj = jsonExport["extra"].toObject();
             if (!exObj.isEmpty()) {
                 query.addQueryItem("extra", QJsonObject2QString(exObj, true));
