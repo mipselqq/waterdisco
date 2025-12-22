@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
+    <width>1307</width>
     <height>885</height>
    </rect>
   </property>
@@ -180,6 +180,13 @@
          <item>
           <widget class="QWidget" name="xray_mux_box" native="true">
            <layout class="QGridLayout" name="gridLayout_8">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_17">
+              <property name="text">
+               <string>Multiplex</string>
+              </property>
+             </widget>
+            </item>
             <item row="0" column="1">
              <widget class="QComboBox" name="xray_mux">
               <item>
@@ -198,23 +205,6 @@
                </property>
               </item>
              </widget>
-            </item>
-            <item row="0" column="0">
-             <widget class="QLabel" name="label_17">
-              <property name="text">
-               <string>Multiplex</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_18">
-              <property name="text">
-               <string>Mux Concurrency</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QLineEdit" name="xray_mux_concurrency"/>
             </item>
            </layout>
           </widget>

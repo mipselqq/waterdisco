@@ -326,6 +326,9 @@ namespace Configs {
         _add(new configItem("show_system_dns", &show_system_dns, itemType::boolean));
         _add(new configItem("main_window_geometry", &mainWindowGeometry, itemType::string));
         _add(new configItem("use_custom_icons", &use_custom_icons, itemType::boolean));
+        _add(new configItem("xray_log_level", &xray_log_level, itemType::string));
+        _add(new configItem("xray_mux_concurrency", &xray_mux_concurrency, itemType::integer));
+        _add(new configItem("xray_mux_default_on", &xray_mux_default_on, itemType::boolean));
     }
 
     void DataStore::UpdateStartedId(int id) {
