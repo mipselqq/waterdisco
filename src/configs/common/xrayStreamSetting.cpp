@@ -280,7 +280,7 @@ namespace Configs {
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
 
-        if (query.hasQueryItem("type")) network = query.queryItemValue("type");
+        if (query.hasQueryItem("type")) network = query.queryItemValue("type").replace("tcp", "raw");
         if (network != "raw" && network != "xhttp") return false;
         if (query.hasQueryItem("security")) security = query.queryItemValue("security");
         if (security == "tls") TLS->ParseFromLink(link);
