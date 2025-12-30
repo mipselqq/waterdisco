@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 
 project(Throne VERSION 0.1)
 
@@ -6,10 +6,9 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
-if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND WIN32)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-endif ()
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network LinguistTools DBus)
 
@@ -29,6 +28,11 @@ elseif (WIN32)
 else ()
     include("cmake/linux/linux.cmake")
 endif ()
+
+#### For Dumps ####
+if (NOT MSVC)
+    add_compile_options(-fno-omit-frame-pointer)
+endif()
 
 #### default prefix path ####
 
