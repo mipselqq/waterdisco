@@ -161,7 +161,6 @@ namespace Configs {
 
     bool xrayXHTTP::ParseExtraJson(QString str) {
         str = str.replace('\'', '"').replace("True", "true").replace("False", "false");
-        MW_show_log(str);
         auto obj = QString2QJsonObject(str);
         if (obj.isEmpty()) return false;
 
