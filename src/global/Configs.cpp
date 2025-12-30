@@ -205,8 +205,8 @@ namespace Configs_ConfigItem {
         if (save_control_no_save) return false;
 
         auto save_content = ToJsonBytes();
-        auto changed = last_save_content != save_content;
-        last_save_content = save_content;
+        auto changed = last_save_content_hash != QCryptographicHash::hash(save_content, QCryptographicHash::Md5);
+        last_save_content_hash = QCryptographicHash::hash(save_content, QCryptographicHash::Md5);
 
         QFile file;
         file.setFileName(fn);
@@ -217,7 +217,11 @@ namespace Configs_ConfigItem {
         return changed;
     }
 
-    bool JsonStore::Load() {
+    bool JsonStore::Load(const QString& content) {
+        if (!content.isEmpty()) {
+            FromJsonBytes(content.toUtf8());
+            return true;
+        }
         QFile file;
         file.setFileName(fn);
 
@@ -229,8 +233,9 @@ namespace Configs_ConfigItem {
         if (!ok) {
             MessageBoxWarning("error", "can not open config " + fn + "\n" + file.errorString());
         } else {
-            last_save_content = file.readAll();
-            FromJsonBytes(last_save_content);
+            QByteArray data = file.readAll();
+            last_save_content_hash = QCryptographicHash::hash(data, QCryptographicHash::Md5);
+            FromJsonBytes(data);
         }
 
         file.close();

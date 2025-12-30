@@ -44,7 +44,7 @@ namespace Configs {
         for (auto id: profilesIdOrder) {
             auto ent = LoadProxyEntity(QString("profiles/%1.json").arg(id));
             // Corrupted profile?
-            if (ent == nullptr || ent->outbound == nullptr || ent->_bean->version == -114514) {
+            if (ent == nullptr || ent->outbound == nullptr || ent->outbound->invalid) {
                 delProfile << id;
                 continue;
             }
@@ -196,9 +196,19 @@ namespace Configs {
 
     std::shared_ptr<ProxyEntity> ProfileManager::LoadProxyEntity(const QString &jsonPath) {
         // Load type
+        auto entFile = QFile(jsonPath);
+        bool ok = entFile.open(QIODevice::ReadOnly);
+        if (!ok) {
+            return nullptr;
+        }
+        QString fileContent = entFile.readAll();
+        entFile.close();
+        if (fileContent.isEmpty()) {
+            return nullptr;
+        }
         ProxyEntity ent0(nullptr, nullptr, nullptr);
         ent0.fn = jsonPath;
-        auto validJson = ent0.Load();
+        auto validJson = ent0.Load(fileContent);
         auto type = ent0.type;
 
         // Load content
@@ -207,23 +217,22 @@ namespace Configs {
 
         if (validType) {
             ent = NewProxyEntity(type);
-            validType = ent->_bean->version != -114514;
+            validType = !ent->outbound->invalid;
         }
 
         if (validType) {
             ent->load_control_must = true;
             ent->fn = jsonPath;
-            ent->Load();
+            ent->Load(fileContent);
             ent->_remove("bean");
         }
 
-        if (!QString2QJsonObject(QString(ent->last_save_content.toStdString().c_str())).contains("outbound"))
+        if (!QString2QJsonObject(QString(fileContent.toStdString().c_str())).contains("outbound"))
         {
-            qDebug() << "migrating" << ent->type;
-            // migrate
             migrateBeanToOutbound(ent);
             ent->Save();
         }
+        ent->_bean = nullptr;
         return ent;
     }
 

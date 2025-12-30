@@ -38,7 +38,7 @@ namespace Configs_ConfigItem {
         bool load_control_must = false; // must load from file
         bool save_control_compact = false;
         bool save_control_no_save = false;
-        QByteArray last_save_content;
+        QByteArray last_save_content_hash;
 
         JsonStore() = default;
 
@@ -66,7 +66,7 @@ namespace Configs_ConfigItem {
 
         virtual bool Save();
 
-        bool Load();
+        bool Load(const QString& content = {});
     };
 } // namespace Configs_ConfigItem
 
