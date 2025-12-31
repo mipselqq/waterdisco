@@ -164,10 +164,12 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
        if (txt == "raw") {
            ui->xray_network_box->setVisible(false);
            if (ui->xray_security_box->isHidden()) ui->xray_widget->hide();
+           ui->xray_downloadsettings_edit->setVisible(false);
        }
        else {
            ui->xray_widget->show();
            ui->xray_network_box->setVisible(true);
+           ui->xray_downloadsettings_edit->setVisible(txt == "xhttp");
        }
         ADJUST_SIZE
     });
@@ -412,6 +414,8 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         ui->xray_hMaxReusableSecs->setText(xrayStream->xhttp->hMaxReusableSecs);
         ui->xray_max_reuse_times->setText(xrayStream->xhttp->cMaxReuseTimes);
         ui->xray_keep_alive_period->setText(Int2String(xrayStream->xhttp->hKeepAlivePeriod));
+        CACHE.XrayDownloadSettings = xrayStream->xhttp->downloadSettings;
+        ui->xray_downloadsettings_edit->setText(xrayStream->xhttp->downloadSettings.isEmpty() ? "Not Set" : "Already Set");
 
         toggleXrayWidgets(true);
         toggleSingboxWidgets(false);
@@ -579,6 +583,7 @@ bool DialogEditProfile::onEnd() {
         xrayStream->xhttp->hMaxReusableSecs = ui->xray_hMaxReusableSecs->text();
         xrayStream->xhttp->cMaxReuseTimes = ui->xray_max_reuse_times->text();
         xrayStream->xhttp->hKeepAlivePeriod = ui->xray_keep_alive_period->text().toLongLong();
+        xrayStream->xhttp->downloadSettings = CACHE.XrayDownloadSettings;
     }
 
     return true;
@@ -615,15 +620,9 @@ void DialogEditProfile::editor_cache_updated_impl() {
     } else {
         ui->certificate_edit->setText(tr("Already set"));
     }
-
-    if (ent != nullptr && ent->outbound->IsXray()) {
-        auto xrayStream = ent->outbound->GetXrayStream();
-        // show state on button like other cached editors
-        ui->xray_downloadsettings_edit->setText(
-            xrayStream->xhttp->downloadSettings.isEmpty() ? tr("Not set") : tr("Already set"));
-        ui->xray_downloadsettings_edit->setEnabled(xrayStream->network == "xhttp");
+    if (ent->outbound->IsXray()) {
+        ui->xray_downloadsettings_edit->setText(CACHE.XrayDownloadSettings.isEmpty() ? "Not Set" : "Already Set");
     }
-
     // CACHE macro
     for (auto a: innerEditor->get_editor_cached()) {
         if (a.second.isEmpty()) {
@@ -644,14 +643,9 @@ void DialogEditProfile::on_certificate_edit_clicked() {
 }
 
 void DialogEditProfile::on_xray_downloadsettings_edit_clicked() {
-    if (ent == nullptr || !ent->outbound->IsXray()) return;
-    auto xrayStream = ent->outbound->GetXrayStream();
-    if (xrayStream->network != "xhttp") return;
-
-    auto editor = new JsonEditor(QString2QJsonObject(xrayStream->xhttp->downloadSettings), this);
+    auto editor = new JsonEditor(QString2QJsonObject(CACHE.XrayDownloadSettings), this);
     auto result = editor->OpenEditor();
-    xrayStream->xhttp->downloadSettings = QJsonObject2QString(result, true);
-    if (result.isEmpty()) xrayStream->xhttp->downloadSettings = "";
+    CACHE.XrayDownloadSettings = QJsonObject2QString(result, true);
     editor->deleteLater();
 
     editor_cache_updated_impl();

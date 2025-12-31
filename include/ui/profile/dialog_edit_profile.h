@@ -48,6 +48,7 @@ private:
 
     struct {
         QStringList certificate;
+        QString XrayDownloadSettings;
     } CACHE;
 
     void typeSelected(const QString &newType);
