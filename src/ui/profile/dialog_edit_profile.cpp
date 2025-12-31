@@ -645,7 +645,8 @@ void DialogEditProfile::on_certificate_edit_clicked() {
 void DialogEditProfile::on_xray_downloadsettings_edit_clicked() {
     auto editor = new JsonEditor(QString2QJsonObject(CACHE.XrayDownloadSettings), this);
     auto result = editor->OpenEditor();
-    CACHE.XrayDownloadSettings = QJsonObject2QString(result, true);
+    if (!result.isEmpty()) CACHE.XrayDownloadSettings = QJsonObject2QString(result, true);
+    else CACHE.XrayDownloadSettings.clear();
     editor->deleteLater();
 
     editor_cache_updated_impl();
