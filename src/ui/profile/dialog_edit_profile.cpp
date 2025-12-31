@@ -17,6 +17,7 @@
 
 #include "3rdparty/qv2ray/v2/ui/widgets/editors/w_JsonEditor.hpp"
 #include "include/global/GuiUtils.hpp"
+#include "include/global/Utils.hpp"
 
 #include <QInputDialog>
 
@@ -403,13 +404,13 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         ui->xray_headers->setText(xrayStream->xhttp->getHeadersString());
         ui->xray_xpaddingbytes->setText(xrayStream->xhttp->xPaddingBytes);
         ui->xray_no_grpc->setChecked(xrayStream->xhttp->noGRPCHeader);
-        ui->xray_scMaxEachPostBytes->setText(Int2String(xrayStream->xhttp->scMaxEachPostBytes));
-        ui->xray_scMinPostsIntervalMs->setText(Int2String(xrayStream->xhttp->scMinPostsIntervalMs));
+        ui->xray_scMaxEachPostBytes->setText(xrayStream->xhttp->scMaxEachPostBytes);
+        ui->xray_scMinPostsIntervalMs->setText(xrayStream->xhttp->scMinPostsIntervalMs);
         ui->xray_max_concurrency->setText(xrayStream->xhttp->maxConcurrency);
-        ui->xray_max_connections->setText(Int2String(xrayStream->xhttp->maxConnections));
+        ui->xray_max_connections->setText(xrayStream->xhttp->maxConnections);
         ui->xray_hMaxRequestTimes->setText(xrayStream->xhttp->hMaxRequestTimes);
         ui->xray_hMaxReusableSecs->setText(xrayStream->xhttp->hMaxReusableSecs);
-        ui->xray_max_reuse_times->setText(Int2String(xrayStream->xhttp->cMaxReuseTimes));
+        ui->xray_max_reuse_times->setText(xrayStream->xhttp->cMaxReuseTimes);
         ui->xray_keep_alive_period->setText(Int2String(xrayStream->xhttp->hKeepAlivePeriod));
 
         toggleXrayWidgets(true);
@@ -570,14 +571,14 @@ bool DialogEditProfile::onEnd() {
         xrayStream->xhttp->headers = xrayStream->xhttp->getHeaderPairs(ui->xray_headers->text());
         xrayStream->xhttp->xPaddingBytes = ui->xray_xpaddingbytes->text();
         xrayStream->xhttp->noGRPCHeader = ui->xray_no_grpc->isChecked();
-        xrayStream->xhttp->scMaxEachPostBytes = ui->xray_scMaxEachPostBytes->text().toInt();
-        xrayStream->xhttp->scMinPostsIntervalMs = ui->xray_scMinPostsIntervalMs->text().toInt();
+        xrayStream->xhttp->scMaxEachPostBytes = ui->xray_scMaxEachPostBytes->text();
+        xrayStream->xhttp->scMinPostsIntervalMs = ui->xray_scMinPostsIntervalMs->text();
         xrayStream->xhttp->maxConcurrency = ui->xray_max_concurrency->text();
-        xrayStream->xhttp->maxConnections = ui->xray_max_connections->text().toInt();
+        xrayStream->xhttp->maxConnections = ui->xray_max_connections->text();
         xrayStream->xhttp->hMaxRequestTimes = ui->xray_hMaxRequestTimes->text();
         xrayStream->xhttp->hMaxReusableSecs = ui->xray_hMaxReusableSecs->text();
-        xrayStream->xhttp->cMaxReuseTimes = ui->xray_max_reuse_times->text().toInt();
-        xrayStream->xhttp->hKeepAlivePeriod = ui->xray_keep_alive_period->text().toInt();
+        xrayStream->xhttp->cMaxReuseTimes = ui->xray_max_reuse_times->text();
+        xrayStream->xhttp->hKeepAlivePeriod = ui->xray_keep_alive_period->text().toLongLong();
     }
 
     return true;
@@ -615,6 +616,14 @@ void DialogEditProfile::editor_cache_updated_impl() {
         ui->certificate_edit->setText(tr("Already set"));
     }
 
+    if (ent != nullptr && ent->outbound->IsXray()) {
+        auto xrayStream = ent->outbound->GetXrayStream();
+        // show state on button like other cached editors
+        ui->xray_downloadsettings_edit->setText(
+            xrayStream->xhttp->downloadSettings.isEmpty() ? tr("Not set") : tr("Already set"));
+        ui->xray_downloadsettings_edit->setEnabled(xrayStream->network == "xhttp");
+    }
+
     // CACHE macro
     for (auto a: innerEditor->get_editor_cached()) {
         if (a.second.isEmpty()) {
@@ -632,4 +641,18 @@ void DialogEditProfile::on_certificate_edit_clicked() {
         CACHE.certificate = txt.split("\n", Qt::SkipEmptyParts);
         editor_cache_updated_impl();
     }
+}
+
+void DialogEditProfile::on_xray_downloadsettings_edit_clicked() {
+    if (ent == nullptr || !ent->outbound->IsXray()) return;
+    auto xrayStream = ent->outbound->GetXrayStream();
+    if (xrayStream->network != "xhttp") return;
+
+    auto editor = new JsonEditor(QString2QJsonObject(xrayStream->xhttp->downloadSettings), this);
+    auto result = editor->OpenEditor();
+    xrayStream->xhttp->downloadSettings = QJsonObject2QString(result, true);
+    if (result.isEmpty()) xrayStream->xhttp->downloadSettings = "";
+    editor->deleteLater();
+
+    editor_cache_updated_impl();
 }
