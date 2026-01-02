@@ -1586,6 +1586,7 @@ void MainWindow::refresh_proxy_list_impl(const int &id, GroupSortAction groupSor
 void MainWindow::refresh_proxy_list_impl_refresh_data(const int &id, bool stopping) {
     ui->proxyListTable->setUpdatesEnabled(false);
     auto currentGroup = Configs::profileManager->CurrentGroup();
+    if (currentGroup == nullptr) return;
     if (id >= 0)
     {
         if (!currentGroup->HasProfile(id))
