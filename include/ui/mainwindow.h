@@ -192,6 +192,8 @@ private:
     //
     QMutex mu_download_update;
     //
+    QMutex connectionListMu;
+    //
     int toolTipID;
     //
     SpeedWidget *speedChartWidget;
