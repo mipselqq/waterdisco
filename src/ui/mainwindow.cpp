@@ -1206,6 +1206,7 @@ void MainWindow::setupConnectionList()
 
 void MainWindow::UpdateConnectionList(const QMap<QString, Stats::ConnectionMetadata>& toUpdate, const QMap<QString, Stats::ConnectionMetadata>& toAdd)
 {
+    connectionListMu.lock();
     ui->connections->setUpdatesEnabled(false);
     for (int row=0;row<ui->connections->rowCount();row++)
     {
@@ -1272,10 +1273,12 @@ void MainWindow::UpdateConnectionList(const QMap<QString, Stats::ConnectionMetad
         row++;
     }
     ui->connections->setUpdatesEnabled(true);
+    connectionListMu.unlock();
 }
 
 void MainWindow::UpdateConnectionListWithRecreate(const QList<Stats::ConnectionMetadata>& connections)
 {
+    connectionListMu.lock();
     ui->connections->setUpdatesEnabled(false);
     ui->connections->setRowCount(0);
     int row=0;
@@ -1315,6 +1318,7 @@ void MainWindow::UpdateConnectionListWithRecreate(const QList<Stats::ConnectionM
         row++;
     }
     ui->connections->setUpdatesEnabled(true);
+    connectionListMu.unlock();
 }
 
 void MainWindow::setSearchState(bool enable)
