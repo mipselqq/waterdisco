@@ -14,6 +14,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/experimental/clashapi"
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
 	"github.com/throneproj/clash2singbox/convert"
@@ -205,14 +206,13 @@ func (s *server) Test(in *gen.TestReq, out *gen.TestResp) error {
 			if err != nil {
 				return err
 			}
-			defer xrayTestIntance.Close()
+			defer common.Must(xrayTestIntance.Close()) // crash in case it does not close properly
 		}
 		testInstance, cancel, err = boxmain.Create([]byte(*in.Config))
 		if err != nil {
 			return err
 		}
-		defer cancel()
-		defer testInstance.Close()
+		defer testInstance.CloseWithTimeout(cancel, 2*time.Second, log.Println)
 	}
 
 	outboundTags := in.OutboundTags
