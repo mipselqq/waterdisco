@@ -3,7 +3,7 @@ module Core
 go 1.25
 
 require (
-	github.com/Mahdi-zarei/speedtest-go v1.7.12
+	github.com/Mahdi-zarei/speedtest-go v1.7.13-0.20260107171856-79c565dfd83a
 	github.com/chai2010/protorpc v0.0.0-00010101000000-000000000000
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gofrs/uuid/v5 v5.3.2
