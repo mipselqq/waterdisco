@@ -206,7 +206,9 @@ func (s *server) Test(in *gen.TestReq, out *gen.TestResp) error {
 			if err != nil {
 				return err
 			}
-			defer common.Must(xrayTestIntance.Close()) // crash in case it does not close properly
+			defer func() {
+				common.Must(xrayTestIntance.Close())
+			}() // crash in case it does not close properly
 		}
 		testInstance, cancel, err = boxmain.Create([]byte(*in.Config))
 		if err != nil {
