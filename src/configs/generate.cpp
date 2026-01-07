@@ -572,7 +572,7 @@ namespace Configs {
         return {entID};
     }
 
-    void buildOutboundChain(std::shared_ptr<BuildSingBoxConfigContext> &ctx, const QList<int>& entIDs, const QString& prefix, bool includeProxy, bool link)
+    void buildOutboundChain(std::shared_ptr<BuildSingBoxConfigContext> &ctx, const QList<int>& entIDs, const QString& prefix, bool includeProxy, bool link, int xrayPort = -1)
     {
         QList<std::shared_ptr<ProxyEntity>> ents;
         entIDListtoEntList(entIDs, ents, ctx->error);
@@ -597,10 +597,10 @@ namespace Configs {
                     ctx->error += xrayErr;
                     return;
                 }
-                int port = MkPort();
-                object["server_port"] = port;
+                if (xrayPort == -1) xrayPort = MkPort();
+                object["server_port"] = xrayPort;
                 xrayObj["tag"] = tag;
-                ctx->xrayOutbounds.append({port, xrayObj});
+                ctx->xrayOutbounds.append({xrayPort, xrayObj});
             }
             if (ent->outbound->IsEndpoint())
             {
@@ -986,6 +986,14 @@ namespace Configs {
         buildCertificateSection(ctx);
         buildNTPSection(ctx);
         int suffix = 1;
+
+        int xrayPortIdx=0;
+        int xrayCount=0;
+        for (const auto& proxy : profiles) {
+            if (proxy->outbound->IsXray()) xrayCount++;
+        }
+        auto xrayPorts = MkManyPorts(xrayCount);
+
         for (const auto& item : profiles)
         {
             if (item->type == "extracore")
@@ -1028,7 +1036,7 @@ namespace Configs {
             }
             if (group->landing_proxy_id >= 0 && !item->outbound->IsXray()) IDs.prepend(group->landing_proxy_id);
             if (group->front_proxy_id >= 0 && !item->outbound->IsXray()) IDs.append(group->front_proxy_id);
-            buildOutboundChain(ctx, IDs, "proxy-" + Int2String(suffix), false, true);
+            buildOutboundChain(ctx, IDs, "proxy-" + Int2String(suffix), false, true, item->outbound->IsXray() ? xrayPorts[xrayPortIdx++] : -1);
             if (!ctx->error.isEmpty()) {
                 res->error = ctx->error;
                 return res;
