@@ -592,8 +592,10 @@ void MainWindow::profile_start(int _id) {
         if (running != nullptr) {
             runOnUiThread([=, this]
             {
-                profile_stop(false, true, true);
+                profile_stop(false, false, true);
             }, true);
+            mu_stopping.lock();
+            mu_stopping.unlock();
         }
         // do start
         MW_show_log(">>>>>>>> " + tr("Starting profile %1").arg(ent->outbound->DisplayTypeAndName()));
