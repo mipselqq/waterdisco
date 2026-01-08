@@ -146,46 +146,53 @@ void MainWindow::urltest_current_group(const QList<std::shared_ptr<Configs::Prox
     }
 
     runOnNewThread([this, profiles]() {
-        auto buildObject = Configs::BuildTestConfig(profiles);
-        if (!buildObject->error.isEmpty()) {
-            MW_show_log(tr("Failed to build test config: ") + buildObject->error);
-            speedtestRunning.unlock();
-            return;
-        }
-
-        std::atomic<int> counter(0);
         stopSpeedtest.store(false);
-        auto testCount = buildObject->fullConfigs.size() + (!buildObject->outboundTags.empty());
-        for (const auto &entID: buildObject->fullConfigs.keys()) {
-            auto configStr = buildObject->fullConfigs[entID];
-            auto func = [this, &counter, testCount, configStr, entID]() {
-                MainWindow::runURLTest(configStr, "", true, {}, {}, entID);
-                counter++;
-                if (counter.load() == testCount) {
-                    speedtestRunning.unlock();
-                }
-            };
-            parallelCoreCallPool->start(func);
-        }
+        auto speedTestFunc = [=, this](const QList<std::shared_ptr<Configs::ProxyEntity>>& profileSlice) {
+            auto buildObject = Configs::BuildTestConfig(profileSlice);
+            if (!buildObject->error.isEmpty()) {
+                MW_show_log(tr("Failed to build test config for batch: ") + buildObject->error);
+                return;
+            }
 
-        if (!buildObject->outboundTags.empty()) {
-            auto func = [this, &buildObject, &counter, testCount]() {
-                MainWindow::runURLTest(QJsonObject2QString(buildObject->coreConfig, false),QJsonObject2QString(buildObject->xrayConfig, false), false, buildObject->outboundTags, buildObject->tag2entID);
-                counter++;
-                if (counter.load() == testCount) {
-                    speedtestRunning.unlock();
-                }
-            };
-            parallelCoreCallPool->start(func);
-        }
-        if (testCount == 0) speedtestRunning.unlock();
+            std::atomic<int> counter(0);
+            auto testCount = buildObject->fullConfigs.size() + (!buildObject->outboundTags.empty());
+            for (const auto &entID: buildObject->fullConfigs.keys()) {
+                auto configStr = buildObject->fullConfigs[entID];
+                auto func = [this, &counter, testCount, configStr, entID]() {
+                    runURLTest(configStr, "", true, {}, {}, entID);
+                    ++counter;
+                    if (counter.load() == testCount) {
+                        speedtestRunning.unlock();
+                    }
+                };
+                parallelCoreCallPool->start(func);
+            }
 
-        speedtestRunning.lock();
+            if (!buildObject->outboundTags.empty()) {
+                auto func = [this, &buildObject, &counter, testCount]() {
+                    runURLTest(QJsonObject2QString(buildObject->coreConfig, false),QJsonObject2QString(buildObject->xrayConfig, false), false, buildObject->outboundTags, buildObject->tag2entID);
+                    ++counter;
+                    if (counter.load() == testCount) {
+                        speedtestRunning.unlock();
+                    }
+                };
+                parallelCoreCallPool->start(func);
+            }
+            if (testCount == 0) speedtestRunning.unlock();
+
+            speedtestRunning.lock();
+            MW_show_log("URL test for batch done.");
+            runOnUiThread([=,this]{
+                refresh_proxy_list();
+            });
+        };
+        for (int i=0;i<profiles.length();i+=100) {
+            if (stopSpeedtest.load()) break;
+            auto profileSlice = profiles.mid(i, 100);
+            speedTestFunc(profileSlice);
+        }
         speedtestRunning.unlock();
-        runOnUiThread([=,this]{
-            refresh_proxy_list();
-            MW_show_log(tr("URL test finished!"));
-        });
+        MW_show_log(tr("URL test finished!"));
     });
 }
 
@@ -239,27 +246,32 @@ void MainWindow::speedtest_current_group(const QList<std::shared_ptr<Configs::Pr
     }
 
     runOnNewThread([this, profiles, testCurrent]() {
+        stopSpeedtest.store(false);
         if (!testCurrent)
         {
-            auto buildObject = Configs::BuildTestConfig(profiles);
-            if (!buildObject->error.isEmpty()) {
-                MW_show_log(tr("Failed to build test config: ") + buildObject->error);
-                speedtestRunning.unlock();
-                return;
-            }
+            auto speedTestFunc = [=, this](const QList<std::shared_ptr<Configs::ProxyEntity>>& profileSlice) {
+                auto buildObject = Configs::BuildTestConfig(profileSlice);
+                if (!buildObject->error.isEmpty()) {
+                    MW_show_log(tr("Failed to build batch test config: ") + buildObject->error);
+                    return;
+                }
 
-            stopSpeedtest.store(false);
-            for (const auto &entID: buildObject->fullConfigs.keys()) {
-                auto configStr = buildObject->fullConfigs[entID];
-                runSpeedTest(configStr, "", true, false, {}, {}, entID);
-            }
+                for (const auto &entID: buildObject->fullConfigs.keys()) {
+                    auto configStr = buildObject->fullConfigs[entID];
+                    runSpeedTest(configStr, "", true, false, {}, {}, entID);
+                }
 
-            if (!buildObject->outboundTags.empty()) {
-                runSpeedTest(QJsonObject2QString(buildObject->coreConfig, false), QJsonObject2QString(buildObject->xrayConfig, false), false, false, buildObject->outboundTags, buildObject->tag2entID);
+                if (!buildObject->outboundTags.empty()) {
+                    runSpeedTest(QJsonObject2QString(buildObject->coreConfig, false), QJsonObject2QString(buildObject->xrayConfig, false), false, false, buildObject->outboundTags, buildObject->tag2entID);
+                }
+            };
+            for (int i=0;i<profiles.length();i+=100) {
+                if (stopSpeedtest.load()) break;
+                auto profileSlice = profiles.mid(i, 100);
+                speedTestFunc(profileSlice);
             }
         } else
         {
-            stopSpeedtest.store(false);
             runSpeedTest("", "", true, true, {}, {});
         }
 
