@@ -21,6 +21,7 @@
 
 #include <QInputDialog>
 
+#include "include/configs/common/utils.h"
 #include "include/ui/profile/edit_advanced.h"
 #include "include/ui/profile/edit_hysteria.h"
 #include "include/ui/profile/edit_socks.h"
@@ -373,7 +374,7 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         ui->tls_frag_fall_delay->setText(tls->fragment_fallback_delay);
         ui->tls_rec_frag->setChecked(tls->record_fragment);
         ui->insecure->setChecked(tls->insecure);
-        ui->headers->setText(transport->getHeadersString());
+        ui->headers->setText(Configs::getHeadersString(transport->headers));
         ui->service_name->setText(transport->service_name);
         ui->ws_early_data_name->setText(transport->early_data_header_name);
         ui->ws_early_data_length->setText(Int2String(transport->max_early_data));
@@ -403,7 +404,7 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         ui->xray_host->setText(xrayStream->xhttp->host);
         ui->xray_path->setText(xrayStream->xhttp->path);
         ui->xray_mode->setCurrentText(xrayStream->xhttp->mode);
-        ui->xray_headers->setText(xrayStream->xhttp->getHeadersString());
+        ui->xray_headers->setText(Configs::getHeadersString(xrayStream->xhttp->headers));
         ui->xray_xpaddingbytes->setText(xrayStream->xhttp->xPaddingBytes);
         ui->xray_no_grpc->setChecked(xrayStream->xhttp->noGRPCHeader);
         ui->xray_scMaxEachPostBytes->setText(xrayStream->xhttp->scMaxEachPostBytes);
@@ -505,11 +506,17 @@ void DialogEditProfile::typeSelected(const QString &newType) {
     }
 }
 
+bool DialogEditProfile::validateHeaders() {
+    return !ui->headers->text().contains("|");
+}
+
 bool DialogEditProfile::onEnd() {
     // bean
     if (!innerEditor->onEnd()) {
         return false;
     }
+
+    if (!validateHeaders()) return false;
 
     ent->outbound->name = ui->name->text();
     ent->outbound->SetAddress(ui->address->text().remove(' '));
@@ -530,7 +537,7 @@ bool DialogEditProfile::onEnd() {
         tls->fragment_fallback_delay = ui->tls_frag_fall_delay->text();
         tls->record_fragment = ui->tls_rec_frag->isChecked();
         tls->insecure = ui->insecure->isChecked();
-        transport->headers = transport->getHeaderPairs(ui->headers->text());
+        transport->headers = Configs::parseHeaderPairs(ui->headers->text());
         transport->method = ui->method->text();
         transport->service_name = ui->service_name->text();
         transport->early_data_header_name = ui->ws_early_data_name->text();
@@ -572,7 +579,7 @@ bool DialogEditProfile::onEnd() {
         xrayStream->xhttp->host = ui->xray_host->text();
         xrayStream->xhttp->path = ui->xray_path->text();
         xrayStream->xhttp->mode = ui->xray_mode->currentText();
-        xrayStream->xhttp->headers = xrayStream->xhttp->getHeaderPairs(ui->xray_headers->text());
+        xrayStream->xhttp->headers = Configs::parseHeaderPairs(ui->xray_headers->text());
         xrayStream->xhttp->xPaddingBytes = ui->xray_xpaddingbytes->text();
         xrayStream->xhttp->noGRPCHeader = ui->xray_no_grpc->isChecked();
         xrayStream->xhttp->scMaxEachPostBytes = ui->xray_scMaxEachPostBytes->text();
