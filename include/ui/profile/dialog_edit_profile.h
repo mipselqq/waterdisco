@@ -53,6 +53,8 @@ private:
 
     void typeSelected(const QString &newType);
 
+    bool validateHeaders();
+
     bool onEnd();
 
     void editor_cache_updated_impl();

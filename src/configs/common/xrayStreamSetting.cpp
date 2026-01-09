@@ -6,56 +6,6 @@
 #include "include/configs/common/utils.h"
 
 namespace Configs {
-    QString xrayXHTTP::getHeadersString() {
-        QString result;
-        for (int i=0;i<headers.length();i+=2) {
-            result += headers[i]+"=";
-            result += "\""+headers[i+1]+"\" ";
-        }
-        return result;
-    }
-
-    QStringList xrayXHTTP::getHeaderPairs(QString rawHeader) {
-        bool inQuote = false;
-        QString curr;
-        QStringList list;
-        for (const auto &ch: rawHeader) {
-            if (inQuote) {
-                if (ch == '"') {
-                    inQuote = false;
-                    list << curr;
-                    curr = "";
-                    continue;
-                } else {
-                    curr += ch;
-                    continue;
-                }
-            }
-            if (ch == '"') {
-                inQuote = true;
-                continue;
-            }
-            if (ch == ' ') {
-                if (!curr.isEmpty()) {
-                    list << curr;
-                    curr = "";
-                }
-                continue;
-            }
-            if (ch == '=') {
-                if (!curr.isEmpty()) {
-                    list << curr;
-                    curr = "";
-                }
-                continue;
-            }
-            curr+=ch;
-        }
-        if (!curr.isEmpty()) list<<curr;
-
-        return list;
-    }
-
     bool xrayTLS::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
@@ -217,7 +167,14 @@ namespace Configs {
         if (query.hasQueryItem("path")) path = query.queryItemValue("path", QUrl::FullyDecoded);
         if (query.hasQueryItem("mode")) mode = query.queryItemValue("mode");
         if (query.hasQueryItem("extra")) ParseExtraJson(query.queryItemValue("extra", QUrl::FullyDecoded));
-        if (query.hasQueryItem("headers")) headers = query.queryItemValue("headers").split(",");
+        if (query.hasQueryItem("headers")) {
+            auto raw = query.queryItemValue("headers", QUrl::FullyDecoded);
+            headers = raw.split("|");
+            if (headers.length()%2 != 0) {
+                MW_show_log("Failed to import invalid headers: " + raw);
+                headers.clear();
+            }
+        }
         if (query.hasQueryItem("x_padding_bytes")) xPaddingBytes = query.queryItemValue("x_padding_bytes");
         if (query.hasQueryItem("no_grpc_header")) noGRPCHeader = query.queryItemValue("no_grpc_header").replace("1", "true") == "true";
 
@@ -258,6 +215,7 @@ namespace Configs {
                 query.addQueryItem("extra", QJsonObject2QString(exObj, true));
             }
         }
+        if (!headers.isEmpty()) query.addQueryItem("headers", headers.join("|"));
         return query.toString(QUrl::FullyEncoded);
     }
 

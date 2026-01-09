@@ -89,10 +89,6 @@ namespace Configs {
             _add(new configItem("downloadSettings", &downloadSettings, string));
         }
 
-        QString getHeadersString();
-
-        QStringList getHeaderPairs(QString rawHeader);
-
         bool ParseExtraJson(QString str);
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
