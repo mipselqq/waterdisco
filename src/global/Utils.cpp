@@ -292,8 +292,12 @@ void HideWindow(QWidget *w) {
 
 void runOnUiThread(const std::function<void()> &callback, bool wait) {
     // any thread
-    auto *timer = new QTimer();
     auto thread = mainwindow->thread();
+    if (thread == QThread::currentThread()) {
+        callback();
+        return;
+    }
+    auto *timer = new QTimer();
     timer->moveToThread(thread);
     timer->setSingleShot(true);
 

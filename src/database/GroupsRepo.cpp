@@ -5,7 +5,9 @@
 #include <QJsonArray>
 #include <QMutexLocker>
 
+#include "include/database/ProfilesRepo.h"
 #include "include/global/Configs.hpp"
+#include "include/ui/mainwindow.h"
 
 
 namespace Configs {
