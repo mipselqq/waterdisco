@@ -4,6 +4,7 @@
 #include <QJsonArray>
 
 #include "include/database/GroupsRepo.h"
+#include "include/ui/mainwindow.h"
 
 
 namespace Configs {
@@ -475,6 +476,11 @@ namespace Configs {
     }
 
     void ProfilesRepo::DeleteProfile(int id) {
+        if (id == dataManager->settingsRepo->started_id) {
+            runOnUiThread([=] {
+                GetMainWindow()->profile_stop(false, true, false);
+            }, true);
+        }
         auto profile = GetProfile(id);
         if (profile) {
             auto group = dataManager->groupsRepo->GetGroup(profile->gid);
@@ -491,6 +497,13 @@ namespace Configs {
     void ProfilesRepo::BatchDeleteProfiles(const QList<int>& ids) {
         QSet<std::shared_ptr<Group>> groups;
         for (auto& id : ids) {
+            if (id == dataManager->settingsRepo->started_id) {
+                if (id == dataManager->settingsRepo->started_id) {
+                    runOnUiThread([=] {
+                        GetMainWindow()->profile_stop(false, true, false);
+                    }, true);
+                }
+            }
             if (auto profile = GetProfile(id)) {
                 if (auto group = dataManager->groupsRepo->GetGroup(profile->gid)) {
                     group->RemoveProfile(id);

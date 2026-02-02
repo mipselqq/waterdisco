@@ -7,6 +7,7 @@
 #include <QMessageBox>
 
 #include "include/database/GroupsRepo.h"
+#include "include/ui/mainwindow.h"
 
 
 QString ParseSubInfo(const QString &info) {
@@ -121,6 +122,9 @@ void GroupItem::on_remove_clicked() {
     if (Configs::dataManager->groupsRepo->GetAllGroupIds().size() <= 1) return;
     if (QMessageBox::question(this, tr("Confirmation"), tr("Remove %1?").arg(ent->name)) ==
         QMessageBox::StandardButton::Yes) {
+        runOnUiThread([=] {
+            GetMainWindow()->profile_stop(false, true, false);
+        }, true);
         Configs::dataManager->groupsRepo->DeleteGroup(ent->id);
         MW_dialog_message(Dialog_DialogManageGroups, "refresh-1");
         delete item;
