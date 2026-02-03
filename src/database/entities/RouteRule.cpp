@@ -57,7 +57,6 @@ namespace Configs {
         sniffOverrideDest = other.sniffOverrideDest;
         strategy = other.strategy;
         type = other.type;
-        simpleAction = other.simpleAction;
     }
 
     QJsonObject RouteRule::get_rule_json(bool forView, const QString& outboundTag) {
@@ -409,10 +408,31 @@ namespace Configs {
     }
 
     bool RouteRule::isEmpty() {
+        if (type != custom) {
+            if (type == simpleAddressProxy || type == simpleAddressBypass || type == simpleAddressBlock) {
+                return domain.empty() &&
+                    domain_suffix.empty() &&
+                    domain_keyword.empty() &&
+                    domain_regex.empty() &&
+                    rule_set.empty() &&
+                    ip_cidr.empty();
+            } else {
+                return process_name.empty() && process_path.empty();
+            }
+        }
         auto ruleJson = get_rule_json();
         if (action == "route" || action == "route-options" || action == "hijack-dns") return ruleJson.keys().length() <= 1;
         if (action == "sniff" || action == "resolve" || action == "reject") return ruleJson.keys().length() < 1;
         return false;
+    }
+
+    bool RouteRule::canEditAttr(const QString &attr) {
+        if (type == custom) return true;
+        if (type == simpleAddressProxy || type == simpleAddressBypass || type == simpleAddressBlock) {
+            return attr == "domain" || attr == "domain_suffix" || attr == "domain_keyword" || attr == "domain_regex" || attr == "rule_set" || attr == "ip_cidr";
+        } else {
+            return attr == "process_path" || attr == "process_name";
+        }
     }
 
     std::shared_ptr<RouteRule> RouteRule::get_processPath_direct_rule(QString processPath)

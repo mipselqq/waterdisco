@@ -29,7 +29,6 @@ namespace Configs {
                 rule_order INTEGER NOT NULL,
                 name TEXT NOT NULL DEFAULT '',
                 type INTEGER NOT NULL DEFAULT 0,
-                simple_action INTEGER,
                 ip_version TEXT,
                 network TEXT,
                 protocol TEXT,
@@ -74,7 +73,6 @@ namespace Configs {
         
         json["name"] = rule->name;
         json["type"] = rule->type;
-        json["simpleAction"] = rule->simpleAction;
         json["ip_version"] = rule->ip_version;
         json["network"] = rule->network;
         json["protocol"] = rule->protocol;
@@ -114,7 +112,6 @@ namespace Configs {
         
         rule->name = json["name"].toString();
         rule->type = json["type"].toInt();
-        rule->simpleAction = json["simpleAction"].toInt();
         rule->ip_version = json["ip_version"].toString();
         rule->network = json["network"].toString();
         rule->protocol = json["protocol"].toString();
@@ -257,20 +254,19 @@ namespace Configs {
             
             db.exec(R"(
                 INSERT INTO route_rules 
-                (route_profile_id, rule_order, name, type, simple_action, ip_version, network, protocol,
+                (route_profile_id, rule_order, name, type, ip_version, network, protocol,
                  inbound_json, domain_json, domain_suffix_json, domain_keyword_json, domain_regex_json,
                  source_ip_cidr_json, source_ip_is_private, ip_cidr_json, ip_is_private,
                  source_port_json, source_port_range_json, port_json, port_range_json,
                  process_name_json, process_path_json, process_path_regex_json, rule_set_json,
                  invert, outbound_id, action, reject_method, no_drop,
                  override_address, override_port, sniffers_json, sniff_override_dest, strategy)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 ruleOrder++,
                 rule->name.toStdString(),
                 rule->type,
-                rule->simpleAction,
                 rule->ip_version.toStdString(),
                 rule->network.toStdString(),
                 rule->protocol.toStdString(),
@@ -309,42 +305,41 @@ namespace Configs {
         QJsonObject ruleJson;
         ruleJson["name"] = QString::fromStdString(stmt.getColumn(baseCol + 0).getText());
         ruleJson["type"] = stmt.getColumn(baseCol + 1).getInt();
-        ruleJson["simpleAction"] = stmt.getColumn(baseCol + 2).getInt();
-        ruleJson["ip_version"] = QString::fromStdString(stmt.getColumn(baseCol + 3).getText());
-        ruleJson["network"] = QString::fromStdString(stmt.getColumn(baseCol + 4).getText());
-        ruleJson["protocol"] = QString::fromStdString(stmt.getColumn(baseCol + 5).getText());
+        ruleJson["ip_version"] = QString::fromStdString(stmt.getColumn(baseCol + 2).getText());
+        ruleJson["network"] = QString::fromStdString(stmt.getColumn(baseCol + 3).getText());
+        ruleJson["protocol"] = QString::fromStdString(stmt.getColumn(baseCol + 4).getText());
         
         auto parseJsonArray = [](const std::string& s) {
             QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(s).toUtf8());
             return doc.isArray() ? doc.array() : QJsonArray();
         };
-        ruleJson["inbound"] = parseJsonArray(stmt.getColumn(baseCol + 6).getText());
-        ruleJson["domain"] = parseJsonArray(stmt.getColumn(baseCol + 7).getText());
-        ruleJson["domain_suffix"] = parseJsonArray(stmt.getColumn(baseCol + 8).getText());
-        ruleJson["domain_keyword"] = parseJsonArray(stmt.getColumn(baseCol + 9).getText());
-        ruleJson["domain_regex"] = parseJsonArray(stmt.getColumn(baseCol + 10).getText());
-        ruleJson["source_ip_cidr"] = parseJsonArray(stmt.getColumn(baseCol + 11).getText());
-        ruleJson["source_ip_is_private"] = stmt.getColumn(baseCol + 12).getInt() != 0;
-        ruleJson["ip_cidr"] = parseJsonArray(stmt.getColumn(baseCol + 13).getText());
-        ruleJson["ip_is_private"] = stmt.getColumn(baseCol + 14).getInt() != 0;
-        ruleJson["source_port"] = parseJsonArray(stmt.getColumn(baseCol + 15).getText());
-        ruleJson["source_port_range"] = parseJsonArray(stmt.getColumn(baseCol + 16).getText());
-        ruleJson["port"] = parseJsonArray(stmt.getColumn(baseCol + 17).getText());
-        ruleJson["port_range"] = parseJsonArray(stmt.getColumn(baseCol + 18).getText());
-        ruleJson["process_name"] = parseJsonArray(stmt.getColumn(baseCol + 19).getText());
-        ruleJson["process_path"] = parseJsonArray(stmt.getColumn(baseCol + 20).getText());
-        ruleJson["process_path_regex"] = parseJsonArray(stmt.getColumn(baseCol + 21).getText());
-        ruleJson["rule_set"] = parseJsonArray(stmt.getColumn(baseCol + 22).getText());
-        ruleJson["invert"] = stmt.getColumn(baseCol + 23).getInt() != 0;
-        ruleJson["outboundID"] = stmt.getColumn(baseCol + 24).getInt();
-        ruleJson["action"] = QString::fromStdString(stmt.getColumn(baseCol + 25).getText());
-        ruleJson["rejectMethod"] = QString::fromStdString(stmt.getColumn(baseCol + 26).getText());
-        ruleJson["no_drop"] = stmt.getColumn(baseCol + 27).getInt() != 0;
-        ruleJson["override_address"] = QString::fromStdString(stmt.getColumn(baseCol + 28).getText());
-        ruleJson["override_port"] = QString::fromStdString(stmt.getColumn(baseCol + 29).getText());
-        ruleJson["sniffers"] = parseJsonArray(stmt.getColumn(baseCol + 30).getText());
-        ruleJson["sniffOverrideDest"] = stmt.getColumn(baseCol + 31).getInt() != 0;
-        ruleJson["strategy"] = QString::fromStdString(stmt.getColumn(baseCol + 32).getText());
+        ruleJson["inbound"] = parseJsonArray(stmt.getColumn(baseCol + 5).getText());
+        ruleJson["domain"] = parseJsonArray(stmt.getColumn(baseCol + 6).getText());
+        ruleJson["domain_suffix"] = parseJsonArray(stmt.getColumn(baseCol + 7).getText());
+        ruleJson["domain_keyword"] = parseJsonArray(stmt.getColumn(baseCol + 8).getText());
+        ruleJson["domain_regex"] = parseJsonArray(stmt.getColumn(baseCol + 9).getText());
+        ruleJson["source_ip_cidr"] = parseJsonArray(stmt.getColumn(baseCol + 10).getText());
+        ruleJson["source_ip_is_private"] = stmt.getColumn(baseCol + 11).getInt() != 0;
+        ruleJson["ip_cidr"] = parseJsonArray(stmt.getColumn(baseCol + 12).getText());
+        ruleJson["ip_is_private"] = stmt.getColumn(baseCol + 13).getInt() != 0;
+        ruleJson["source_port"] = parseJsonArray(stmt.getColumn(baseCol + 14).getText());
+        ruleJson["source_port_range"] = parseJsonArray(stmt.getColumn(baseCol + 15).getText());
+        ruleJson["port"] = parseJsonArray(stmt.getColumn(baseCol + 16).getText());
+        ruleJson["port_range"] = parseJsonArray(stmt.getColumn(baseCol + 17).getText());
+        ruleJson["process_name"] = parseJsonArray(stmt.getColumn(baseCol + 18).getText());
+        ruleJson["process_path"] = parseJsonArray(stmt.getColumn(baseCol + 19).getText());
+        ruleJson["process_path_regex"] = parseJsonArray(stmt.getColumn(baseCol + 20).getText());
+        ruleJson["rule_set"] = parseJsonArray(stmt.getColumn(baseCol + 21).getText());
+        ruleJson["invert"] = stmt.getColumn(baseCol + 22).getInt() != 0;
+        ruleJson["outboundID"] = stmt.getColumn(baseCol + 23).getInt();
+        ruleJson["action"] = QString::fromStdString(stmt.getColumn(baseCol + 24).getText());
+        ruleJson["rejectMethod"] = QString::fromStdString(stmt.getColumn(baseCol + 25).getText());
+        ruleJson["no_drop"] = stmt.getColumn(baseCol + 26).getInt() != 0;
+        ruleJson["override_address"] = QString::fromStdString(stmt.getColumn(baseCol + 27).getText());
+        ruleJson["override_port"] = QString::fromStdString(stmt.getColumn(baseCol + 28).getText());
+        ruleJson["sniffers"] = parseJsonArray(stmt.getColumn(baseCol + 29).getText());
+        ruleJson["sniffOverrideDest"] = stmt.getColumn(baseCol + 30).getInt() != 0;
+        ruleJson["strategy"] = QString::fromStdString(stmt.getColumn(baseCol + 31).getText());
         return ruleJson;
     }
 
@@ -365,7 +360,7 @@ namespace Configs {
             idList += QString::number(profileIds[i]);
         }
         std::string sql =
-            "SELECT route_profile_id, name, type, simple_action, ip_version, network, protocol, "
+            "SELECT route_profile_id, name, type, ip_version, network, protocol, "
             "inbound_json, domain_json, domain_suffix_json, domain_keyword_json, domain_regex_json, "
             "source_ip_cidr_json, source_ip_is_private, ip_cidr_json, ip_is_private, "
             "source_port_json, source_port_range_json, port_json, port_range_json, "
@@ -396,7 +391,7 @@ namespace Configs {
         auto routeProfile = routeProfileFromProfileRow(*profileQuery);
         
         auto rulesQuery = db.query(R"(
-            SELECT name, type, simple_action, ip_version, network, protocol,
+            SELECT name, type, ip_version, network, protocol,
                    inbound_json, domain_json, domain_suffix_json, domain_keyword_json, domain_regex_json,
                    source_ip_cidr_json, source_ip_is_private, ip_cidr_json, ip_is_private,
                    source_port_json, source_port_range_json, port_json, port_range_json,
