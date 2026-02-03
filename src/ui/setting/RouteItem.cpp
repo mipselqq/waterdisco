@@ -50,7 +50,7 @@ RouteItem::RouteItem(QWidget *parent, const std::shared_ptr<Configs::RouteProfil
     chain = std::make_shared<Configs::RouteProfile>(*routeChain);
 
     // add the default rule if empty
-    if (chain->Rules.empty()) {
+    if (chain->IsEmpty()) {
         auto routeItem = std::make_shared<Configs::RouteRule>();
         routeItem->name = "dns-hijack";
         routeItem->protocol = "dns";
@@ -207,7 +207,7 @@ RouteItem::RouteItem(QWidget *parent, const std::shared_ptr<Configs::RouteProfil
                MessageBoxInfo(tr("Invalid JSON Array"), tr("The provided input cannot be parsed to a valid route rule array:\n") + *err);
                return;
            }
-           chain->Rules.clear();
+           chain->ResetRules();
            chain->Rules << parsed;
            updateRouteItemsView();
            updateRuleSection();
@@ -285,34 +285,25 @@ void RouteItem::accept() {
         return;
     }
 
-    QList<std::shared_ptr<Configs::RouteRule>> tmpChain;
-    for (const auto& item: chain->Rules) {
-        if (!item->isEmpty()) {
-            tmpChain << item;
-        }
-    }
-    chain->Rules.clear();
-    for (const auto& item: tmpChain) {
-        chain->Rules << item;
-    }
-
-    if (chain->Rules.empty()) {
-        MessageBoxInfo(tr("Empty Route Profile"), tr("No valid rules are in the profile"));
-        return;
-    }
-
     QString res;
     res += chain->UpdateSimpleRules(simpleDirect->toPlainText(), Configs::direct);
     res += chain->UpdateSimpleRules(simpleBlock->toPlainText(), Configs::block);
     res += chain->UpdateSimpleRules(simpleProxy->toPlainText(), Configs::proxy);
     if (!res.isEmpty())
     {
-        runOnUiThread([=,this]
+        runOnUiThread([=]
         {
             MessageBoxWarning(tr("Invalid rules"), tr("Some rules could not be added, fix them before saving:\n") + res);
         });
         return;
     }
+    chain->FilterEmptyRules();
+
+    if (chain->IsEmpty()) {
+        MessageBoxInfo(tr("Empty Route Profile"), tr("No valid rules are in the profile"));
+        return;
+    }
+
     chain->defaultOutboundID = Configs::stringToOutboundID(ui->def_out->currentText());
 
     emit settingsChanged(chain);
@@ -322,7 +313,7 @@ void RouteItem::accept() {
 
 void RouteItem::updateRouteItemsView() {
     ui->route_items->clear();
-    if (chain->Rules.empty()) return;
+    if (chain->IsEmpty()) return;
 
     for (const auto& item: chain->Rules) {
         ui->route_items->addItem(item->name);
@@ -337,12 +328,22 @@ void RouteItem::updateRuleSection() {
     auto currentAttr = ui->rule_attr->currentText();
     switch (ruleItem->get_input_type(currentAttr)) {
         case Configs::trufalse: {
+            if (ruleItem->canEditAttr(currentAttr)) {
+                ui->rule_attr_selector->setEnabled(true);
+            } else {
+                ui->rule_attr_selector->setEnabled(false);
+            }
             QStringList items = {"false", "true"};
             QString currentVal = ruleItem->get_current_value_bool(currentAttr);
             showSelectItem(items, currentVal);
             break;
         }
         case Configs::select: {
+            if (ruleItem->canEditAttr(currentAttr)) {
+                ui->rule_attr_selector->setEnabled(true);
+            } else {
+                ui->rule_attr_selector->setEnabled(false);
+            }
             if (currentAttr == "outbound")
             {
                 // due to the need for mapping, we handle this in a different way...
@@ -355,6 +356,13 @@ void RouteItem::updateRuleSection() {
             break;
         }
         case Configs::text: {
+            if (ruleItem->canEditAttr(currentAttr)) {
+                rule_set_editor->setEnabled(true);
+                ui->rule_attr_text->setEnabled(true);
+            } else {
+                rule_set_editor->setEnabled(false);
+                ui->rule_attr_text->setEnabled(false);
+            }
             auto currentItems = ruleItem->get_current_value_string(currentAttr);
             showTextEnterItem(currentItems, currentAttr == "rule_set");
             break;

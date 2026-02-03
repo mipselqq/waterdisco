@@ -41,14 +41,30 @@ namespace Configs {
 
         QStringList get_direct_ips();
 
+        bool IsEmpty();
+
+        void ResetRules();
+
+        void ResetSimpleRule(ruleType type);
+
         QString GetSimpleRules(simpleAction action);
 
         QString UpdateSimpleRules(const QString& content, simpleAction action);
+
+        void FilterEmptyRules();
     private:
         static bool add_simple_rule(const QString& content, const std::shared_ptr<RouteRule>& rule, ruleType type);
 
         static bool add_simple_address_rule(const QString& content, const std::shared_ptr<RouteRule>& rule);
 
-        static bool add_simple_process_rule(const QString& content, const std::shared_ptr<RouteRule>& rule, ruleType type);
+        static bool add_simple_process_rule(const QString& content, const std::shared_ptr<RouteRule>& rule);
+
+        std::shared_ptr<RouteRule> get_simple_rule_by_type(ruleType type);
+
+        static ruleType get_rule_type(const QString& content, simpleAction action);
+
+        static QList<std::shared_ptr<RouteRule>> get_simple_rules();
+
+        static void reset_simple_rule(std::shared_ptr<RouteRule>& rule);
     };
 } // namespace Configs

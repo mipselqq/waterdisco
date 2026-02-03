@@ -5,13 +5,12 @@
 namespace Configs {
     enum inputType {trufalse, select, text};
 
-    enum outboundID {proxyID=-1, directID=-2, blockID=-3, dnsOutID=-4};
+    enum outboundID {proxyID=-1, directID=-2, blockID=-3};
     inline QString outboundIDToString(int id)
     {
         if (id == proxyID) return {"proxy"};
         if (id == directID) return {"direct"};
         if (id == blockID) return {"block"};
-        if (id == dnsOutID) return {"dns"};
         return {"unknown"};
     }
     inline outboundID stringToOutboundID(const QString& out)
@@ -19,18 +18,23 @@ namespace Configs {
         if (out == "proxy") return proxyID;
         if (out == "direct") return directID;
         if (out == "block") return blockID;
-        if (out == "dns_out") return dnsOutID;
         return proxyID;
     }
 
-    enum ruleType {custom, simpleAddress, simpleProcessName, simpleProcessPath};
+    enum ruleType {custom, simpleAddressProxy, simpleAddressBypass, simpleAddressBlock, simpleProcessNameProxy, simpleProcessNameBypass, simpleProcessNameBlock, simpleProcessPathProxy, simpleProcessPathBypass, simpleProcessPathBlock};
 
     inline QString ruleTypeToString(ruleType type)
     {
         if (type == custom) return {"custom"};
-        if (type == simpleAddress) return {"Address"};
-        if (type == simpleProcessName) return {"Process Name"};
-        if (type == simpleProcessPath) return {"Process Path"};
+        if (type == simpleAddressProxy) return {"Simple Address Proxy"};
+        if (type == simpleAddressBypass) return {"Simple Address Bypass"};
+        if (type == simpleAddressBlock) return {"Simple Address Block"};
+        if (type == simpleProcessNameProxy) return {"Simple Process Name Proxy"};
+        if (type == simpleProcessNameBypass) return {"Simple Process Name Bypass"};
+        if (type == simpleProcessNameBlock) return {"Simple Process Name Block"};
+        if (type == simpleProcessPathProxy) return {"Simple Process Path Proxy"};
+        if (type == simpleProcessPathBypass) return {"Simple Process Path Bypass"};
+        if (type == simpleProcessPathBlock) return {"Simple Process Path Block"};
         return {"invalid"};
     }
 
@@ -51,7 +55,6 @@ namespace Configs {
 
         QString name = "";
         int type = custom;
-        int simpleAction;
         QString ip_version;
         QString network;
         QString protocol;
@@ -102,5 +105,6 @@ namespace Configs {
         [[nodiscard]] QString get_current_value_bool(const QString& fieldName) const;
         void set_field_value(const QString& fieldName, const QStringList& value);
         [[nodiscard]] bool isEmpty();
+        bool canEditAttr(const QString &attr);
     };
 } // namespace Configs
