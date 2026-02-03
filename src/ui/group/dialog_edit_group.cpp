@@ -21,6 +21,8 @@ DialogEditGroup::DialogEditGroup(const std::shared_ptr<Configs::Group> &ent, QWi
         ADJUST_SIZE
     });
 
+    ui->front_proxy->setMaxCount(1000);
+    ui->landing_proxy->setMaxCount(1000);
     ui->name->setText(ent->name);
     ui->skip_auto_update->setChecked(ent->skip_auto_update);
     ui->url->setText(ent->url);

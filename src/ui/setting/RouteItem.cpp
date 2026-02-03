@@ -106,6 +106,9 @@ RouteItem::RouteItem(QWidget *parent, const std::shared_ptr<Configs::RouteProfil
         outboundMap[outboundMap.size()] = item;
     }
 
+    // limit
+    ui->rule_attr_selector->setMaxCount(1000);
+
     ui->route_name->setText(chain->name);
     ui->rule_attr->addItems(Configs::RouteRule::get_attributes());
     adjustComboBoxWidth(ui->rule_attr);
