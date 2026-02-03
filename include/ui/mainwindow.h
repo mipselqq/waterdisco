@@ -225,6 +225,8 @@ private:
 
     QList<int> get_selected_or_group();
 
+    void clearUnavailableProfiles(bool confirm = true, QList<int> profileIDs = {});
+
     void dialog_message_impl(const QString &sender, const QString &info);
 
     void refresh_proxy_list_impl(const int &id = -1);

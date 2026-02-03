@@ -13,6 +13,7 @@ namespace Configs
         int id = -1;
         bool archive = false;
         bool skip_auto_update = false;
+        bool auto_clear_unavailable = false;
         QString name = "";
         QString url = "";
         QString info = "";
@@ -23,7 +24,6 @@ namespace Configs
         // list ui
         QList<int> column_width;
         QList<int> profiles;
-        /// Last profile index (row in profiles list / QTableView) for scroll position; -1 = none
         int scroll_last_profile = -1;
 
         Group() = default;
