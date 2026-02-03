@@ -31,11 +31,12 @@ namespace Configs {
                 column_width_json TEXT,
                 profiles_json TEXT NOT NULL DEFAULT '[]',
                 scroll_last_profile INTEGER NOT NULL DEFAULT -1,
+                auto_clear_unavailable INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
             )
         )");
-        
+
         // Create groups_order table to store UI tab order
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS groups_order (
@@ -51,6 +52,7 @@ namespace Configs {
         json["id"] = group->id;
         json["archive"] = group->archive;
         json["skip_auto_update"] = group->skip_auto_update;
+        json["auto_clear_unavailable"] = group->auto_clear_unavailable;
         json["name"] = group->name;
         json["url"] = group->url;
         json["info"] = group->info;
@@ -70,6 +72,7 @@ namespace Configs {
         group->id = json["id"].toInt();
         group->archive = json["archive"].toBool();
         group->skip_auto_update = json["skip_auto_update"].toBool();
+        group->auto_clear_unavailable = json["auto_clear_unavailable"].toBool();
         group->name = json["name"].toString();
         group->url = json["url"].toString();
         group->info = json["info"].toString();
@@ -102,7 +105,7 @@ namespace Configs {
             // Update
             db.exec(R"(
                 UPDATE groups 
-                SET archive = ?, skip_auto_update = ?, name = ?, url = ?, info = ?,
+                SET archive = ?, skip_auto_update = ?, auto_clear_unavailable = ?, name = ?, url = ?, info = ?,
                     sub_last_update = ?, front_proxy_id = ?, landing_proxy_id = ?,
                     column_width_json = ?, profiles_json = ?, scroll_last_profile = ?,
                     updated_at = strftime('%s', 'now')
@@ -110,6 +113,7 @@ namespace Configs {
             )",
                 group->archive ? 1 : 0,
                 group->skip_auto_update ? 1 : 0,
+                group->auto_clear_unavailable ? 1 : 0,
                 group->name.toStdString(),
                 group->url.toStdString(),
                 group->info.toStdString(),
@@ -125,14 +129,15 @@ namespace Configs {
             // Insert
             db.exec(R"(
                 INSERT INTO groups 
-                (id, archive, skip_auto_update, name, url, info, sub_last_update,
+                (id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
                  front_proxy_id, landing_proxy_id,
                  column_width_json, profiles_json, scroll_last_profile)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 group->archive ? 1 : 0,
                 group->skip_auto_update ? 1 : 0,
+                group->auto_clear_unavailable ? 1 : 0,
                 group->name.toStdString(),
                 group->url.toStdString(),
                 group->info.toStdString(),
@@ -148,7 +153,7 @@ namespace Configs {
 
     std::shared_ptr<Group> GroupsRepo::loadFromDatabase(int id) const {
         auto query = db.query(R"(
-            SELECT id, archive, skip_auto_update, name, url, info, sub_last_update,
+            SELECT id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
                    front_proxy_id, landing_proxy_id,
                    column_width_json, profiles_json, scroll_last_profile
             FROM groups WHERE id = ?
@@ -161,15 +166,16 @@ namespace Configs {
         json["id"] = query->getColumn(0).getInt();
         json["archive"] = query->getColumn(1).getInt() != 0;
         json["skip_auto_update"] = query->getColumn(2).getInt() != 0;
-        json["name"] = QString::fromStdString(query->getColumn(3).getText());
-        json["url"] = QString::fromStdString(query->getColumn(4).getText());
-        json["info"] = QString::fromStdString(query->getColumn(5).getText());
-        json["sub_last_update"] = static_cast<qint64>(query->getColumn(6).getInt64());
-        json["front_proxy_id"] = query->getColumn(7).getInt();
-        json["landing_proxy_id"] = query->getColumn(8).getInt();
+        json["auto_clear_unavailable"] = query->getColumn(3).getInt() != 0;
+        json["name"] = QString::fromStdString(query->getColumn(4).getText());
+        json["url"] = QString::fromStdString(query->getColumn(5).getText());
+        json["info"] = QString::fromStdString(query->getColumn(6).getText());
+        json["sub_last_update"] = static_cast<qint64>(query->getColumn(7).getInt64());
+        json["front_proxy_id"] = query->getColumn(8).getInt();
+        json["landing_proxy_id"] = query->getColumn(9).getInt();
 
         // Parse JSON arrays
-        QString columnWidthJsonStr = QString::fromStdString(query->getColumn(9).getText());
+        QString columnWidthJsonStr = QString::fromStdString(query->getColumn(10).getText());
         if (!columnWidthJsonStr.isEmpty()) {
             QJsonDocument columnWidthDoc = QJsonDocument::fromJson(columnWidthJsonStr.toUtf8());
             if (!columnWidthDoc.isNull() && columnWidthDoc.isArray()) {
@@ -177,7 +183,7 @@ namespace Configs {
             }
         }
         
-        QString profilesJsonStr = QString::fromStdString(query->getColumn(10).getText());
+        QString profilesJsonStr = QString::fromStdString(query->getColumn(11).getText());
         if (!profilesJsonStr.isEmpty()) {
             QJsonDocument profilesDoc = QJsonDocument::fromJson(profilesJsonStr.toUtf8());
             if (!profilesDoc.isNull() && profilesDoc.isArray()) {
@@ -185,8 +191,8 @@ namespace Configs {
             }
         }
 
-        if (query->getColumnCount() > 11) {
-            json["scroll_last_profile"] = query->getColumn(11).getInt();
+        if (query->getColumnCount() > 12) {
+            json["scroll_last_profile"] = query->getColumn(12).getInt();
         }
         
         return groupFromJson(json);

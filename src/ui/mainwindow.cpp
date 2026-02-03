@@ -1972,33 +1972,7 @@ void MainWindow::on_menu_update_subscription_triggered() {
 }
 
 void MainWindow::on_menu_remove_unavailable_triggered() {
-    QList<std::shared_ptr<Configs::Profile>> out_del;
-
-    for (const auto &profileID: Configs::dataManager->profilesRepo->GetAllProfileIds()) {
-        auto profile = Configs::dataManager->profilesRepo->GetProfile(profileID);
-        if (Configs::dataManager->settingsRepo->current_group != profile->gid) continue;
-        if (profile->latency < 0) out_del += profile;
-    }
-
-    int remove_display_count = 0;
-    QString remove_display;
-    for (const auto &ent: out_del) {
-        remove_display += ent->outbound->DisplayTypeAndName() + "\n";
-        if (++remove_display_count == 20) {
-            remove_display += "...";
-            break;
-        }
-    }
-
-    if (!out_del.empty() &&
-        QMessageBox::question(this, tr("Confirmation"), tr("Remove %1 Unavailable item(s) ?").arg(out_del.length()) + "\n" + remove_display) == QMessageBox::StandardButton::Yes) {
-        QList<int> del_ids;
-        for (const auto &ent: out_del) {
-            del_ids += ent->id;
-        }
-        Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
-        refresh_proxy_list();
-    }
+    clearUnavailableProfiles();
 }
 
 void MainWindow::on_menu_remove_invalid_triggered() {
@@ -2127,6 +2101,43 @@ QList<int> MainWindow::get_selected_or_group() {
         profileIDs = Configs::dataManager->groupsRepo->CurrentGroup()->Profiles();
     }
     return profileIDs;
+}
+
+void MainWindow::clearUnavailableProfiles(bool confirm, QList<int> profileIDs) {
+    QList<int> del_ids;
+    int remove_display_count = 0;
+    QString remove_display;
+
+    auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+    if (!group) return;
+
+    if (profileIDs.isEmpty()) profileIDs = group->Profiles();
+
+    auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
+    for (const auto &profile: profiles) {
+        if (profile->latency < 0) {
+            del_ids += profile->id;
+            remove_display += profile->outbound->DisplayTypeAndName() + "\n";
+            if (++remove_display_count == 20) {
+                remove_display += "...";
+            }
+        }
+    }
+
+    auto clearFunc = [=, this] {
+        Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
+        refresh_proxy_list();
+    };
+
+    if (!del_ids.isEmpty()) {
+        if (confirm) {
+            if (QMessageBox::question(this, tr("Confirmation"), tr("Remove %1 Unavailable item(s) ?").arg(del_ids.length()) + "\n" + remove_display) == QMessageBox::StandardButton::Yes) {
+                clearFunc();
+            }
+        } else {
+            clearFunc();
+        }
+    }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {

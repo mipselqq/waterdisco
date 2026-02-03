@@ -24,6 +24,7 @@ DialogEditGroup::DialogEditGroup(const std::shared_ptr<Configs::Group> &ent, QWi
     ui->front_proxy->setMaxCount(1000);
     ui->landing_proxy->setMaxCount(1000);
     ui->name->setText(ent->name);
+    ui->auto_clear_unavailable->setChecked(ent->auto_clear_unavailable);
     ui->skip_auto_update->setChecked(ent->skip_auto_update);
     ui->url->setText(ent->url);
     ui->type->setCurrentIndex(ent->url.isEmpty() ? 0 : 1);
@@ -112,6 +113,7 @@ void DialogEditGroup::accept() {
         }
     }
     ent->name = ui->name->text();
+    ent->auto_clear_unavailable = ui->auto_clear_unavailable->isChecked();
     ent->url = ui->url->text();
     ent->skip_auto_update = ui->skip_auto_update->isChecked();
     ent->front_proxy_id = CACHE.front_proxy;

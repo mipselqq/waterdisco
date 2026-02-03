@@ -188,13 +188,23 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs) {
                 refresh_proxy_list();
             });
         };
+        std::shared_ptr<Configs::Group> currentGroup;
         for (int i=0;i<profileIDs.length();i+=100) {
             if (stopSpeedtest.load()) break;
             auto profileIDsSlice = profileIDs.mid(i, 100);
             auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
+            if (!currentGroup && !profiles.isEmpty()) {
+                currentGroup = Configs::dataManager->groupsRepo->GetGroup(profiles[0]->gid);
+            }
             speedTestFunc(profiles);
         }
         speedtestRunning.unlock();
+        if (currentGroup->auto_clear_unavailable) {
+            MW_show_log("URL test finished, clearing unavailable profiles...");
+            runOnUiThread([=, this] {
+               clearUnavailableProfiles(false, profileIDs);
+            });
+        }
         MW_show_log(tr("URL test finished!"));
     });
 }
@@ -248,7 +258,9 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool test
         return;
     }
 
-    runOnNewThread([this, profileIDs, testCurrent]() {
+    auto currentGroup = Configs::dataManager->groupsRepo->GetGroup(Configs::dataManager->profilesRepo->GetProfile(profileIDs[0])->gid);
+
+    runOnNewThread([this, profileIDs, testCurrent, currentGroup]() {
         stopSpeedtest.store(false);
         if (!testCurrent)
         {
@@ -281,6 +293,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool test
 
         speedtestRunning.unlock();
         runOnUiThread([=,this]{
+            if (currentGroup->auto_clear_unavailable) clearUnavailableProfiles(false, profileIDs);
             refresh_proxy_list();
             MW_show_log(tr("Speedtest finished!"));
         });

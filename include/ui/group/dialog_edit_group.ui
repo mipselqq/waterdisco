@@ -32,28 +32,13 @@
       <string>Common</string>
      </property>
      <layout class="QGridLayout" name="main">
-      <item row="2" column="0">
-       <widget class="QLabel" name="front_proxy_l">
-        <property name="text">
-         <string>Front Proxy</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QLineEdit" name="name"/>
-      </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>Name</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>Type</string>
-        </property>
+      <item row="3" column="1">
+       <widget class="QComboBox" name="landing_proxy">
+        <item>
+         <property name="text">
+          <string notr="true">None</string>
+         </property>
+        </item>
        </widget>
       </item>
       <item row="1" column="1">
@@ -70,13 +55,11 @@
         </item>
        </widget>
       </item>
-      <item row="3" column="1">
-       <widget class="QComboBox" name="landing_proxy">
-        <item>
-         <property name="text">
-          <string notr="true">None</string>
-         </property>
-        </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Name</string>
+        </property>
        </widget>
       </item>
       <item row="3" column="0">
@@ -99,6 +82,30 @@
         </item>
        </layout>
       </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Type</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="front_proxy_l">
+        <property name="text">
+         <string>Front Proxy</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="name"/>
+      </item>
+      <item row="4" column="1">
+       <widget class="QCheckBox" name="auto_clear_unavailable">
+        <property name="text">
+         <string>Auto Clear Unavailable Profiles</string>
+        </property>
+       </widget>
+      </item>
      </layout>
      <zorder>label</zorder>
      <zorder>front_proxy_l</zorder>
@@ -107,6 +114,7 @@
      <zorder>landing_proxy</zorder>
      <zorder>landing_proxy_l</zorder>
      <zorder>name</zorder>
+     <zorder>auto_clear_unavailable</zorder>
     </widget>
    </item>
    <item>
