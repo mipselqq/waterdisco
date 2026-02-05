@@ -617,7 +617,7 @@ namespace Configs {
             }
             ent->traffic_data->id = ent->id;
             ent->traffic_data->tag = tag.toStdString();
-            ctx->buildConfigResult->outboundStats += ent->traffic_data;
+            ctx->buildConfigResult->outboundEntsForTraffic += ent;
         }
     }
 
@@ -850,7 +850,6 @@ namespace Configs {
 
         auto ctx = std::make_shared<BuildSingBoxConfigContext>();
         ctx->ent = ent;
-        ctx->buildConfigResult->outboundStats << std::make_shared<Stats::TrafficData>("direct");
 
         CalculatePrerequisities(ctx);
 

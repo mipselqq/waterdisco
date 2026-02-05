@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QElapsedTimer>
 
+#include "include/database/ProfilesRepo.h"
 
 
 namespace Stats {
@@ -112,12 +113,21 @@ namespace Stats {
                     m->refresh_status(QObject::tr("Proxy: %1\nDirect: %2").arg(proxy->DisplaySpeed(), direct->DisplaySpeed()));
                     m->update_traffic_graph(proxy->downlink_rate, proxy->uplink_rate, direct->downlink_rate, direct->uplink_rate);
                 }
-                for (const auto &item: items) {
-                    if (item->id < 0) continue;
-                    m->refresh_proxy_list(item->id);
+                for (const auto &profile: profiles) {
+                    m->refresh_proxy_list(profile->id);
+                    Configs::dataManager->profilesRepo->Save(profile);
                 }
             });
         }
+    }
+
+    void TrafficLooper::SetEnts(const QList<std::shared_ptr<Configs::Profile>>& profs) {
+        items.clear();
+        profiles = profs;
+        for (const auto &profile: profs) {
+            items << profile->traffic_data;
+        }
+        items << std::make_shared<TrafficData>("direct");
     }
 
     bool TrafficData::ParseFromJson(const QJsonObject& object) {

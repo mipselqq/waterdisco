@@ -55,7 +55,6 @@ QMimeData* ProfilesTableModel::mimeData(const QModelIndexList &indexes) const {
 
 void ProfilesTableModel::ensureCached(int profileId) const {
     if (m_cache.contains(profileId)) {
-        m_cache[profileId].lastAccessed = ++m_accessCounter;
         for (int i = 0; i < m_lruOrder.size(); ++i) {
             if (m_lruOrder[i] == profileId) {
                 m_lruOrder.move(i, m_lruOrder.size() - 1);
@@ -68,29 +67,10 @@ void ProfilesTableModel::ensureCached(int profileId) const {
     auto profile = Configs::dataManager->profilesRepo->GetProfile(profileId);
     if (!profile) return;
 
-    const int startedId = Configs::dataManager->settingsRepo->started_id;
-    const bool isRunning = (profile->id == startedId);
-    QColor linkColor = isRunning ? QApplication::palette().link().color() : QColor();
-
-    CachedRow row;
-    row.type = profile->outbound ? profile->outbound->DisplayType() : QString();
-    row.address = profile->outbound ? profile->outbound->DisplayAddress() : QString();
-    row.name = profile->outbound ? profile->outbound->name : QString();
-    if (profile->full_test_report.isEmpty()) {
-        row.testResult = profile->DisplayTestResult();
-        row.latencyColor = profile->DisplayLatencyColor();
-    } else {
-        row.testResult = profile->full_test_report;
-        row.latencyColor = QColor();
-    }
-    row.traffic = profile->traffic_data ? profile->traffic_data->DisplayTraffic() : QString();
-    row.foreground = isRunning ? linkColor : QColor();
-    row.lastAccessed = ++m_accessCounter;
-
     while (m_cache.size() >= m_cacheSize && !m_lruOrder.isEmpty()) {
         evictOne();
     }
-    m_cache[profileId] = row;
+    m_cache[profileId] = profile;
     m_lruOrder.append(profileId);
 }
 
@@ -112,25 +92,29 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
     ensureCached(profileId);
     auto it = m_cache.constFind(profileId);
     if (it == m_cache.constEnd()) return {};
-    const CachedRow &row = it.value();
+    const std::shared_ptr<Configs::Profile> &profile = it.value();
+    if (!profile) return {};
+
+    const int startedId = Configs::dataManager->settingsRepo->started_id;
+    const bool isRunning = (profile->id == startedId);
+    QColor linkColor = isRunning ? QApplication::palette().link().color() : QColor();
 
     if (role == Qt::DisplayRole) {
         switch (index.column()) {
-        case 0: return row.type;
-        case 1: return row.address;
-        case 2: return row.name;
-        case 3: return row.testResult;
-        case 4: return row.traffic;
+        case 0: return profile->outbound ? profile->outbound->DisplayType() : QString();
+        case 1: return profile->outbound ? profile->outbound->DisplayAddress() : QString();
+        case 2: return profile->outbound ? profile->outbound->name : QString();
+        case 3: return profile->full_test_report.isEmpty() ? profile->DisplayTestResult() : profile->full_test_report;
+        case 4: return profile->traffic_data ? profile->traffic_data->DisplayTraffic() : QString();
         default: return {};
         }
     }
     if (role == Qt::ForegroundRole) {
-        if (index.column() == 3 && row.latencyColor.isValid()) {
-            return row.latencyColor;
+        if (index.column() == 3 && profile->full_test_report.isEmpty()) {
+            QColor latencyColor = profile->DisplayLatencyColor();
+            if (latencyColor.isValid()) return latencyColor;
         }
-        if (row.foreground.isValid()) {
-            return row.foreground;
-        }
+        if (isRunning && linkColor.isValid()) return linkColor;
         return {};
     }
     return {};

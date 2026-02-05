@@ -558,7 +558,7 @@ void MainWindow::profile_start(int _id) {
         //
         Stats::trafficLooper->proxy = std::make_shared<Stats::TrafficData>("proxy");
         Stats::trafficLooper->direct = std::make_shared<Stats::TrafficData>("direct");
-        Stats::trafficLooper->items = result->outboundStats;
+        Stats::trafficLooper->SetEnts(result->outboundEntsForTraffic);
         Stats::trafficLooper->isChain = ent->type == "chain";
         Stats::trafficLooper->loop_enabled = true;
         Stats::connection_lister->suspend = false;
@@ -688,11 +688,6 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
     UpdateConnectionListWithRecreate({});
     Stats::trafficLooper->loop_mutex.lock();
     Stats::trafficLooper->UpdateAll();
-    for (const auto &item: Stats::trafficLooper->items) {
-        if (item->id < 0) continue;
-        Configs::dataManager->profilesRepo->Save(Configs::dataManager->profilesRepo->GetProfile(item->id));
-        refresh_proxy_list(item->id);
-    }
     Stats::trafficLooper->loop_mutex.unlock();
 
     restartMsgboxTimer->cancel();
