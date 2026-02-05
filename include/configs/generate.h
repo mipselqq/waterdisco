@@ -80,7 +80,7 @@ namespace Configs
         QJsonObject xrayConfig;
         std::shared_ptr<ExtraCoreData> extraCoreData = std::make_shared<ExtraCoreData>();
 
-        QList<std::shared_ptr<Stats::TrafficData>> outboundStats;
+        QList<std::shared_ptr<Profile>> outboundEntsForTraffic;
     };
 
     class BuildSingBoxConfigContext

@@ -4,6 +4,7 @@
 #include <QList>
 #include <QHash>
 #include <QColor>
+#include <memory>
 
 namespace Configs {
     class Profile;
@@ -47,23 +48,12 @@ public:
     QString rowLabel(int row) const;
 
 private:
-    struct CachedRow {
-        QString type;
-        QString address;
-        QString name;
-        QString testResult;
-        QString traffic;
-        QColor foreground;  // same for all cols when running; col3 may override
-        QColor latencyColor; // col 3 only
-        qint64 lastAccessed = 0;
-    };
     void ensureCached(int profileId) const;
     void evictOne() const;
 
     QList<int> m_profileIds;
     mutable QHash<int, int> id2row;
-    mutable QHash<int, CachedRow> m_cache;
+    mutable QHash<int, std::shared_ptr<Configs::Profile>> m_cache;
     mutable QList<int> m_lruOrder;
-    mutable qint64 m_accessCounter = 0;
     int m_cacheSize = 100;
 };

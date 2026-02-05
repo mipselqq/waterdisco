@@ -5,6 +5,7 @@
 #include <QMutex>
 
 #include "TrafficData.hpp"
+#include "include/database/entities/Profile.h"
 
 namespace Stats {
     class TrafficLooper {
@@ -13,7 +14,6 @@ namespace Stats {
         bool looping = false;
         QMutex loop_mutex;
 
-        QList<std::shared_ptr<TrafficData>> items;
         bool isChain;
         std::shared_ptr<TrafficData> proxy;
         std::shared_ptr<TrafficData> direct;
@@ -21,6 +21,12 @@ namespace Stats {
         void UpdateAll();
 
         void Loop();
+
+        void SetEnts(const QList<std::shared_ptr<Configs::Profile>>& profs);
+
+    private:
+        QList<std::shared_ptr<Configs::Profile>> profiles;
+        QList<std::shared_ptr<TrafficData>> items;
     };
 
     extern TrafficLooper *trafficLooper;
