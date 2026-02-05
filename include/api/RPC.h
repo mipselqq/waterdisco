@@ -25,6 +25,10 @@ namespace API {
 
         libcore::QueryURLTestResponse QueryURLTest(bool *rpcOK);
 
+        libcore::IPTestResp IPTest(bool *rpcOK, const libcore::IPTestRequest &request);
+
+        libcore::QueryIPTestResponse QueryIPTest(bool *rpcOK);
+
         QString SetSystemDNS(bool *rpcOK, bool clear) const;
 
         libcore::ListConnectionsResp ListConnections(bool *rpcOK) const;

@@ -7,6 +7,7 @@ import (
 	"Core/internal/process"
 	"Core/internal/sys"
 	"Core/internal/xray"
+	"Core/test_utils"
 	"context"
 	"encoding/json"
 	"errors"
@@ -225,9 +226,9 @@ func (s *server) Test(in *gen.TestReq, out *gen.TestResp) error {
 
 	var maxConcurrency = *in.MaxConcurrency
 	if maxConcurrency >= 500 || maxConcurrency == 0 {
-		maxConcurrency = MaxConcurrentTests
+		maxConcurrency = test_utils.MaxConcurrentTests
 	}
-	results := BatchURLTest(testCtx, testInstance, outboundTags, *in.Url, int(maxConcurrency), twice, time.Duration(*in.TestTimeoutMs)*time.Millisecond)
+	results := test_utils.BatchURLTest(test_utils.TestCtx, testInstance, outboundTags, *in.Url, int(maxConcurrency), twice, time.Duration(*in.TestTimeoutMs)*time.Millisecond)
 
 	res := make([]*gen.URLTestResp, 0)
 	for idx, data := range results {
@@ -247,14 +248,14 @@ func (s *server) Test(in *gen.TestReq, out *gen.TestResp) error {
 }
 
 func (s *server) StopTest(in *gen.EmptyReq, out *gen.EmptyResp) error {
-	cancelTests()
-	testCtx, cancelTests = context.WithCancel(context.Background())
+	test_utils.CancelTests()
+	test_utils.TestCtx, test_utils.CancelTests = context.WithCancel(context.Background())
 
 	return nil
 }
 
 func (s *server) QueryURLTest(in *gen.EmptyReq, out *gen.QueryURLTestResponse) error {
-	results := URLReporter.Results()
+	results := test_utils.URLReporter.Results()
 	for _, r := range results {
 		errStr := ""
 		if r.Error != nil {
@@ -263,6 +264,78 @@ func (s *server) QueryURLTest(in *gen.EmptyReq, out *gen.QueryURLTestResponse) e
 		out.Results = append(out.Results, &gen.URLTestResp{
 			OutboundTag: To(r.Tag),
 			LatencyMs:   To(int32(r.Duration.Milliseconds())),
+			Error:       To(errStr),
+		})
+	}
+	return nil
+}
+
+func (s *server) IPTest(in *gen.IPTestRequest, out *gen.IPTestResp) error {
+	var testInstance *boxbox.Box
+	var xrayTestInstance *core.Instance
+	var cancel context.CancelFunc
+	var err error
+	if *in.NeedXray {
+		xrayTestInstance, err = xray.CreateXrayInstance(*in.XrayConfig)
+		if err != nil {
+			return err
+		}
+		err = xrayTestInstance.Start()
+		if err != nil {
+			return err
+		}
+		defer func() {
+			common.Must(xrayTestInstance.Close())
+		}()
+	}
+	testInstance, cancel, err = boxmain.Create([]byte(*in.Config))
+	if err != nil {
+		return err
+	}
+	defer testInstance.CloseWithTimeout(cancel, 2*time.Second, log.Println)
+
+	outboundTags := in.OutboundTags
+	if *in.UseDefaultOutbound {
+		outbound := testInstance.Outbound().Default()
+		outboundTags = []string{outbound.Tag()}
+	}
+
+	maxConcurrency := *in.MaxConcurrency
+	if maxConcurrency >= 500 || maxConcurrency == 0 {
+		maxConcurrency = test_utils.MaxConcurrentTests
+	}
+	timeout := time.Duration(*in.TestTimeoutMs) * time.Millisecond
+	results := test_utils.BatchIPTest(test_utils.TestCtx, testInstance, outboundTags, int(maxConcurrency), timeout)
+
+	res := make([]*gen.IPTestRes, 0, len(results))
+	for idx, data := range results {
+		errStr := ""
+		if data.Error != nil {
+			errStr = data.Error.Error()
+		}
+		tag := outboundTags[idx]
+		res = append(res, &gen.IPTestRes{
+			OutboundTag: To(tag),
+			Ip:          To(data.Result.IP),
+			CountryCode: To(data.Result.CountryCode),
+			Error:       To(errStr),
+		})
+	}
+	out.Results = res
+	return nil
+}
+
+func (s *server) QueryIPTest(in *gen.EmptyReq, out *gen.QueryIPTestResponse) error {
+	results := test_utils.IPReporter.Results()
+	for _, r := range results {
+		errStr := ""
+		if r.Error != nil {
+			errStr = r.Error.Error()
+		}
+		out.Results = append(out.Results, &gen.IPTestRes{
+			OutboundTag: To(r.Tag),
+			Ip:          To(r.Result.IP),
+			CountryCode: To(r.Result.CountryCode),
 			Error:       To(errStr),
 		})
 	}
@@ -396,7 +469,7 @@ func (s *server) SpeedTest(in *gen.SpeedTestRequest, out *gen.SpeedTestResponse)
 		outboundTags = []string{outbound.Tag()}
 	}
 
-	results := BatchSpeedTest(testCtx, testInstance, outboundTags, *in.TestDownload, *in.TestUpload, *in.SimpleDownload, *in.SimpleDownloadAddr, time.Duration(*in.TimeoutMs)*time.Millisecond, *in.OnlyCountry, *in.CountryConcurrency)
+	results := test_utils.BatchSpeedTest(test_utils.TestCtx, testInstance, outboundTags, *in.TestDownload, *in.TestUpload, *in.SimpleDownload, *in.SimpleDownloadAddr, time.Duration(*in.TimeoutMs)*time.Millisecond, *in.OnlyCountry, *in.CountryConcurrency)
 
 	res := make([]*gen.SpeedTestResult, 0)
 	for _, data := range results {
@@ -421,7 +494,7 @@ func (s *server) SpeedTest(in *gen.SpeedTestRequest, out *gen.SpeedTestResponse)
 }
 
 func (s *server) QuerySpeedTest(in *gen.EmptyReq, out *gen.QuerySpeedTestResponse) error {
-	res, isRunning := SpTQuerier.Result()
+	res, isRunning := test_utils.SpTQuerier.Result()
 	errStr := ""
 	if res.Error != nil {
 		errStr = res.Error.Error()
@@ -441,7 +514,7 @@ func (s *server) QuerySpeedTest(in *gen.EmptyReq, out *gen.QuerySpeedTestRespons
 }
 
 func (s *server) QueryCountryTest(in *gen.EmptyReq, out *gen.QueryCountryTestResponse) error {
-	results := CountryResults.Results()
+	results := test_utils.CountryResults.Results()
 	for _, res := range results {
 		var errStr string
 		if res.Error != nil {

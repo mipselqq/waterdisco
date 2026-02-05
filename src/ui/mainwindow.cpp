@@ -1,6 +1,7 @@
 #include "include/ui/mainwindow.h"
 
 #include <QAbstractItemView>
+#include <QMenu>
 #include "include/configs/sub/GroupUpdater.hpp"
 #include "include/sys/Process.hpp"
 #include "include/sys/AutoRun.hpp"
@@ -309,7 +310,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         } else {
             proxy_last_order = logicalIndex;
         }
-        action.save_sort = true;
         if (logicalIndex == 0) {
             action.method = GroupSortMethod::ByType;
         } else if (logicalIndex == 1) {
@@ -317,7 +317,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         } else if (logicalIndex == 2) {
             action.method = GroupSortMethod::ByName;
         } else if (logicalIndex == 3) {
-            action.method = GroupSortMethod::ByLatency;
+            action.method = GroupSortMethod::ByTestResult;
         } else {
             return;
         }
@@ -345,6 +345,83 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         }
         group->column_width[logicalIndex] = newSize;
         Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
+    });
+    ui->profilesTableView->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->profilesTableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        auto* header = ui->profilesTableView->horizontalHeader();
+        if (header->logicalIndexAt(pos) != 3) return;
+        auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+        if (group == nullptr) return;
+        QMenu menu(this);
+        auto* includeLabel = menu.addAction(tr("Include:"));
+        includeLabel->setEnabled(false);
+
+        auto* actionShowOutIP = menu.addAction(tr("Out IP"));
+        actionShowOutIP->setCheckable(true);
+        actionShowOutIP->setChecked(group->test_items_to_show == Configs::testShowItems::all ||
+                             group->test_items_to_show == Configs::testShowItems::ipOnly);
+
+        auto* actionShowSpeed = menu.addAction(tr("Speed"));
+        actionShowSpeed->setCheckable(true);
+        actionShowSpeed->setChecked(group->test_items_to_show == Configs::testShowItems::all ||
+                             group->test_items_to_show == Configs::testShowItems::speedOnly);
+
+        auto updateTestItemsToShow = [this, group, actionShowOutIP, actionShowSpeed] {
+            const bool ip = actionShowOutIP->isChecked();
+            const bool speed = actionShowSpeed->isChecked();
+            if (ip && speed) group->test_items_to_show = Configs::testShowItems::all;
+            else if (ip) group->test_items_to_show = Configs::testShowItems::ipOnly;
+            else if (speed) group->test_items_to_show = Configs::testShowItems::speedOnly;
+            else group->test_items_to_show = Configs::testShowItems::none;
+            Configs::dataManager->groupsRepo->Save(group);
+            refresh_proxy_list();
+        };
+
+        connect(actionShowOutIP, &QAction::triggered, this, updateTestItemsToShow);
+        connect(actionShowSpeed, &QAction::triggered, this, updateTestItemsToShow);
+
+        menu.addSeparator();
+        auto* sortByLabel = menu.addAction(tr("Sort By:"));
+        sortByLabel->setEnabled(false);
+        menu.addSeparator();
+
+        struct SortOption { int value; QString label; };
+        QList<SortOption> options = {
+            { static_cast<int>(Configs::testBy::latency), tr("Latency") },
+            { static_cast<int>(Configs::testBy::dlSpeed), tr("Download Speed") },
+            { static_cast<int>(Configs::testBy::ulSpeed), tr("Upload Speed") },
+            { static_cast<int>(Configs::testBy::ipOut), tr("IP Out") }
+        };
+        for (const auto& opt : options) {
+            auto* act = menu.addAction(opt.label);
+            act->setData(opt.value);
+            act->setCheckable(true);
+            act->setChecked(static_cast<int>(group->test_sort_by) == opt.value);
+        }
+
+        auto* chosen = menu.exec(header->mapToGlobal(pos));
+        if (chosen == nullptr || !chosen->data().isValid()) return;
+
+        int testSortBy = chosen->data().toInt();
+        group->test_sort_by = static_cast<Configs::testBy>(testSortBy);
+        Configs::dataManager->groupsRepo->Save(group);
+        GroupSortAction action;
+        action.method = GroupSortMethod::ByTestResult;
+        action.descending = false;
+        runOnNewThread([=, this] {
+            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+            if (currGroup == nullptr) return;
+            if (!currGroup->SortProfiles(action)) {
+                runOnUiThread([=] {
+                    MessageBoxWarning("Action already in progress", "A sort action is already in progress");
+                });
+                return;
+            }
+            Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
+            runOnUiThread([=, this] {
+                refresh_proxy_list();
+            });
+        });
     });
     ui->profilesTableView->verticalHeader()->setStretchLastSection(false);
     ui->profilesTableView->verticalHeader()->setDefaultSectionSize(24);
@@ -464,11 +541,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             ui->actionSpeedtest_Selected->setEnabled(false);
             ui->actionUrl_Test_Selected->setEnabled(false);
             ui->menu_resolve_selected->setEnabled(false);
+            ui->actionResolve_Selected_Out_IP->setEnabled(false);
         } else
         {
             ui->actionSpeedtest_Selected->setEnabled(true);
             ui->actionUrl_Test_Selected->setEnabled(true);
             ui->menu_resolve_selected->setEnabled(true);
+            ui->actionResolve_Selected_Out_IP->setEnabled(true);
         }
         if (!speedtestRunning.tryLock()) {
             ui->menu_server->addAction(ui->menu_stop_testing);
@@ -497,6 +576,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         }
     };
     runOnNewThread(getRemoteRouteProfiles);
+
+    connect(ui->actionRefresh_Column_Widths, &QAction::triggered, this, [=, this] {
+        auto ent = Configs::dataManager->groupsRepo->CurrentGroup();
+        ent->column_width.clear();
+        Configs::dataManager->groupsRepo->Save(ent);
+        show_group(ent->id);
+    });
 
     connect(ui->menuRouting_Menu, &QMenu::aboutToShow, this, [=,this]()
     {
@@ -528,7 +614,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 {
                     auto resp = NetworkRequestHelper::HttpGet(Configs::get_jsdelivr_link("https://raw.githubusercontent.com/throneproj/routeprofiles/profile/" + profile + ".json"));
                     if (!resp.error.isEmpty()) {
-                        runOnUiThread([=,this] {
+                        runOnUiThread([=] {
                             MessageBoxWarning(QObject::tr("Download Profiles"), QObject::tr("Requesting profile error: %1").arg(resp.error + "\n" + resp.data));
                         });
                         return;
@@ -536,7 +622,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                     auto err = new QString;
                     auto parsed = Configs::RouteProfile::parseJsonArray(QString2QJsonArray(resp.data), err);
                     if (!err->isEmpty()) {
-                        runOnUiThread([=,this]
+                        runOnUiThread([=]
                         {
                             MessageBoxInfo(tr("Invalid JSON Array"), tr("The provided input cannot be parsed to a valid route rule array:\n") + *err);
                         });
@@ -593,6 +679,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->actionSpeedtest_Group, &QAction::triggered, this, [=,this]()
     {
         speedtest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles());
+    });
+    connect(ui->actionResolve_Selected_Out_IP, &QAction::triggered, this, [=,this]() {
+        iptest_current_group(get_now_selected_list());
+    });
+    connect(ui->actionResolve_Out_IP, &QAction::triggered, this, [=,this]() {
+        iptest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles());
     });
     connect(ui->menu_stop_testing, &QAction::triggered, this, [=,this]() { stopTests(); });
     //
@@ -1944,10 +2036,7 @@ void MainWindow::on_menu_clear_test_result_triggered() {
     auto entIDs = get_selected_or_group();
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
     for (const auto &ent: ents) {
-        ent->latency = 0;
-        ent->dl_speed.clear();
-        ent->ul_speed.clear();
-        ent->full_test_report = "";
+        ent->ClearTestResults();
         Configs::dataManager->profilesRepo->Save(ent);
     }
     refresh_proxy_list();
@@ -2234,17 +2323,9 @@ void MainWindow::on_tabWidget_customContextMenuRequested(const QPoint &p) {
     ui->tabWidget->setCurrentIndex(clickedIndex);
     auto* menu = new QMenu(this);
 
-    auto* refreshWidthAction = new QAction(tr("Refresh column widths"), this);
     auto* addAction = new QAction(tr("Add new Group"), this);
     auto* deleteAction = new QAction(tr("Delete selected Group"), this);
     auto* editAction = new QAction(tr("Edit selected Group"), this);
-    connect(refreshWidthAction, &QAction::triggered, this, [=, this] {
-        auto id = Configs::dataManager->groupsRepo->GetGroupsTabOrder()[clickedIndex];
-        auto ent = Configs::dataManager->groupsRepo->GetGroup(id);
-        ent->column_width.clear();
-        Configs::dataManager->groupsRepo->Save(ent);
-        show_group(id);
-    });
     connect(addAction, &QAction::triggered, this, [=,this]{
         auto ent = Configs::GroupsRepo::NewGroup();
         auto dialog = new DialogEditGroup(ent, this);
@@ -2278,7 +2359,7 @@ void MainWindow::on_tabWidget_customContextMenuRequested(const QPoint &p) {
         });
         dialog->show();
     });
-    menu->addAction(refreshWidthAction);
+    menu->addAction(ui->actionRefresh_Column_Widths);
     menu->addAction(addAction);
     menu->addAction(editAction);
     auto group = Configs::dataManager->groupsRepo->GetGroup(Configs::dataManager->settingsRepo->current_group);
@@ -2286,6 +2367,7 @@ void MainWindow::on_tabWidget_customContextMenuRequested(const QPoint &p) {
     if (!group->Profiles().empty()) {
         menu->addAction(ui->actionUrl_Test_Group);
         menu->addAction(ui->actionSpeedtest_Group);
+        menu->addAction(ui->actionResolve_Out_IP);
         menu->addAction(ui->menu_resolve_domain);
         menu->addAction(ui->menu_clear_test_result);
         menu->addAction(ui->menu_delete_repeat);
@@ -2415,6 +2497,9 @@ void MainWindow::setActionsData()
     ui->actionUrl_Test_Selected->setData(QString("m22"));
     ui->actionHide_window->setData(QString("m23"));
     ui->actionAdd_profile_from_File->setData(QString("m24"));
+    ui->actionRefresh_Column_Widths->setData(QString("m25"));
+    ui->actionResolve_Out_IP->setData(QString("m26"));
+    ui->actionResolve_Selected_Out_IP->setData(QString("m27"));
 }
 
 QList<QAction*> MainWindow::getActionsForShortcut()

@@ -23,8 +23,14 @@ namespace Configs
             }
             case GroupSortMethod::ByAddress:
             case GroupSortMethod::ByName:
-            case GroupSortMethod::ByLatency:
+            case GroupSortMethod::ByTestResult:
             case GroupSortMethod::ByType: {
+                auto get_latency_for_sort = [](const std::shared_ptr<Profile>& prof) {
+                    auto i = prof->latency;
+                    if (i == 0) i = 100000;
+                    if (i < 0) i = 99999;
+                    return i;
+                };
                 std::ranges::sort(profiles,
                                   [&](int a, int b) {
                                       auto profA = dataManager->profilesRepo->GetProfile(a);
@@ -40,33 +46,21 @@ namespace Configs
                                       } else if (sortAction.method == GroupSortMethod::ByAddress) {
                                           ms_a = profA->outbound->DisplayAddress();
                                           ms_b = profB->outbound->DisplayAddress();
-                                      } else if (sortAction.method == GroupSortMethod::ByLatency) {
-                                          ms_a = profA->full_test_report;
-                                          ms_b = profB->full_test_report;
-                                      }
-                                      auto get_latency_for_sort = [](const std::shared_ptr<Profile>& prof) {
-                                          auto i = prof->latency;
-                                          if (i == 0) i = 100000;
-                                          if (i < 0) i = 99999;
-                                          return i;
-                                      };
-                                      if (sortAction.descending) {
-                                          if (sortAction.method == GroupSortMethod::ByLatency) {
-                                              if (ms_a.isEmpty() && ms_b.isEmpty()) {
-                                                  // compare latency if full_test_report is empty
-                                                  return get_latency_for_sort(profA) > get_latency_for_sort(profB);
-                                              }
+                                      } else if (sortAction.method == GroupSortMethod::ByTestResult) {
+                                          if (test_sort_by == testBy::latency) {
+                                              return sortAction.descending ? get_latency_for_sort(profA) > get_latency_for_sort(profB) : get_latency_for_sort(profA) < get_latency_for_sort(profB);
                                           }
-                                          return ms_a > ms_b;
-                                      } else {
-                                          if (sortAction.method == GroupSortMethod::ByLatency) {
-                                              if (ms_a.isEmpty() && ms_b.isEmpty()) {
-                                                  // compare latency if full_test_report is empty
-                                                  return get_latency_for_sort(profA) < get_latency_for_sort(profB);
-                                              }
+                                          if (test_sort_by == testBy::dlSpeed) {
+                                              return sortAction.descending ? profA->dl_speed > profB->dl_speed : profA->dl_speed < profB->dl_speed;
                                           }
-                                          return ms_a < ms_b;
+                                          if (test_sort_by == testBy::ulSpeed) {
+                                              return sortAction.descending ? profA->ul_speed > profB->ul_speed : profA->ul_speed < profB->ul_speed;
+                                          }
+                                          if (test_sort_by == testBy::ipOut) {
+                                              return sortAction.descending ? profA->ip_out > profB->ip_out : profA->ip_out < profB->ip_out;
+                                          }
                                       }
+                                      return sortAction.descending ? ms_a > ms_b : ms_a < ms_b;
                                   });
                 break;
             }
@@ -75,23 +69,23 @@ namespace Configs
         return true;
     }
 
-    bool Group::AddProfile(int id)
+    bool Group::AddProfile(int ID)
     {
         QMutexLocker locker(&mutex);
-        if (HasProfile(id))
+        if (HasProfile(ID))
         {
             return false;
         }
         column_width.clear();
-        profiles.append(id);
+        profiles.append(ID);
         return true;
     }
 
-    bool Group::RemoveProfile(int id)
+    bool Group::RemoveProfile(int ID)
     {
         QMutexLocker locker(&mutex);
-        if (!HasProfile(id)) return false;
-        profiles.removeAll(id);
+        if (!HasProfile(ID)) return false;
+        profiles.removeAll(ID);
         return true;
     }
 
@@ -113,8 +107,8 @@ namespace Configs
         return true;
     }
 
-    bool Group::HasProfile(int id) const
+    bool Group::HasProfile(int ID) const
     {
-        return profiles.contains(id);
+        return profiles.contains(ID);
     }
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"Core/gen"
 	"Core/internal/boxmain"
+	"Core/test_utils"
 	"context"
 	"flag"
 	"fmt"
@@ -88,7 +89,7 @@ func main() {
 		}
 	}()
 
-	testCtx, cancelTests = context.WithCancel(context.Background())
+	test_utils.TestCtx, test_utils.CancelTests = context.WithCancel(context.Background())
 	RunCore()
 	return
 }

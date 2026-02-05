@@ -113,6 +113,39 @@ if (!Configs::dataManager->settingsRepo->core_running) MW_show_log("Cannot invok
         }
     }
 
+    libcore::IPTestResp Client::IPTest(bool *rpcOK, const libcore::IPTestRequest &request) {
+        CHECK("IPTest")
+        libcore::IPTestResp reply;
+        std::string resp, req = spb::pb::serialize<std::string>(request);
+        auto err = make_rpc_client()->CallMethod("LibcoreService.IPTest", &req, &resp);
+
+        if(err.IsNil()) {
+            reply = spb::pb::deserialize< libcore::IPTestResp >( resp );
+            *rpcOK = true;
+            return reply;
+        } else {
+            NOT_OK
+            return reply;
+        }
+    }
+
+    libcore::QueryIPTestResponse Client::QueryIPTest(bool *rpcOK) {
+        CHECK("QueryIPTest")
+        libcore::EmptyReq request;
+        libcore::QueryIPTestResponse reply;
+        std::string resp, req = spb::pb::serialize<std::string>(request);
+        auto err = make_rpc_client()->CallMethod("LibcoreService.QueryIPTest", &req, &resp);
+
+        if(err.IsNil()) {
+            reply = spb::pb::deserialize< libcore::QueryIPTestResponse >( resp );
+            *rpcOK = true;
+            return reply;
+        } else {
+            NOT_OK
+            return reply;
+        }
+    }
+
     QString Client::SetSystemDNS(bool *rpcOK, const bool clear) const {
         CHECK("SetSystemDNS")
         libcore::SetSystemDNSRequest request;

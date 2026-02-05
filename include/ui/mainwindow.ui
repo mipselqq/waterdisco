@@ -276,31 +276,6 @@
            <attribute name="verticalHeaderDefaultSectionSize">
             <number>30</number>
            </attribute>
-           <column>
-            <property name="text">
-             <string>Type</string>
-            </property>
-           </column>
-           <column>
-            <property name="text">
-             <string>Address</string>
-            </property>
-           </column>
-           <column>
-            <property name="text">
-             <string>Name</string>
-            </property>
-           </column>
-           <column>
-            <property name="text">
-             <string>Test Result</string>
-            </property>
-           </column>
-           <column>
-            <property name="text">
-             <string>Traffic</string>
-            </property>
-           </column>
           </widget>
          </item>
         </layout>
@@ -628,6 +603,7 @@
     <addaction name="menu_resolve_selected"/>
     <addaction name="actionSpeedtest_Current"/>
     <addaction name="actionSpeedtest_Selected"/>
+    <addaction name="actionResolve_Selected_Out_IP"/>
    </widget>
    <widget class="QMenu" name="menuHidden_menu">
     <property name="title">
@@ -641,6 +617,8 @@
     <addaction name="menu_clear_test_result"/>
     <addaction name="menu_delete_repeat"/>
     <addaction name="actionSpeedtest_Group"/>
+    <addaction name="actionResolve_Out_IP"/>
+    <addaction name="actionRefresh_Column_Widths"/>
    </widget>
    <widget class="QMenu" name="menuRouting_Menu">
     <property name="title">
@@ -1107,6 +1085,21 @@
    </property>
    <property name="shortcut">
     <string notr="true">Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionResolve_Out_IP">
+   <property name="text">
+    <string>Resolve Out IP</string>
+   </property>
+  </action>
+  <action name="actionResolve_Selected_Out_IP">
+   <property name="text">
+    <string>Resolve Selected Out IP</string>
+   </property>
+  </action>
+  <action name="actionRefresh_Column_Widths">
+   <property name="text">
+    <string>Refresh Column Widths</string>
    </property>
   </action>
  </widget>

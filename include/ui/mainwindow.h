@@ -261,9 +261,13 @@ private:
 
     void urltest_current_group(const QList<int>& profileIDs);
 
+    void iptest_current_group(const QList<int>& profileIDs);
+
     void stopTests();
 
     void runURLTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
+
+    void runIPTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
 
     void url_test_current();
 
