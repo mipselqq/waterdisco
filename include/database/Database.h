@@ -17,7 +17,6 @@ namespace Configs {
         std::string dl_speed;
         std::string ul_speed;
         std::string test_country;
-        std::string full_test_report;
         std::string ip_out;
         std::string outbound_json;
         std::string traffic_json;
