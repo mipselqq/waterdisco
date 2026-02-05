@@ -58,10 +58,10 @@ namespace Configs {
     void Database::execBatchInsertProfilesChunk(const std::vector<ProfileInsertRow>& rows) {
         if (rows.empty()) return;
         const size_t n = rows.size();
-        std::string sql = "INSERT INTO profiles (id, type, name, gid, latency, dl_speed, ul_speed, test_country, full_test_report, outbound_json, traffic_json) VALUES ";
+        std::string sql = "INSERT INTO profiles (id, type, name, gid, latency, dl_speed, ul_speed, test_country, full_test_report, ip_out, outbound_json, traffic_json) VALUES ";
         for (size_t i = 0; i < n; ++i) {
             if (i > 0) sql += ",";
-            sql += "(?,?,?,?,?,?,?,?,?,?,?)";
+            sql += "(?,?,?,?,?,?,?,?,?,?,?,?)";
         }
         try {
             SQLite::Statement stmt(db, sql);
@@ -76,6 +76,7 @@ namespace Configs {
                 stmt.bind(idx++, r.ul_speed);
                 stmt.bind(idx++, r.test_country);
                 stmt.bind(idx++, r.full_test_report);
+                stmt.bind(idx++, r.ip_out);
                 stmt.bind(idx++, r.outbound_json);
                 stmt.bind(idx++, r.traffic_json);
             }

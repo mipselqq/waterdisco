@@ -138,6 +138,112 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
     }
 }
 
+void MainWindow::runIPTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID) {
+    if (stopSpeedtest.load()) {
+        MW_show_log(tr("Profile test aborted"));
+        return;
+    }
+
+    libcore::IPTestRequest req;
+    for (const auto &item: outboundTags) {
+        req.outbound_tags.push_back(item.toStdString());
+    }
+    req.config = config.toStdString();
+    req.use_default_outbound = useDefault;
+    req.max_concurrency = Configs::dataManager->settingsRepo->test_concurrent;
+    req.test_timeout_ms = Configs::dataManager->settingsRepo->url_test_timeout_ms;
+    req.xray_config = xrayConfig.toStdString();
+    req.need_xray = !xrayConfig.isEmpty();
+
+    auto done = new QMutex;
+    done->lock();
+    runOnNewThread([=,this]
+    {
+        bool ok;
+        while (true)
+        {
+            QThread::msleep(200);
+            if (done->try_lock()) break;
+            auto resp = defaultClient->QueryIPTest(&ok);
+            if (!ok || resp.results.empty())
+            {
+                continue;
+            }
+
+            bool needRefresh = false;
+            for (const auto& res : resp.results)
+            {
+                int entid = -1;
+                if (!tag2entID.empty()) {
+                    entid = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
+                }
+                if (entid == -1) {
+                    continue;
+                }
+                auto ent = Configs::dataManager->profilesRepo->GetProfile(entid);
+                if (ent == nullptr) {
+                    continue;
+                }
+                if (res.error.value().empty()) {
+                    ent->ip_out = QString::fromStdString(res.ip.value());
+                    ent->test_country = QString::fromStdString(res.country_code.value());
+                } else {
+                    if (!QString::fromStdString(res.error.value()).contains("test aborted") &&
+                        !QString::fromStdString(res.error.value()).contains("context canceled")) {
+                        MW_show_log(tr("[%1] IP test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
+                    }
+                    ent->ip_out.clear();
+                    ent->test_country.clear();
+                }
+                Configs::dataManager->profilesRepo->Save(ent);
+                needRefresh = true;
+            }
+            if (needRefresh)
+            {
+                runOnUiThread([=,this]{
+                    refresh_proxy_list();
+                });
+            }
+        }
+        done->unlock();
+        delete done;
+    });
+    bool rpcOK;
+    auto result = defaultClient->IPTest(&rpcOK, req);
+    done->unlock();
+    //
+    if (!rpcOK || result.results.empty()) return;
+
+    for (const auto &res: result.results) {
+        if (!tag2entID.empty()) {
+            entID = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
+        }
+        if (entID == -1) {
+            MW_show_log(tr("Something is very wrong, the subject ent cannot be found!"));
+            continue;
+        }
+
+        auto ent = Configs::dataManager->profilesRepo->GetProfile(entID);
+        if (ent == nullptr) {
+            MW_show_log(tr("Profile manager data is corrupted, try again."));
+            continue;
+        }
+
+        if (res.error.value().empty()) {
+            ent->ip_out = QString::fromStdString(res.ip.value());
+            ent->test_country = QString::fromStdString(res.country_code.value());
+        } else {
+            if (!QString::fromStdString(res.error.value()).contains("test aborted") &&
+                !QString::fromStdString(res.error.value()).contains("context canceled")) {
+                MW_show_log(tr("[%1] IP test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
+            }
+            ent->ip_out.clear();
+            ent->test_country.clear();
+        }
+        Configs::dataManager->profilesRepo->Save(ent);
+    }
+}
+
 void MainWindow::urltest_current_group(const QList<int>& profileIDs) {
     if (profileIDs.isEmpty()) {
         return;
@@ -172,7 +278,8 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs) {
 
             if (!buildObject->outboundTags.empty()) {
                 auto func = [this, &buildObject, &counter, testCount]() {
-                    runURLTest(QJsonObject2QString(buildObject->coreConfig, false),QJsonObject2QString(buildObject->xrayConfig, false), false, buildObject->outboundTags, buildObject->tag2entID);
+                    auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
+                    runURLTest(QJsonObject2QString(buildObject->coreConfig, false),xrayConf, false, buildObject->outboundTags, buildObject->tag2entID);
                     ++counter;
                     if (counter.load() == testCount) {
                         speedtestRunning.unlock();
@@ -248,19 +355,79 @@ void MainWindow::url_test_current() {
     });
 }
 
+void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
+    if (profileIDs.isEmpty()) {
+        return;
+    }
+    if (!speedtestRunning.tryLock()) {
+        MessageBoxWarning(software_name, tr("The last test did not exit completely, please wait. If it persists, please restart the program."));
+        return;
+    }
+
+    runOnNewThread([this, profileIDs]() {
+        stopSpeedtest.store(false);
+        auto ipTestFunc = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice) {
+            auto buildObject = Configs::BuildTestConfig(profileSlice);
+            if (!buildObject->error.isEmpty()) {
+                MW_show_log(tr("Failed to build test config for batch: ") + buildObject->error);
+                return;
+            }
+
+            std::atomic<int> counter(0);
+            auto testCount = buildObject->fullConfigs.size() + (!buildObject->outboundTags.empty());
+            for (const auto &entID: buildObject->fullConfigs.keys()) {
+                auto configStr = buildObject->fullConfigs[entID];
+                auto func = [this, &counter, testCount, configStr, entID]() {
+                    runIPTest(configStr, "", true, {}, {}, entID);
+                    ++counter;
+                    if (counter.load() == testCount) {
+                        speedtestRunning.unlock();
+                    }
+                };
+                parallelCoreCallPool->start(func);
+            }
+
+            if (!buildObject->outboundTags.empty()) {
+                auto func = [this, &buildObject, &counter, testCount]() {
+                    auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
+                    runIPTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID);
+                    ++counter;
+                    if (counter.load() == testCount) {
+                        speedtestRunning.unlock();
+                    }
+                };
+                parallelCoreCallPool->start(func);
+            }
+            if (testCount == 0) speedtestRunning.unlock();
+
+            speedtestRunning.lock();
+            MW_show_log("IP test for batch done.");
+            runOnUiThread([=,this]{
+                refresh_proxy_list();
+            });
+        };
+        for (int i = 0; i < profileIDs.length(); i += 100) {
+            if (stopSpeedtest.load()) break;
+            auto profileIDsSlice = profileIDs.mid(i, 100);
+            auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
+            ipTestFunc(profiles);
+        }
+        speedtestRunning.unlock();
+        MW_show_log(tr("IP test finished!"));
+    });
+}
+
 void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool testCurrent)
 {
     if (profileIDs.isEmpty() && !testCurrent) {
         return;
     }
     if (!speedtestRunning.tryLock()) {
-        MessageBoxWarning(software_name, tr("The last speed test did not exit completely, please wait. If it persists, please restart the program."));
+        MessageBoxWarning(software_name, tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
         return;
     }
 
-    auto currentGroup = Configs::dataManager->groupsRepo->GetGroup(Configs::dataManager->profilesRepo->GetProfile(profileIDs[0])->gid);
-
-    runOnNewThread([this, profileIDs, testCurrent, currentGroup]() {
+    runOnNewThread([this, profileIDs, testCurrent]() {
         stopSpeedtest.store(false);
         if (!testCurrent)
         {
@@ -277,7 +444,8 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool test
                 }
 
                 if (!buildObject->outboundTags.empty()) {
-                    runSpeedTest(QJsonObject2QString(buildObject->coreConfig, false), QJsonObject2QString(buildObject->xrayConfig, false), false, false, buildObject->outboundTags, buildObject->tag2entID);
+                    auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, true) : "";
+                    runSpeedTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, false, buildObject->outboundTags, buildObject->tag2entID);
                 }
             };
             for (int i=0;i<profileIDs.length();i+=100) {
@@ -293,7 +461,6 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool test
 
         speedtestRunning.unlock();
         runOnUiThread([=,this]{
-            if (currentGroup->auto_clear_unavailable) clearUnavailableProfiles(false, profileIDs);
             refresh_proxy_list();
             MW_show_log(tr("Speedtest finished!"));
         });

@@ -1,5 +1,7 @@
 #include <include/database/entities/Profile.h>
 
+#include "include/database/GroupsRepo.h"
+
 namespace Configs
 {
     Profile::Profile(Configs::outbound *outbound, const QString &type_)
@@ -12,16 +14,30 @@ namespace Configs
         }
     }
 
+    void Profile::ClearTestResults() {
+        test_country.clear();
+        ip_out.clear();
+        latency = 0;
+        dl_speed.clear();
+        ul_speed.clear();
+    }
+
     QString Profile::DisplayTestResult() const {
+        auto group = dataManager->groupsRepo->GetGroup(gid);
+        if (group == nullptr) return "";
         QString result;
+        if (!test_country.isEmpty()) result += UNICODE_LRO + CountryCodeToFlag(test_country) + " ";
         if (latency < 0) {
             result = "Unavailable";
+            return result;
         } else if (latency > 0) {
-            if (!test_country.isEmpty()) result += UNICODE_LRO + CountryCodeToFlag(test_country) + " ";
             result += QString("%1 ms").arg(latency);
         }
-        if (!dl_speed.isEmpty() && dl_speed != "N/A") result += " ↓" + dl_speed;
-        if (!ul_speed.isEmpty() && ul_speed != "N/A") result += " ↑" + ul_speed;
+        bool showSpeed = group->test_items_to_show == testShowItems::all || group->test_items_to_show == testShowItems::speedOnly;
+        bool showIP = group->test_items_to_show == testShowItems::all || group->test_items_to_show == testShowItems::ipOnly;
+        if (!dl_speed.isEmpty() && dl_speed != "N/A" && showSpeed) result += " ↓" + dl_speed;
+        if (!ul_speed.isEmpty() && ul_speed != "N/A" && showSpeed) result += " ↑" + ul_speed;
+        if (!ip_out.isEmpty() && showIP) result += " 🌐" + ip_out;
         return result;
     }
 

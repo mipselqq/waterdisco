@@ -104,13 +104,13 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         case 0: return profile->outbound ? profile->outbound->DisplayType() : QString();
         case 1: return profile->outbound ? profile->outbound->DisplayAddress() : QString();
         case 2: return profile->outbound ? profile->outbound->name : QString();
-        case 3: return profile->full_test_report.isEmpty() ? profile->DisplayTestResult() : profile->full_test_report;
+        case 3: return profile->DisplayTestResult();
         case 4: return profile->traffic_data ? profile->traffic_data->DisplayTraffic() : QString();
         default: return {};
         }
     }
     if (role == Qt::ForegroundRole) {
-        if (index.column() == 3 && profile->full_test_report.isEmpty()) {
+        if (index.column() == 3) {
             QColor latencyColor = profile->DisplayLatencyColor();
             if (latencyColor.isValid()) return latencyColor;
         }

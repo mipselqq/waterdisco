@@ -7,6 +7,20 @@
 
 namespace Configs
 {
+    enum class testBy : int {
+        latency = 0,
+        dlSpeed,
+        ulSpeed,
+        ipOut
+    };
+
+    enum class testShowItems : int {
+        all = 0,
+        none,
+        ipOnly,
+        speedOnly
+    };
+
     class Group {
     public:
         QMutex mutex;
@@ -25,6 +39,8 @@ namespace Configs
         QList<int> column_width;
         QList<int> profiles;
         int scroll_last_profile = -1;
+        testBy test_sort_by = testBy::latency;
+        testShowItems test_items_to_show = testShowItems::all;
 
         Group() = default;
 
@@ -32,14 +48,14 @@ namespace Configs
 
         bool SortProfiles(GroupSortAction method);
 
-        bool RemoveProfile(int id);
+        bool RemoveProfile(int ID);
 
-        bool AddProfile(int id);
+        bool AddProfile(int ID);
 
         bool SwapProfiles(int idx1, int idx2);
 
         bool EmplaceProfile(int idx, int newIdx);
 
-        bool HasProfile(int id) const;
+        [[nodiscard]] bool HasProfile(int ID) const;
     };
 }// namespace Configs

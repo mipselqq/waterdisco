@@ -18,6 +18,7 @@ namespace Configs {
         std::string ul_speed;
         std::string test_country;
         std::string full_test_report;
+        std::string ip_out;
         std::string outbound_json;
         std::string traffic_json;
     };
@@ -124,9 +125,9 @@ namespace Configs {
             }
         }
 
-        // Chunked (11 params per row -> BATCH_LIMIT/11 rows per chunk)
+        // Chunked (12 params per row -> BATCH_LIMIT/12 rows per chunk)
         void execBatchInsertProfiles(const std::vector<ProfileInsertRow>& rows) {
-            const size_t chunkSize = BATCH_LIMIT / 11;
+            const size_t chunkSize = BATCH_LIMIT / 12;
             for (size_t off = 0; off < rows.size(); off += chunkSize) {
                 size_t end = std::min(off + chunkSize, rows.size());
                 std::vector<ProfileInsertRow> chunk(rows.begin() + static_cast<std::ptrdiff_t>(off),

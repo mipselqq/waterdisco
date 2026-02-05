@@ -37,10 +37,12 @@ namespace Configs {
         std::shared_ptr<Configs::outbound> outbound;
         std::shared_ptr<Stats::TrafficData> traffic_data = std::make_shared<Stats::TrafficData>("");
 
-        QString full_test_report;
+        QString ip_out;
 
         Profile() = default;
         Profile(Configs::outbound *outbound, const QString &type_);
+
+        void ClearTestResults();
 
         [[nodiscard]] QString DisplayTestResult() const;
 

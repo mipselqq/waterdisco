@@ -27,7 +27,7 @@ namespace Configs {
                 dl_speed TEXT,
                 ul_speed TEXT,
                 test_country TEXT,
-                full_test_report TEXT,
+                ip_out TEXT,
                 outbound_json TEXT NOT NULL,
                 traffic_json TEXT,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
@@ -35,7 +35,7 @@ namespace Configs {
                 FOREIGN KEY(gid) REFERENCES groups(id) ON DELETE CASCADE
             )
         )");
-        
+
         // Create indexes for faster lookups
         db.exec("CREATE INDEX IF NOT EXISTS idx_profiles_gid ON profiles(gid)");
         db.exec("CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name)");
@@ -53,7 +53,7 @@ namespace Configs {
         json["dl_speed"] = profile->dl_speed;
         json["ul_speed"] = profile->ul_speed;
         json["test_country"] = profile->test_country;
-        json["full_test_report"] = profile->full_test_report;
+        json["ip_out"] = profile->ip_out;
         
         // Complex objects - serialize to JSON strings
         if (profile->outbound) {
@@ -79,7 +79,7 @@ namespace Configs {
         profile->dl_speed = json["dl_speed"].toString();
         profile->ul_speed = json["ul_speed"].toString();
         profile->test_country = json["test_country"].toString();
-        profile->full_test_report = json["full_test_report"].toString();
+        profile->ip_out = json["ip_out"].toString();
         
         // Reconstruct outbound (bean is not needed in new implementation)
         QString type = profile->type;
@@ -175,7 +175,7 @@ namespace Configs {
             db.exec(R"(
                 UPDATE profiles 
                 SET type = ?, name = ?, gid = ?, latency = ?, dl_speed = ?, ul_speed = ?, 
-                    test_country = ?, full_test_report = ?, outbound_json = ?, 
+                    test_country = ?, ip_out = ?, outbound_json = ?,
                     traffic_json = ?, updated_at = strftime('%s', 'now')
                 WHERE id = ?
             )", 
@@ -186,7 +186,7 @@ namespace Configs {
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
                 profile->test_country.toStdString(),
-                profile->full_test_report.toStdString(),
+                profile->ip_out.toStdString(),
                 outboundJson.toStdString(),
                 trafficJson.toStdString(),
                 id
@@ -196,8 +196,8 @@ namespace Configs {
             db.exec(R"(
                 INSERT INTO profiles 
                 (id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
-                 full_test_report, outbound_json, traffic_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ip_out, outbound_json, traffic_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 profile->type.toStdString(),
@@ -207,7 +207,7 @@ namespace Configs {
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
                 profile->test_country.toStdString(),
-                profile->full_test_report.toStdString(),
+                profile->ip_out.toStdString(),
                 outboundJson.toStdString(),
                 trafficJson.toStdString()
             );
@@ -233,7 +233,7 @@ namespace Configs {
         row.dl_speed = profile->dl_speed.toStdString();
         row.ul_speed = profile->ul_speed.toStdString();
         row.test_country = profile->test_country.toStdString();
-        row.full_test_report = profile->full_test_report.toStdString();
+        row.ip_out = profile->ip_out.toStdString();
         row.outbound_json = outboundJson.toStdString();
         row.traffic_json = trafficJson.toStdString();
         return row;
@@ -249,7 +249,7 @@ namespace Configs {
         json["dl_speed"] = QString::fromStdString(stmt.getColumn(5).getText());
         json["ul_speed"] = QString::fromStdString(stmt.getColumn(6).getText());
         json["test_country"] = QString::fromStdString(stmt.getColumn(7).getText());
-        json["full_test_report"] = QString::fromStdString(stmt.getColumn(8).getText());
+        json["ip_out"] = QString::fromStdString(stmt.getColumn(8).getText());
         
         QString outboundJsonStr = QString::fromStdString(stmt.getColumn(9).getText());
         QJsonDocument outboundDoc = QJsonDocument::fromJson(outboundJsonStr.toUtf8());
@@ -271,7 +271,7 @@ namespace Configs {
     std::shared_ptr<Profile> ProfilesRepo::loadFromDatabase(int id) const {
         auto query = db.query(R"(
             SELECT id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
-                   full_test_report, outbound_json, traffic_json
+                   ip_out, outbound_json, traffic_json
             FROM profiles WHERE id = ?
         )", id);
         if (!query || !query->executeStep()) {
@@ -400,7 +400,7 @@ namespace Configs {
             idList += QString::number(chunkIds[i]);
         }
         std::string sql = "SELECT id, type, name, gid, latency, dl_speed, ul_speed, test_country, "
-                         "full_test_report, outbound_json, traffic_json FROM profiles WHERE id IN (" +
+                         "ip_out, outbound_json, traffic_json FROM profiles WHERE id IN (" +
                          idList.toStdString() + ") ORDER BY id";
         auto query = db.query(sql);
         if (!query) return result;

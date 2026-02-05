@@ -20,6 +20,8 @@ service LibcoreService {
   rpc SpeedTest(SpeedTestRequest) returns(SpeedTestResponse);
   rpc QuerySpeedTest(EmptyReq) returns(QuerySpeedTestResponse);
   rpc QueryCountryTest(EmptyReq) returns(QueryCountryTestResponse);
+  rpc IPTest(IPTestRequest) returns (IPTestResp);
+  rpc QueryIPTest(EmptyReq) returns (QueryIPTestResponse);
   //
   rpc Clash2Singbox(Clash2SingboxRequest) returns(Clash2SingboxResponse);
 }
@@ -149,3 +151,29 @@ message Clash2SingboxResponse {
   optional string singbox_config = 1 [default = ""];
   optional string error = 2 [default = ""];
 }
+
+message IPTestRes {
+  optional string outbound_tag = 1 [default = ""];
+  optional string ip = 2 [default = "" ];
+  optional string country_code = 3 [default = ""];
+  optional string error = 4 [default = ""];
+}
+
+message IPTestRequest {
+  optional string config = 1 [default = ""];
+  repeated string outbound_tags = 2;
+  optional bool use_default_outbound = 3 [default = false];
+  optional int32 max_concurrency = 4 [default = 0];
+  optional int32 test_timeout_ms = 5 [default = 0];
+  optional bool need_xray = 6 [default = false];
+  optional string xray_config = 7 [default = ""];
+}
+
+message IPTestResp {
+  repeated IPTestRes results = 1;
+}
+
+message QueryIPTestResponse {
+  repeated IPTestRes results = 1;
+}
+

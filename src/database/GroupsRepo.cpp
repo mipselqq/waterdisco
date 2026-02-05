@@ -32,6 +32,8 @@ namespace Configs {
                 profiles_json TEXT NOT NULL DEFAULT '[]',
                 scroll_last_profile INTEGER NOT NULL DEFAULT -1,
                 auto_clear_unavailable INTEGER NOT NULL DEFAULT 0,
+                test_sort_by INTEGER NOT NULL DEFAULT 0,
+                test_items_to_show INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
             )
@@ -62,6 +64,8 @@ namespace Configs {
         json["column_width"] = QListInt2QJsonArray(group->column_width);
         json["profiles"] = QListInt2QJsonArray(group->profiles);
         json["scroll_last_profile"] = group->scroll_last_profile;
+        json["test_sort_by"] = static_cast<int>(group->test_sort_by);
+        json["test_items_to_show"] = static_cast<int>(group->test_items_to_show);
         
         return json;
     }
@@ -82,6 +86,8 @@ namespace Configs {
         group->column_width = QJsonArray2QListInt(json["column_width"].toArray());
         group->profiles = QJsonArray2QListInt(json["profiles"].toArray());
         group->scroll_last_profile = json["scroll_last_profile"].toInt(-1);
+        group->test_sort_by = static_cast<testBy>(json["test_sort_by"].toInt(0));
+        group->test_items_to_show = static_cast<testShowItems>(json["test_items_to_show"].toInt(0));
         
         return group;
     }
@@ -107,7 +113,7 @@ namespace Configs {
                 UPDATE groups 
                 SET archive = ?, skip_auto_update = ?, auto_clear_unavailable = ?, name = ?, url = ?, info = ?,
                     sub_last_update = ?, front_proxy_id = ?, landing_proxy_id = ?,
-                    column_width_json = ?, profiles_json = ?, scroll_last_profile = ?,
+                    column_width_json = ?, profiles_json = ?, scroll_last_profile = ?, test_sort_by = ?, test_items_to_show = ?,
                     updated_at = strftime('%s', 'now')
                 WHERE id = ?
             )",
@@ -123,6 +129,8 @@ namespace Configs {
                 columnWidthJson.toStdString(),
                 profilesJson.toStdString(),
                 group->scroll_last_profile,
+                static_cast<int>(group->test_sort_by),
+                static_cast<int>(group->test_items_to_show),
                 id
             );
         } else {
@@ -131,8 +139,8 @@ namespace Configs {
                 INSERT INTO groups 
                 (id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
                  front_proxy_id, landing_proxy_id,
-                 column_width_json, profiles_json, scroll_last_profile)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 column_width_json, profiles_json, scroll_last_profile, test_sort_by, test_items_to_show)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 group->archive ? 1 : 0,
@@ -146,7 +154,9 @@ namespace Configs {
                 group->landing_proxy_id,
                 columnWidthJson.toStdString(),
                 profilesJson.toStdString(),
-                group->scroll_last_profile
+                group->scroll_last_profile,
+                static_cast<int>(group->test_sort_by),
+                static_cast<int>(group->test_items_to_show)
             );
         }
     }
@@ -155,7 +165,7 @@ namespace Configs {
         auto query = db.query(R"(
             SELECT id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
                    front_proxy_id, landing_proxy_id,
-                   column_width_json, profiles_json, scroll_last_profile
+                   column_width_json, profiles_json, scroll_last_profile, test_sort_by, test_items_to_show
             FROM groups WHERE id = ?
         )", id);
         if (!query || !query->executeStep()) {
@@ -191,9 +201,9 @@ namespace Configs {
             }
         }
 
-        if (query->getColumnCount() > 12) {
-            json["scroll_last_profile"] = query->getColumn(12).getInt();
-        }
+        json["scroll_last_profile"] = query->getColumn(12).getInt();
+        json["test_sort_by"] = query->getColumn(13).getInt();
+        json["test_items_to_show"] = query->getColumn(14).getInt();
         
         return groupFromJson(json);
     }
