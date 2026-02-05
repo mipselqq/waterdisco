@@ -82,6 +82,7 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     //
     D_LOAD_BOOL(start_minimal)
     D_LOAD_INT(max_log_line)
+    ui->skip_delete_confirm->setChecked(Configs::dataManager->settingsRepo->skip_delete_confirmation);
     //
     ui->language->setCurrentIndex(Configs::dataManager->settingsRepo->language);
     connect(ui->language, &QComboBox::currentIndexChanged, this, [=,this](int index) {
@@ -239,6 +240,7 @@ void DialogBasicSettings::accept() {
     if (oldUseCustomIcon != Configs::dataManager->settingsRepo->use_custom_icons) CACHE.updateTrayIcon = true;
     D_SAVE_BOOL(start_minimal)
     D_SAVE_INT(max_log_line)
+    Configs::dataManager->settingsRepo->skip_delete_confirmation = ui->skip_delete_confirm->isChecked();
     Configs::dataManager->settingsRepo->show_system_dns = ui->show_sys_dns->isChecked();
 
     if (Configs::dataManager->settingsRepo->max_log_line <= 0) {

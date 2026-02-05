@@ -341,15 +341,32 @@
          </item>
          <item>
           <widget class="QGroupBox" name="connection_statistics_box">
-           <layout class="QHBoxLayout" name="horizontalLayout_15">
-            <item>
+           <layout class="QGridLayout" name="gridLayout_11">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_17">
+              <property name="text">
+               <string>Max log lines</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
              <widget class="QLabel" name="label_9">
               <property name="text">
                <string>Connection statistics</string>
               </property>
              </widget>
             </item>
-            <item>
+            <item row="0" column="2">
+             <widget class="QLineEdit" name="max_log_line">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="2">
              <widget class="QCheckBox" name="connection_statistics">
               <property name="text">
                <string>Enable</string>
@@ -393,19 +410,9 @@
           <widget class="QGroupBox" name="groupBox_2">
            <layout class="QHBoxLayout" name="horizontalLayout_23">
             <item>
-             <widget class="QLabel" name="label_17">
+             <widget class="QCheckBox" name="skip_delete_confirm">
               <property name="text">
-               <string>Max log lines</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLineEdit" name="max_log_line">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
+               <string>Skip confirmation When Deleting Profiles</string>
               </property>
              </widget>
             </item>
