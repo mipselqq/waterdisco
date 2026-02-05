@@ -39,7 +39,8 @@ namespace Configs {
             "show_system_dns",
             "use_custom_icons",
             "xray_mux_default_on",
-            "use_dns_object"
+            "use_dns_object",
+        "skip_delete_confirmation"
         };
 
         const QSet<QString> intKeys = {
@@ -324,6 +325,7 @@ namespace Configs {
                 else if (key == "xray_mux_concurrency") xray_mux_concurrency = varValue.toInt();
                 else if (key == "xray_mux_default_on") xray_mux_default_on = varValue.toBool();
                 else if (key == "extra_core_paths") extraCorePaths = varValue.toStringList();
+                else if (key == "skip_delete_confirmation") skip_delete_confirmation = varValue.toBool();
             }
         }
     }
@@ -435,6 +437,7 @@ namespace Configs {
             {"xray_mux_concurrency", xray_mux_concurrency},
             {"xray_mux_default_on", xray_mux_default_on},
             {"extra_core_paths", extraCorePaths},
+            {"skip_delete_confirmation", skip_delete_confirmation},
         };
 
         std::vector<std::pair<std::string, std::string>> keyValues;

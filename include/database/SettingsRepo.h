@@ -90,6 +90,7 @@ namespace Configs {
         bool allow_beta_update = false;
         bool show_system_dns = false;
         bool use_custom_icons = false;
+        bool skip_delete_confirmation = false;
 
         // Network
         bool net_use_proxy = false;

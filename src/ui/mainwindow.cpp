@@ -1743,7 +1743,7 @@ void  MainWindow::on_menu_delete_repeat_triggered () {
     }
 
     if  (!out_del.empty()  &&
-        QMessageBox::question ( this ,  tr ( " Confirmation " ),  tr ( " Remove %1 item(s) ? " ). arg (out_del. length ()) +  " \n "  + remove_display) == QMessageBox::StandardButton::Yes) {
+        (Configs::dataManager->settingsRepo->skip_delete_confirmation || QMessageBox::question( this , tr("Confirmation"),tr( "Remove %1 item(s) ?").arg(out_del.length()) + "\n" + remove_display)==QMessageBox::StandardButton::Yes)) {
         QList<int> del_ids;
         for (const auto &ent: out_del) {
             del_ids += ent->id;
@@ -1756,8 +1756,7 @@ void  MainWindow::on_menu_delete_repeat_triggered () {
 void MainWindow::on_menu_delete_triggered() {
     auto entIDs = get_now_selected_list();
     if (entIDs.count() == 0) return;
-    if (QMessageBox::question(this, tr("Confirmation"), QString(tr("Remove %1 item(s) ?")).arg(entIDs.count())) ==
-        QMessageBox::StandardButton::Yes) {
+    if (Configs::dataManager->settingsRepo->skip_delete_confirmation || QMessageBox::question(this, tr("Confirmation"), QString(tr("Remove %1 item(s) ?")).arg(entIDs.count()))==QMessageBox::StandardButton::Yes) {
         QList<int> del_ids;
         for (const auto &entID: entIDs) {
             del_ids += entID;
@@ -2105,7 +2104,7 @@ void MainWindow::on_menu_remove_invalid_triggered() {
      runOnUiThread([=,this]
      {
          if (!out_del.empty() &&
-         QMessageBox::question(this, tr("Confirmation"), tr("Remove %1 Invalid item(s) ?").arg(out_del.length()) + "\n" + remove_display) == QMessageBox::StandardButton::Yes) {
+         (Configs::dataManager->settingsRepo->skip_delete_confirmation || QMessageBox::question(this, tr("Confirmation"), tr("Remove %1 Invalid item(s) ?").arg(out_del.length()) + "\n" + remove_display) == QMessageBox::StandardButton::Yes)) {
          QList<int> del_ids;
          for (const auto &ent: out_del) {
              del_ids += ent->id;
@@ -2219,7 +2218,7 @@ void MainWindow::clearUnavailableProfiles(bool confirm, QList<int> profileIDs) {
     };
 
     if (!del_ids.isEmpty()) {
-        if (confirm) {
+        if (confirm && !Configs::dataManager->settingsRepo->skip_delete_confirmation) {
             if (QMessageBox::question(this, tr("Confirmation"), tr("Remove %1 Unavailable item(s) ?").arg(del_ids.length()) + "\n" + remove_display) == QMessageBox::StandardButton::Yes) {
                 clearFunc();
             }
