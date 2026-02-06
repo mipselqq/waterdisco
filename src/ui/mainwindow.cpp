@@ -233,7 +233,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     software_name = "Throne";
     software_core_name = "sing-box";
     //
-    if (auto dashDir = QDir("dashboard"); !dashDir.exists("dashboard") && QDir().mkdir("dashboard")) {
+    if (auto dashDir = QDir("dashboard"); !dashDir.exists() && QDir().mkdir("dashboard")) {
         if (auto dashFile = QFile(":/Throne/dashboard-notice.html"); dashFile.exists() && dashFile.open(QIODevice::ReadOnly))
         {
             auto data = dashFile.readAll();
@@ -245,7 +245,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             dashFile.close();
         }
     }
-    if (auto dashDir = QDir("icons"); !dashDir.exists("icons")) {
+    if (auto iconsDir = QDir("icons"); !iconsDir.exists()) {
         QDir().mkdir("icons") ? qDebug("created icons dir") : qDebug("Failed to create icons dir");
     }
 
