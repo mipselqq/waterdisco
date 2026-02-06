@@ -478,9 +478,7 @@ namespace Configs {
 
     void ProfilesRepo::DeleteProfile(int id) {
         if (id == dataManager->settingsRepo->started_id) {
-            runOnUiThread([=] {
-                GetMainWindow()->profile_stop(false, true, false);
-            }, true);
+            GetMainWindow()->profile_stop(false, true, false);
         }
         auto profile = GetProfile(id);
         if (profile) {
@@ -500,9 +498,7 @@ namespace Configs {
         auto profiles = GetProfileBatch(ids);
         for (const auto& ent : profiles) {
             if (ent->id == dataManager->settingsRepo->started_id) {
-                runOnUiThread([=] {
-                    GetMainWindow()->profile_stop(false, true, false);
-                }, true);
+                GetMainWindow()->profile_stop(false, true, false);
             }
             groupIDs.insert(ent->gid);
         }
