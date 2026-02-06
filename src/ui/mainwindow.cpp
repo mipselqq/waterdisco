@@ -1757,11 +1757,7 @@ void MainWindow::on_menu_delete_triggered() {
     auto entIDs = get_now_selected_list();
     if (entIDs.count() == 0) return;
     if (Configs::dataManager->settingsRepo->skip_delete_confirmation || QMessageBox::question(this, tr("Confirmation"), QString(tr("Remove %1 item(s) ?")).arg(entIDs.count()))==QMessageBox::StandardButton::Yes) {
-        QList<int> del_ids;
-        for (const auto &entID: entIDs) {
-            del_ids += entID;
-        }
-        Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
+        Configs::dataManager->profilesRepo->BatchDeleteProfiles(entIDs);
         refresh_proxy_list();
     }
 }
