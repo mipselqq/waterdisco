@@ -635,9 +635,6 @@
    <property name="text">
     <string>Exit</string>
    </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+Shift+W</string>
-   </property>
   </action>
   <action name="actionShow_window">
    <property name="text">
@@ -647,9 +644,6 @@
   <action name="menu_basic_settings">
    <property name="text">
     <string>Basic Settings</string>
-   </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+,</string>
    </property>
   </action>
   <action name="menu_add_from_input">
@@ -664,16 +658,13 @@
    <property name="text">
     <string>Groups</string>
    </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+G</string>
-   </property>
   </action>
   <action name="menu_start">
    <property name="text">
     <string>Start</string>
    </property>
    <property name="shortcut">
-    <string notr="true">Return</string>
+    <string>Return</string>
    </property>
   </action>
   <action name="menu_stop">
@@ -687,9 +678,6 @@
   <action name="menu_routing_settings">
    <property name="text">
     <string>Routing Settings</string>
-   </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+Shift+O</string>
    </property>
   </action>
   <action name="menu_add_from_clipboard">
@@ -705,7 +693,7 @@
     <string>Delete</string>
    </property>
    <property name="shortcut">
-    <string notr="true">Del</string>
+    <string>Del</string>
    </property>
   </action>
   <action name="menu_add_from_clipboard2">
@@ -863,9 +851,6 @@
    <property name="text">
     <string>Hotkey Settings</string>
    </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+K</string>
-   </property>
   </action>
   <action name="menu_select_all">
    <property name="text">
@@ -946,24 +931,15 @@
    <property name="text">
     <string>Tun Settings</string>
    </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+T</string>
-   </property>
   </action>
   <action name="actionRestart_Program">
    <property name="text">
     <string>Restart Program</string>
    </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+F5</string>
-   </property>
   </action>
   <action name="menu_open_config_folder">
    <property name="text">
     <string>Open Config Folder</string>
-   </property>
-   <property name="shortcut">
-    <string notr="true">Ctrl+Shift+E</string>
    </property>
   </action>
   <action name="actionfake_4">
@@ -985,9 +961,6 @@
   <action name="actionRestart_Proxy">
    <property name="text">
     <string>Restart Proxy</string>
-   </property>
-   <property name="shortcut">
-    <string notr="true">F5</string>
    </property>
   </action>
   <action name="menu_stop_testing">
