@@ -838,12 +838,10 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
     if (!mu_stopping.tryLock()) {
         return;
     }
-    QMutex blocker;
-    if (block) blocker.lock();
 
     UpdateConnectionListWithRecreate({});
 
-    runOnNewThread([=, this, &blocker] {
+    runOnNewThread([=, this] {
         Stats::trafficLooper->loop_enabled = false;
         Stats::connection_lister->suspend = true;
         Stats::trafficLooper->loop_mutex.lock();
@@ -869,8 +867,6 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
         Configs::dataManager->settingsRepo->need_keep_vpn_off = false;
         running = nullptr;
 
-        if (block) blocker.unlock();
-
         runOnUiThread([=, this, &restartMsgboxTimer, &restartMsgbox] {
             restartMsgboxTimer->cancel();
             restartMsgboxTimer->deleteLater();
@@ -881,11 +877,5 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
 
             mu_stopping.unlock();
         }, true);
-    });
-
-    if (block)
-    {
-        blocker.lock();
-        blocker.unlock();
-    }
+    }, block);
 }
