@@ -213,11 +213,12 @@ private:
 
     // search
     bool searchEnabled = false;
-    QString searchString;
+    QString addressFilterString;
+    QString nameFilterString;
+    QString typeFilterString;
+    QString countryFilterString;
 
     ProfilesTableModel *profilesTableModel = nullptr;
-
-    void setSearchState(bool enable);
 
     QList<int> filterProfilesList(const QList<int>& profileIDs);
 

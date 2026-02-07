@@ -204,9 +204,6 @@
         </property>
        </widget>
       </item>
-      <item>
-       <widget class="QLineEdit" name="search_input"/>
-      </item>
      </layout>
     </item>
     <item>
