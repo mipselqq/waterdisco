@@ -1098,7 +1098,6 @@ void MainWindow::on_commitDataRequest() {
     if (Configs::dataManager->settingsRepo->remember_enable && last_id >= 0) {
         Configs::dataManager->settingsRepo->remember_id = last_id;
     }
-    if (running) Configs::dataManager->profilesRepo->Save(running);
     //
     Configs::dataManager->settingsRepo->Save();
     qDebug() << "End of data save";
@@ -1772,7 +1771,7 @@ void MainWindow::on_menu_reset_traffic_triggered() {
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
     for (const auto& ent: ents) {
         ent->traffic_data->Reset();
-        Configs::dataManager->profilesRepo->Save(ent);
+        Configs::dataManager->profilesRepo->SaveTraffic(ent);
         refresh_proxy_list(ent->id);
     }
 }
