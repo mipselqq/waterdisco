@@ -550,11 +550,9 @@ namespace Configs {
             return false;
         }
         
-        runOnNewThread([=, this] {
-            QMutexLocker locker(&mutex);
-            saveToDatabase(profile.get(), profile->id);
-            identityMap[profile->id] = std::weak_ptr<Profile>(profile);
-        });
+        QMutexLocker locker(&mutex);
+        saveToDatabase(profile.get(), profile->id);
+        identityMap[profile->id] = std::weak_ptr<Profile>(profile);
         
         return true;
     }
