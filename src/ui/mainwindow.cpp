@@ -291,7 +291,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // table UI: model-backed view with on-demand row data
     profilesTableModel = new ProfilesTableModel(this);
-    profilesTableModel->setCacheSize(100);
     ui->profilesTableView->setModel(profilesTableModel);
     ui->profilesTableView->rowsSwapped = [=,this](int row1, int row2)
     {
@@ -440,7 +439,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->search_input, &QLineEdit::textChanged, this, [=,this](const QString& currentText)
     {
        searchString = currentText;
-       refresh_proxy_list(-1);
+       refresh_proxy_list({}, true);
     });
     connect(shortcut_esc, &QShortcut::activated, this, [=,this] {
         if (select_mode) {
@@ -874,7 +873,7 @@ void MainWindow::show_group(int gid) {
     }
 
     // show proxies
-    refresh_proxy_list_impl(-1);
+    refresh_proxy_list({}, true);
 
     for (int i = 0; i <= 4; i++) {
         hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
@@ -939,7 +938,6 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
         if (info.contains("NeedRestart")) {
             suggestRestartProxy = false;
         }
-        refresh_proxy_list();
         if (info.contains("VPNChanged") && Configs::dataManager->settingsRepo->spmode_vpn) {
             MessageBoxWarning(tr("Tun Settings changed"), tr("Restart Tun to take effect."));
         }
@@ -997,7 +995,7 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
         }
     } else if (sender == "SubUpdater") {
         if (info.startsWith("finish")) {
-            refresh_proxy_list();
+            refresh_proxy_list({}, true);
             if (!info.contains("dingyue")) {
                 show_log_impl(tr("Imported %1 profile(s)").arg(Configs::dataManager->settingsRepo->imported_count));
             }
@@ -1483,7 +1481,7 @@ void MainWindow::setSearchState(bool enable)
         if (!searchString.isEmpty())
         {
             searchString.clear();
-            refresh_proxy_list(-1);
+            refresh_proxy_list({}, true);
         }
     }
 }
@@ -1656,34 +1654,30 @@ void MainWindow::refresh_groups() {
     Configs::dataManager->settingsRepo->refreshing_group_list = false;
 }
 
-void MainWindow::refresh_proxy_list(const int &id) {
-    refresh_proxy_list_impl(id);
+void MainWindow::refresh_proxy_list(const QList<int>& ids, bool mayNeedReset) {
+    refresh_proxy_list_impl(ids, mayNeedReset);
 }
 
-void MainWindow::refresh_proxy_list_impl(const int &id) {
+void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedReset) {
     if (auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup(); currentGroup == nullptr)
     {
         MW_show_log("Could not find current group!");
         return;
     }
     // refresh data
-    refresh_proxy_list_impl_refresh_data(id);
+    refresh_proxy_list_impl_refresh_data(ids, mayNeedReset);
 }
 
-void MainWindow::refresh_proxy_list_impl_refresh_data(const int &id, bool stopping) {
+void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
     auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
     if (currentGroup == nullptr) return;
-    if (id >= 0)
-    {
-        if (!currentGroup->HasProfile(id))
+    if (!ids.isEmpty()) {
+        if (filterProfilesList(ids).isEmpty())
             return;
-        if (filterProfilesList({id}).isEmpty())
-            return;
-        profilesTableModel->refreshProfileId(id);
-    } else
-    {
+        for (auto id:ids) profilesTableModel->refreshProfileId(id);
+    } else {
         auto profileIDs = filterProfilesList(currentGroup->profiles);
-        profilesTableModel->setProfileIds(profileIDs);
+        profilesTableModel->refreshTable(profileIDs, mayNeedReset);
     }
 }
 
@@ -1752,7 +1746,7 @@ void  MainWindow::on_menu_delete_repeat_triggered () {
             del_ids += ent->id;
         }
         Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
-        refresh_proxy_list();
+        refresh_proxy_list({}, true);
     }
 }
 
@@ -1761,7 +1755,7 @@ void MainWindow::on_menu_delete_triggered() {
     if (entIDs.count() == 0) return;
     if (Configs::dataManager->settingsRepo->skip_delete_confirmation || QMessageBox::question(this, tr("Confirmation"), QString(tr("Remove %1 item(s) ?")).arg(entIDs.count()))==QMessageBox::StandardButton::Yes) {
         Configs::dataManager->profilesRepo->BatchDeleteProfiles(entIDs);
-        refresh_proxy_list();
+        refresh_proxy_list({}, true);
     }
 }
 
@@ -1772,8 +1766,8 @@ void MainWindow::on_menu_reset_traffic_triggered() {
     for (const auto& ent: ents) {
         ent->traffic_data->Reset();
         Configs::dataManager->profilesRepo->SaveTraffic(ent);
-        refresh_proxy_list(ent->id);
     }
+    refresh_proxy_list(entIDs);
 }
 
 void MainWindow::on_menu_copy_links_triggered() {
@@ -2035,8 +2029,8 @@ void MainWindow::on_menu_clear_test_result_triggered() {
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
     for (const auto &ent: ents) {
         ent->ClearTestResults();
-        Configs::dataManager->profilesRepo->Save(ent);
     }
+    Configs::dataManager->profilesRepo->SaveBatch(ents);
     refresh_proxy_list();
 }
 
@@ -2109,7 +2103,7 @@ void MainWindow::on_menu_remove_invalid_triggered() {
              del_ids += ent->id;
          }
          Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
-         refresh_proxy_list();
+         refresh_proxy_list({}, true);
      }
      });
     });
@@ -2127,12 +2121,12 @@ void MainWindow::on_menu_resolve_selected_triggered() {
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(profiles);
     for (const auto &profile: ents) {
         profile->outbound->ResolveDomainToIP([=,this] {
-            Configs::dataManager->profilesRepo->Save(profile);
             if (--Configs::dataManager->settingsRepo->resolve_count != 0) return;
             refresh_proxy_list();
             mw_sub_updating = false;
         });
     }
+    Configs::dataManager->profilesRepo->SaveBatch(ents);
 }
 
 void MainWindow::on_menu_resolve_domain_triggered() {
@@ -2213,7 +2207,7 @@ void MainWindow::clearUnavailableProfiles(bool confirm, QList<int> profileIDs) {
 
     auto clearFunc = [=, this] {
         Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
-        refresh_proxy_list();
+        refresh_proxy_list({}, true);
     };
 
     if (!del_ids.isEmpty()) {
