@@ -2121,8 +2121,8 @@ void MainWindow::on_menu_resolve_selected_triggered() {
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(profiles);
     for (const auto &profile: ents) {
         profile->outbound->ResolveDomainToIP([=,this] {
+            refresh_proxy_list({profile->id});
             if (--Configs::dataManager->settingsRepo->resolve_count != 0) return;
-            refresh_proxy_list();
             mw_sub_updating = false;
         });
     }
@@ -2150,8 +2150,8 @@ void MainWindow::on_menu_resolve_domain_triggered() {
         auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
         profile->outbound->ResolveDomainToIP([=,this] {
             Configs::dataManager->profilesRepo->Save(profile);
+            refresh_proxy_list({profile->id});
             if (--Configs::dataManager->settingsRepo->resolve_count != 0) return;
-            refresh_proxy_list();
             mw_sub_updating = false;
         });
     }

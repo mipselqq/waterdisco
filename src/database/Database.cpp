@@ -1,6 +1,21 @@
 #include "include/database/Database.h"
 
 namespace Configs {
+    void Database::maybeCheckpoint(int count) {
+        if (writeCount.fetch_add(count) >= WAL_CHECKPOINT_AFTER_WRITES) {
+            writeCount = 0;
+            checkpointWal();
+        }
+    }
+
+    void Database::checkpointWal() {
+        try {
+            db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        } catch (std::exception& e) {
+            std::cerr << "DB WAL checkpoint error: " << e.what() << std::endl;
+        }
+    }
+
     void Database::execDeleteByIdInChunk(const std::string& table, const std::string& idColumn, const std::vector<int>& ids) {
         if (ids.empty()) return;
         std::string sql = "DELETE FROM " + table + " WHERE " + idColumn + " IN (";
@@ -11,6 +26,7 @@ namespace Configs {
         sql += ")";
         try {
             db.exec(sql);
+            maybeCheckpoint(ids.size());
         } catch (std::exception& e) {
             std::cerr << "DB Error: " << e.what() << std::endl;
         }
@@ -30,6 +46,7 @@ namespace Configs {
                 stmt.bind(static_cast<int>(2 * i + 2), keyValues[i].second);
             }
             stmt.exec();
+            maybeCheckpoint(1);
         } catch (std::exception& e) {
             std::cerr << "DB Error: " << e.what() << std::endl;
         }
@@ -50,6 +67,7 @@ namespace Configs {
                 stmt.bind(static_cast<int>(i + 1), pairs[i]);
             }
             stmt.exec();
+            maybeCheckpoint(pairs.size() / 2);
         } catch (std::exception& e) {
             std::cerr << "DB Error: " << e.what() << std::endl;
         }
@@ -80,6 +98,7 @@ namespace Configs {
                 stmt.bind(idx++, r.traffic_json);
             }
             stmt.exec();
+            maybeCheckpoint(rows.size());
         } catch (std::exception& e) {
             std::cerr << "DB Error: " << e.what() << std::endl;
         }
@@ -110,6 +129,7 @@ namespace Configs {
                 stmt.bind(idx++, r.traffic_json);
             }
             stmt.exec();
+            maybeCheckpoint(rows.size());
         } catch (std::exception& e) {
             std::cerr << "DB Error: " << e.what() << std::endl;
         }

@@ -877,7 +877,7 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
             restartMsgbox->deleteLater();
 
             refresh_status();
-            refresh_proxy_list_impl_refresh_data({id});
+            refresh_proxy_list({id});
 
             mu_stopping.unlock();
         }, true);
