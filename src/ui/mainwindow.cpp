@@ -2198,10 +2198,9 @@ void MainWindow::clearUnavailableProfiles(bool confirm, QList<int> profileIDs) {
     for (const auto &profile: profiles) {
         if (profile->latency < 0) {
             del_ids += profile->id;
-            remove_display += profile->outbound->DisplayTypeAndName() + "\n";
             if (++remove_display_count == 20) {
                 remove_display += "...";
-            }
+            }else if (remove_display_count < 20) remove_display += profile->outbound->DisplayTypeAndName() + "\n";
         }
     }
 
