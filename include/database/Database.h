@@ -33,6 +33,7 @@ namespace Configs {
         void execBatchInsertIntPairsChunk(const std::string& table, const std::string& colA, const std::string& colB,
                                          const std::vector<int>& pairs);
         void execBatchInsertProfilesChunk(const std::vector<ProfileInsertRow>& rows);
+        void execBatchReplaceProfilesChunk(const std::vector<ProfileInsertRow>& rows);
     public:
         Database(const std::string& path)
             : db(path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE) {
@@ -135,6 +136,17 @@ namespace Configs {
                 std::vector<ProfileInsertRow> chunk(rows.begin() + static_cast<std::ptrdiff_t>(off),
                                                     rows.begin() + static_cast<std::ptrdiff_t>(end));
                 execBatchInsertProfilesChunk(chunk);
+            }
+        }
+
+        // Same chunking as execBatchInsertProfiles; INSERT OR REPLACE for batch save/update
+        void execBatchReplaceProfiles(const std::vector<ProfileInsertRow>& rows) {
+            const size_t chunkSize = BATCH_LIMIT_WRITE / 12;
+            for (size_t off = 0; off < rows.size(); off += chunkSize) {
+                size_t end = std::min(off + chunkSize, rows.size());
+                std::vector<ProfileInsertRow> chunk(rows.begin() + static_cast<std::ptrdiff_t>(off),
+                                                    rows.begin() + static_cast<std::ptrdiff_t>(end));
+                execBatchReplaceProfilesChunk(chunk);
             }
         }
     };
