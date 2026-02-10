@@ -339,7 +339,7 @@ namespace API {
 
     QString Client::CheckConfig(bool* rpcOK, const QString& config) const
     {
-        libcore::LoadConfigReq request{core_config: config.toStdString()};
+        libcore::LoadConfigReq request{.core_config = config.toStdString()};
         libcore::ErrorResp reply;
         std::vector<uint8_t> resp;
         auto status = default_grpc_channel->Call("CheckConfig", spb::pb::serialize<std::string>(request), resp);
