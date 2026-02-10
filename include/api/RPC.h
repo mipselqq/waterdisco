@@ -1,15 +1,18 @@
 #pragma once
 
 #ifndef Q_MOC_RUN
-#include "libcore.pb.h"
+#include <core/server/gen/libcore.pb.h>
 #endif
 #include <QString>
-#include "3rdparty/protorpc/rpc_client.h"
+
+namespace QtGrpc {
+    class Http2GrpcChannelPrivate;
+}
 
 namespace API {
     class Client {
     public:
-        explicit Client(std::function<void(const QString &)> onError, const QString &host, int port);
+        explicit Client(std::function<void(const QString &)> onError, const QString &target);
 
         // QString returns is error string
 
@@ -31,7 +34,7 @@ namespace API {
 
         QString SetSystemDNS(bool *rpcOK, bool clear) const;
 
-        libcore::ListConnectionsResp ListConnections(bool *rpcOK) const;
+        libcore::ListConnectionsResp ListConnections() const;
 
         QString CheckConfig(bool *rpcOK, const QString& config) const;
 
@@ -46,7 +49,8 @@ namespace API {
         QString Clash2Singbox(bool *rpcOK, const QString& config) const;
 
     private:
-        std::function<std::unique_ptr<protorpc::Client>()> make_rpc_client;
+        std::function<std::unique_ptr<QtGrpc::Http2GrpcChannelPrivate>()> make_grpc_channel;
+        std::unique_ptr<QtGrpc::Http2GrpcChannelPrivate> default_grpc_channel;
         std::function<void(const QString &)> onError;
     };
 

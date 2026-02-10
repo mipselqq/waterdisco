@@ -1,31 +1,199 @@
 #include "include/api/RPC.h"
-
-
+#include <utility>
 
 #include "include/global/Configs.hpp"
 
+#include <QCoreApplication>
+#include <QNetworkReply>
+#include <QTimer>
+#include <QtEndian>
+#include <QThread>
+#include <QMutex>
+#include <QAbstractNetworkCache>
+
+namespace QtGrpc {
+    const char *GrpcAcceptEncodingHeader = "grpc-accept-encoding";
+    const char *AcceptEncodingHeader = "accept-encoding";
+    const char *TEHeader = "te";
+    const char *GrpcStatusHeader = "grpc-status";
+    const char *GrpcStatusMessage = "grpc-message";
+    const int GrpcMessageSizeHeaderSize = 5;
+
+    class NoCache : public QAbstractNetworkCache {
+    public:
+        QNetworkCacheMetaData metaData(const QUrl &url) override {
+            return {};
+        }
+        void updateMetaData(const QNetworkCacheMetaData &metaData) override {
+        }
+        QIODevice *data(const QUrl &url) override {
+            return nullptr;
+        }
+        bool remove(const QUrl &url) override {
+            return false;
+        }
+        [[nodiscard]] qint64 cacheSize() const override {
+            return 0;
+        }
+        QIODevice *prepare(const QNetworkCacheMetaData &metaData) override {
+            return nullptr;
+        }
+        void insert(QIODevice *device) override {
+        }
+        void clear() override {
+        }
+    };
+
+    class Http2GrpcChannelPrivate {
+    private:
+        QThread *thread;
+        QNetworkAccessManager *nm;
+
+        QString url_base;
+        QString serviceName;
+
+        // async
+        QNetworkReply *post(const QString &method, const QString &service, const QByteArray &args) {
+            QUrl callUrl = url_base + "/" + service + "/" + method;
+
+            QNetworkRequest request(callUrl);
+            request.setAttribute(QNetworkRequest::Http2DirectAttribute, true);
+            request.setHeader(QNetworkRequest::ContentTypeHeader, QLatin1String{"application/grpc"});
+            request.setRawHeader("Cache-Control", "no-store");
+            request.setRawHeader(GrpcAcceptEncodingHeader, QByteArray{"identity,deflate,gzip"});
+            request.setRawHeader(AcceptEncodingHeader, QByteArray{"identity,gzip"});
+            request.setRawHeader(TEHeader, QByteArray{"trailers"});
+
+            QByteArray msg(GrpcMessageSizeHeaderSize, '\0');
+            *reinterpret_cast<int *>(msg.data() + 1) = qToBigEndian((int) args.size());
+            msg += args;
+
+            QNetworkReply *networkReply = nm->post(request, msg);
+            return networkReply;
+        }
+
+        static QByteArray processReply(QNetworkReply *networkReply, QNetworkReply::NetworkError &statusCode) {
+            // Check if no network error occured
+            if (networkReply->error() != QNetworkReply::NoError) {
+                statusCode = networkReply->error();
+                return {};
+            }
+
+            // Check if server answer with error
+            auto errCode = networkReply->rawHeader(GrpcStatusHeader).toInt();
+            if (errCode != 0) {
+                QStringList errstr;
+                errstr << "grpc-status error code:" << Int2String(errCode) << ", error msg:"
+                       << QLatin1String(networkReply->rawHeader(GrpcStatusMessage));
+                MW_show_log(errstr.join(" "));
+                statusCode = QNetworkReply::NetworkError::ProtocolUnknownError;
+                return {};
+            }
+            statusCode = QNetworkReply::NetworkError::NoError;
+            return networkReply->readAll().mid(GrpcMessageSizeHeaderSize);
+        }
+
+        QNetworkReply::NetworkError call(const QString &method, const QString &service, const QByteArray &args, QByteArray &qByteArray, int timeout_ms) {
+            QNetworkReply *networkReply = post(method, service, args);
+
+            QTimer *abortTimer = nullptr;
+            if (timeout_ms > 0) {
+                abortTimer = new QTimer;
+                abortTimer->setSingleShot(true);
+                abortTimer->setInterval(timeout_ms);
+                QObject::connect(abortTimer, &QTimer::timeout, networkReply, &QNetworkReply::abort);
+                abortTimer->start();
+            }
+
+            {
+                QEventLoop loop;
+                QObject::connect(networkReply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+                loop.exec();
+            }
+
+            if (abortTimer != nullptr) {
+                abortTimer->stop();
+                abortTimer->deleteLater();
+            }
+
+            auto grpcStatus = QNetworkReply::NetworkError::ProtocolUnknownError;
+            qByteArray = processReply(networkReply, grpcStatus);
+
+            networkReply->deleteLater();
+            return grpcStatus;
+        }
+
+    public:
+        Http2GrpcChannelPrivate(const QString &url_, const QString &serviceName_) {
+            url_base = "http://" + url_;
+            serviceName = serviceName_;
+            //
+            thread = new QThread;
+            nm = new QNetworkAccessManager();
+            nm->setCache(new NoCache);
+            nm->moveToThread(thread);
+            thread->start();
+        }
+
+        ~Http2GrpcChannelPrivate() {
+            nm->deleteLater();
+            thread->quit();
+            thread->wait();
+            thread->deleteLater();
+        }
+
+        QNetworkReply::NetworkError Call(const QString &methodName,
+                                         const std::string req, std::vector<uint8_t> &rsp,
+                                         int timeout_ms = 0) {
+            if (!Configs::dataManager->settingsRepo->core_running) return QNetworkReply::NetworkError(-1919);
+
+            auto requestArray = QByteArray::fromStdString(req);
+
+            QByteArray responseArray;
+            QNetworkReply::NetworkError err;
+            QMutex lock;
+            lock.lock();
+
+            runOnUiThread(
+                [&] {
+                    err = call(methodName, serviceName, requestArray, responseArray, timeout_ms);
+                    lock.unlock();
+                },
+                nm);
+
+            lock.lock();
+            lock.unlock();
+            // qDebug() << "rsp err" << err;
+            // qDebug() << "rsp array" << responseArray;
+
+            if (err != QNetworkReply::NetworkError::NoError) {
+                return err;
+            }
+            rsp.assign(responseArray.begin(), responseArray.end());
+            return QNetworkReply::NetworkError::NoError;
+        }
+    };
+} // namespace QtGrpc
+
 namespace API {
 
-    Client::Client(std::function<void(const QString &)> onError, const QString &host, int port) {
-        this->make_rpc_client = [=,this]() { return std::make_unique<protorpc::Client>(host.toStdString().c_str(), port); };
+    Client::Client(std::function<void(const QString &)> onError, const QString &target) {
+        this->make_grpc_channel = [=]() { return std::make_unique<QtGrpc::Http2GrpcChannelPrivate>(target, "libcore.LibcoreService"); };
+        this->default_grpc_channel = make_grpc_channel();
         this->onError = std::move(onError);
     }
 
-#define CHECK(method) \
-if (!Configs::dataManager->settingsRepo->core_running) MW_show_log("Cannot invoke method " + QString(method) + ", core is not running");
-
 #define NOT_OK      \
     *rpcOK = false; \
-    onError(QString("LibcoreService error: %1\n").arg(QString::fromStdString(err.String())));
+    onError(QString("QNetworkReply::NetworkError code: %1\n").arg(status));
 
     QString Client::Start(bool *rpcOK, const libcore::LoadConfigReq &request) {
-        CHECK("Start")
         libcore::ErrorResp reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.Start", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("Start", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::ErrorResp >(resp);
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::ErrorResp>(resp);
             *rpcOK = true;
             return QString::fromStdString(reply.error.value());
         } else {
@@ -35,14 +203,13 @@ if (!Configs::dataManager->settingsRepo->core_running) MW_show_log("Cannot invok
     }
 
     QString Client::Stop(bool *rpcOK) {
-        CHECK("Stop")
         libcore::EmptyReq request;
         libcore::ErrorResp reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.Stop", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("Stop", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::ErrorResp >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::ErrorResp>(resp);
             *rpcOK = true;
             return QString::fromStdString(reply.error.value());
         } else {
@@ -52,14 +219,13 @@ if (!Configs::dataManager->settingsRepo->core_running) MW_show_log("Cannot invok
     }
 
     libcore::QueryStatsResp Client::QueryStats() {
-        CHECK("QueryStats")
         libcore::EmptyReq request;
         libcore::QueryStatsResp reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.QueryStats", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("QueryStats", spb::pb::serialize<std::string>(request), resp, 500);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::QueryStatsResp >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::QueryStatsResp>(resp);
             return reply;
         } else {
             return {};
@@ -67,28 +233,26 @@ if (!Configs::dataManager->settingsRepo->core_running) MW_show_log("Cannot invok
     }
 
     libcore::TestResp Client::Test(bool *rpcOK, const libcore::TestReq &request) {
-        CHECK("Test")
         libcore::TestResp reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.Test", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("Test", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::TestResp >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::TestResp>(resp);
             *rpcOK = true;
             return reply;
         } else {
             NOT_OK
-            return reply;
+            return {};
         }
     }
 
     void Client::StopTests(bool *rpcOK) {
-        CHECK("StopTests")
         const libcore::EmptyReq request;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.StopTest", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("StopTests", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
+        if (status == QNetworkReply::NoError) {
             *rpcOK = true;
         } else {
             NOT_OK
@@ -97,122 +261,112 @@ if (!Configs::dataManager->settingsRepo->core_running) MW_show_log("Cannot invok
 
     libcore::QueryURLTestResponse Client::QueryURLTest(bool *rpcOK)
     {
-        CHECK("QueryURLTest")
         libcore::EmptyReq request;
         libcore::QueryURLTestResponse reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.QueryURLTest", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("QueryURLTest", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::QueryURLTestResponse >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::QueryURLTestResponse>(resp);
             *rpcOK = true;
             return reply;
         } else {
             NOT_OK
-            return reply;
+            return {};
         }
     }
 
     libcore::IPTestResp Client::IPTest(bool *rpcOK, const libcore::IPTestRequest &request) {
-        CHECK("IPTest")
         libcore::IPTestResp reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.IPTest", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("IPTest", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::IPTestResp >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::IPTestResp>(resp);
             *rpcOK = true;
             return reply;
         } else {
             NOT_OK
-            return reply;
+            return {};
         }
     }
 
     libcore::QueryIPTestResponse Client::QueryIPTest(bool *rpcOK) {
-        CHECK("QueryIPTest")
         libcore::EmptyReq request;
         libcore::QueryIPTestResponse reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.QueryIPTest", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("IPTest", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::QueryIPTestResponse >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::QueryIPTestResponse>(resp);
             *rpcOK = true;
             return reply;
         } else {
             NOT_OK
-            return reply;
+            return {};
         }
     }
 
     QString Client::SetSystemDNS(bool *rpcOK, const bool clear) const {
-        CHECK("SetSystemDNS")
-        libcore::SetSystemDNSRequest request;
-        request.clear = clear;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
+        libcore::SetSystemDNSRequest request{clear};
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("SetSystemDNS", spb::pb::serialize<std::string>(request), resp);
 
-        auto err = make_rpc_client()->CallMethod("LibcoreService.SetSystemDNS", &req, &resp);
-        if(err.IsNil()) {
+        if (status == QNetworkReply::NoError) {
             *rpcOK = true;
             return "";
         } else {
             NOT_OK
-            return QString::fromStdString(err.String());
+            return qt_error_string(status);
         }
     }
 
-    libcore::ListConnectionsResp Client::ListConnections(bool* rpcOK) const
+    libcore::ListConnectionsResp Client::ListConnections() const
     {
-        CHECK("ListConnections")
         libcore::EmptyReq request;
         libcore::ListConnectionsResp reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.ListConnections", &req, &resp);
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::ListConnectionsResp >( resp );
-            *rpcOK = true;
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("ListConnections", spb::pb::serialize<std::string>(request), resp);
+
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::ListConnectionsResp>(resp);
             return reply;
         } else {
-            NOT_OK
-            MW_show_log(QString("Failed to list connections: ") + QString::fromStdString(err.String()));
+            MW_show_log(QString("Failed to list connections: " + qt_error_string(status)));
             return {};
         }
     }
 
     QString Client::CheckConfig(bool* rpcOK, const QString& config) const
     {
-        CHECK("CheckConfig")
-        libcore::LoadConfigReq request;
+        libcore::LoadConfigReq request{core_config: config.toStdString()};
         libcore::ErrorResp reply;
-        request.core_config = config.toStdString();
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.CheckConfig", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("CheckConfig", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil())
+        if (status == QNetworkReply::NoError)
         {
-            reply = spb::pb::deserialize< libcore::ErrorResp >( resp );
+            reply = spb::pb::deserialize<libcore::ErrorResp>(resp);
             *rpcOK = true;
             return QString::fromStdString(reply.error.value());
         } else
         {
             NOT_OK
-            return QString::fromStdString(err.String());
+            return qt_error_string(status);
         }
 
     }
 
     bool Client::IsPrivileged(bool* rpcOK) const
     {
-        CHECK("IsPrivileged")
         libcore::EmptyReq request;
         libcore::IsPrivilegedResponse reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.IsPrivileged", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("IsPrivileged", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil())
+        if (status == QNetworkReply::NoError)
         {
-            reply = spb::pb::deserialize< libcore::IsPrivilegedResponse >( resp );
+            reply = spb::pb::deserialize<libcore::IsPrivilegedResponse>(resp);
             *rpcOK = true;
             return reply.has_privilege.value();
         } else
@@ -224,68 +378,63 @@ if (!Configs::dataManager->settingsRepo->core_running) MW_show_log("Cannot invok
 
     libcore::SpeedTestResponse Client::SpeedTest(bool *rpcOK, const libcore::SpeedTestRequest &request)
     {
-        CHECK("SpeedTest")
         libcore::SpeedTestResponse reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.SpeedTest", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("SpeedTest", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::SpeedTestResponse >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::SpeedTestResponse>(resp);
             *rpcOK = true;
             return reply;
         } else {
             NOT_OK
-            return reply;
+            return {};
         }
     }
 
     libcore::QuerySpeedTestResponse Client::QueryCurrentSpeedTests(bool *rpcOK)
     {
-        CHECK("QueryCurrentSpeedTests")
         const libcore::EmptyReq request;
         libcore::QuerySpeedTestResponse reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.QuerySpeedTest", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("QuerySpeedTest", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::QuerySpeedTestResponse >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::QuerySpeedTestResponse>(resp);
             *rpcOK = true;
             return reply;
         } else {
             NOT_OK
-            return reply;
+            return {};
         }
     }
 
     libcore::QueryCountryTestResponse Client::QueryCountryTestResults(bool* rpcOK)
     {
-        CHECK("QueryCountryTestResults")
         const libcore::EmptyReq request;
         libcore::QueryCountryTestResponse reply;
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.QueryCountryTest", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("QueryCountryTestResults", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::QueryCountryTestResponse >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::QueryCountryTestResponse>(resp);
             *rpcOK = true;
             return reply;
         } else {
             NOT_OK
-            return reply;
+            return {};
         }
     }
 
     QString Client::Clash2Singbox(bool* rpcOK, const QString& config) const
     {
-        CHECK("Clash2Singbox")
-        libcore::Clash2SingboxRequest request;
+        libcore::Clash2SingboxRequest request{config.toStdString()};
         libcore::Clash2SingboxResponse reply;
-        request.clash_config = config.toStdString();
-        std::string resp, req = spb::pb::serialize<std::string>(request);
-        auto err = make_rpc_client()->CallMethod("LibcoreService.Clash2Singbox", &req, &resp);
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("Clash2Singbox", spb::pb::serialize<std::string>(request), resp);
 
-        if(err.IsNil()) {
-            reply = spb::pb::deserialize< libcore::Clash2SingboxResponse >( resp );
+        if (status == QNetworkReply::NoError) {
+            reply = spb::pb::deserialize<libcore::Clash2SingboxResponse>(resp);
             *rpcOK = true;
             QString error = QString::fromStdString(reply.error.value());
             if (!error.isEmpty()) {
