@@ -26,7 +26,7 @@ void MainWindow::setup_rpc() {
         [=](const QString &errStr) {
             MW_show_log("[Error] Core: " + errStr);
         },
-        "127.0.0.1", Configs::dataManager->settingsRepo->core_port);
+        "127.0.0.1:" + Int2String(Configs::dataManager->settingsRepo->core_port));
 
     // Looper
     runOnNewThread([=] { Stats::trafficLooper->Loop(); });
