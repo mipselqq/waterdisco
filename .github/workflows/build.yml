@@ -186,7 +186,6 @@ jobs:
         shell: cmd
         if: matrix.platform == 'windows-latest' && steps.cache-static-Qt.outputs.cache-hit != 'true' && matrix.qt_version != '6.2.12'
         run: |
-          set "OPENSSL_ROOT_DIR=%cd%\openssl"
           ./script/build_qt_static_windows.bat ${{ matrix.qt_version }}
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.0
