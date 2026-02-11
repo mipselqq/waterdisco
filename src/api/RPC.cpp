@@ -250,7 +250,7 @@ namespace API {
     void Client::StopTests(bool *rpcOK) {
         const libcore::EmptyReq request;
         std::vector<uint8_t> resp;
-        auto status = default_grpc_channel->Call("StopTests", spb::pb::serialize<std::string>(request), resp);
+        auto status = default_grpc_channel->Call("StopTest", spb::pb::serialize<std::string>(request), resp);
 
         if (status == QNetworkReply::NoError) {
             *rpcOK = true;
@@ -295,7 +295,7 @@ namespace API {
         libcore::EmptyReq request;
         libcore::QueryIPTestResponse reply;
         std::vector<uint8_t> resp;
-        auto status = default_grpc_channel->Call("IPTest", spb::pb::serialize<std::string>(request), resp);
+        auto status = default_grpc_channel->Call("QueryIPTest", spb::pb::serialize<std::string>(request), resp);
 
         if (status == QNetworkReply::NoError) {
             reply = spb::pb::deserialize<libcore::QueryIPTestResponse>(resp);
@@ -414,7 +414,7 @@ namespace API {
         const libcore::EmptyReq request;
         libcore::QueryCountryTestResponse reply;
         std::vector<uint8_t> resp;
-        auto status = default_grpc_channel->Call("QueryCountryTestResults", spb::pb::serialize<std::string>(request), resp);
+        auto status = default_grpc_channel->Call("QueryCountryTest", spb::pb::serialize<std::string>(request), resp);
 
         if (status == QNetworkReply::NoError) {
             reply = spb::pb::deserialize<libcore::QueryCountryTestResponse>(resp);
