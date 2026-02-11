@@ -1,5 +1,5 @@
 #include <QThread>
-#include <libcore.pb.h>
+#include <core/server/gen/libcore.pb.h>
 #include <include/api/RPC.h>
 #include "include/ui/mainwindow_interface.h"
 #include <include/stats/connections/connectionLister.hpp>
@@ -40,12 +40,7 @@ namespace Stats
 
     void ConnectionLister::update()
     {
-        bool ok;
-        libcore::ListConnectionsResp resp = API::defaultClient->ListConnections(&ok);
-        if (!ok)
-        {
-            return;
-        }
+        libcore::ListConnectionsResp resp = API::defaultClient->ListConnections();
 
         QMap<QString, ConnectionMetadata> toUpdate;
         QMap<QString, ConnectionMetadata> toAdd;
