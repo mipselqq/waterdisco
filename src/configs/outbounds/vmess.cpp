@@ -42,7 +42,7 @@ namespace Configs {
         // Standard VMess URL format
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         uuid = url.userName();

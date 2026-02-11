@@ -12,7 +12,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid() && !url.errorString().startsWith("Invalid port")) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         // handle the common format
         if (query.hasQueryItem("fp")) fingerPrint = query.queryItemValue("fp");
@@ -56,7 +56,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid() && !url.errorString().startsWith("Invalid port")) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("ech_enabled")) enabled = query.queryItemValue("ech_enabled") == "true";
         if (query.hasQueryItem("ech_config")) config = query.queryItemValue("ech_config").split(",");
@@ -102,7 +102,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid() && !url.errorString().startsWith("Invalid port")) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         // handle the common format
         if (query.hasQueryItem("pbk"))
@@ -153,7 +153,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid() && !url.errorString().startsWith("Invalid port")) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("security")) enabled = query.queryItemValue("security")
         .replace("reality", "tls")

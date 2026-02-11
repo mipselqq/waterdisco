@@ -24,13 +24,13 @@ namespace Configs {
                 }
             }
         }
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         
         if (url.scheme() == "hysteria") {
             protocol_version = "1";
-            if (query.hasQueryItem("obfsParam")) obfs = QUrl::fromPercentEncoding(query.queryItemValue("obfsParam").toUtf8());
+            if (query.hasQueryItem("obfsParam")) obfs = query.queryItemValue("obfsParam", QUrl::FullyDecoded);
             if (query.hasQueryItem("auth")) {
                 auth = query.queryItemValue("auth");
                 auth_type = "STRING";
@@ -46,7 +46,7 @@ namespace Configs {
                 password = url.userName() + ":" + url.password();
             }
             if (query.hasQueryItem("obfs-password")) {
-                obfs = QUrl::fromPercentEncoding(query.queryItemValue("obfs-password").toUtf8());
+                obfs = query.queryItemValue("obfs-password", QUrl::FullyDecoded);
             }
         }
         
