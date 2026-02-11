@@ -11,7 +11,7 @@ namespace Configs {
     bool xrayTLS::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("sni")) serverName = query.queryItemValue("sni");
         if (query.hasQueryItem("peer")) serverName = query.queryItemValue("peer");
@@ -62,7 +62,7 @@ namespace Configs {
     bool xrayReality::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("sni")) serverName = query.queryItemValue("sni");
         if (query.hasQueryItem("peer")) serverName = query.queryItemValue("peer");
@@ -257,7 +257,7 @@ namespace Configs {
     bool xrayStreamSetting::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("type")) network = query.queryItemValue("type").replace("tcp", "raw");
         if (network != "raw" && network != "xhttp") return false;

@@ -2,14 +2,11 @@
 
 #include <QUrlQuery>
 
-
-
-
 namespace Configs {
     bool xrayMultiplex::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("mux")) enabled = query.queryItemValue("mux").replace("1", "true") == "true", useDefault = false;
         if (query.hasQueryItem("mux_concurrency")) concurrency = query.queryItemValue("mux_concurrency").toInt();

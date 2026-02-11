@@ -8,7 +8,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("brutal_enabled")) enabled = query.queryItemValue("brutal_enabled") == "true";
         if (query.hasQueryItem("brutal_up_mbps")) up_mbps = query.queryItemValue("brutal_up_mbps").toInt();
@@ -51,7 +51,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("mux")) enabled = query.queryItemValue("mux") == "true";
         else unspecified = true;

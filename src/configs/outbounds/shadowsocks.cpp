@@ -19,7 +19,7 @@ namespace Configs {
             url = QUrl("https://" + linkN);
         }
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
         outbound::ParseFromLink(url.toString());
 
         // Traditional SS format

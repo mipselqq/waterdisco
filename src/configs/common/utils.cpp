@@ -50,7 +50,7 @@ namespace Configs
     bool useXrayVless(const QString& link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.queryItemValue("type") == "xhttp"
             || (query.queryItemValue("security") == "reality" && dataManager->settingsRepo->xray_vless_preference == Xray::XhttpAndReality)
