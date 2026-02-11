@@ -69,7 +69,7 @@ namespace Configs {
         if (query.hasQueryItem("pbk")) password = query.queryItemValue("pbk");
         if (query.hasQueryItem("fp")) fingerprint = query.queryItemValue("fp");
         if (query.hasQueryItem("sid")) shortId = query.queryItemValue("sid");
-        if (query.hasQueryItem("spx")) spiderX = query.queryItemValue("spx");
+        if (query.hasQueryItem("spx")) spiderX = query.queryItemValue("spx", QUrl::FullyDecoded);
         return true;
 
     }
