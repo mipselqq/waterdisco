@@ -331,7 +331,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             }
             Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
             runOnUiThread([=, this] {
-                refresh_proxy_list();
+                refresh_proxy_list({}, true);
             });
         });
     });
