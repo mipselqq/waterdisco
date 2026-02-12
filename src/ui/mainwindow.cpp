@@ -982,7 +982,7 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
     if (sender == Dialog_DialogEditProfile) {
         auto msg = info.split(",");
         if (msg.contains("accept")) {
-            refresh_proxy_list();
+            refresh_proxy_list({}, true);
             if (msg.contains("restart")) {
                 if (QMessageBox::question(GetMessageBoxParent(), tr("Confirmation"), tr("Settings changed, restart proxy?")) == QMessageBox::StandardButton::Yes) {
                     profile_start(Configs::dataManager->settingsRepo->started_id);

@@ -195,7 +195,7 @@ namespace Configs {
                 INSERT INTO profiles 
                 (id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
                 ip_out, outbound_json, traffic_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 profile->type.toStdString(),
