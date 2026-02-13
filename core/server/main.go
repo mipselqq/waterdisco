@@ -1,13 +1,14 @@
 package main
 
 import (
-	"Core/gen"
-	"Core/internal/boxmain"
-	"Core/test_utils"
+	"ThroneCore/gen"
+	"ThroneCore/internal/boxmain"
+	"ThroneCore/test_utils"
 	"context"
 	"flag"
 	"fmt"
 	"github.com/xtls/xray-core/core"
+	"google.golang.org/grpc"
 	"log"
 	"net"
 	"os"
@@ -16,9 +17,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
-	"google.golang.org/grpc"
 
-	_ "Core/internal/distro/all"
+	_ "ThroneCore/internal/distro/all"
 	C "github.com/sagernet/sing-box/constant"
 )
 

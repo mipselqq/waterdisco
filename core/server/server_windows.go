@@ -1,8 +1,8 @@
 package main
 
 import (
-	"Core/gen"
-	"Core/internal/boxdns"
+	"ThroneCore/gen"
+	"ThroneCore/internal/boxdns"
 	"context"
 )
 
