@@ -1,13 +1,13 @@
 package main
 
 import (
-	"Core/gen"
-	"Core/internal/boxbox"
-	"Core/internal/boxmain"
-	"Core/internal/process"
-	"Core/internal/sys"
-	"Core/internal/xray"
-	"Core/test_utils"
+	"ThroneCore/gen"
+	"ThroneCore/internal/boxbox"
+	"ThroneCore/internal/boxmain"
+	"ThroneCore/internal/process"
+	"ThroneCore/internal/sys"
+	"ThroneCore/internal/xray"
+	"ThroneCore/test_utils"
 	"context"
 	"encoding/json"
 	"errors"
@@ -432,7 +432,7 @@ func (s *server) IsPrivileged(ctx context.Context, _ *gen.EmptyReq) (*gen.IsPriv
 	return &gen.IsPrivilegedResponse{HasPrivilege: To(os.Geteuid() == 0)}, nil
 }
 
-func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.SpeedTestResponse, error){
+func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.SpeedTestResponse, error) {
 	if !*in.TestDownload && !*in.TestUpload && !*in.SimpleDownload && !*in.OnlyCountry {
 		return nil, errors.New("cannot run empty test")
 	}
