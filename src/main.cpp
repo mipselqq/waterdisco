@@ -151,6 +151,9 @@ int main(int argc, char* argv[]) {
     DS_cores = new QThread;
     DS_cores->start();
 
+    LogThread = new QThread;
+    LogThread->start();
+
 // icons
     QIcon::setFallbackSearchPaths(QStringList{
         ":/icon",

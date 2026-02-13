@@ -107,9 +107,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->splitter->restoreState(DecodeB64IfValid(Configs::dataManager->settingsRepo->splitter_state));
     new SyntaxHighlighter(Configs::dataManager->settingsRepo->theme.toLower().contains("vista") ? false : (Configs::dataManager->settingsRepo->theme.toLower().contains("qdarkstyle") ? true : isDarkMode()), qvLogDocument);
     qvLogDocument->setUndoRedoEnabled(false);
+    qvLogDocument->setMaximumBlockCount(Configs::dataManager->settingsRepo->max_log_line);
     ui->masterLogBrowser->setUndoRedoEnabled(false);
     ui->masterLogBrowser->setDocument(qvLogDocument);
     ui->masterLogBrowser->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    updateLogFilterFields();
+    runOnThread([=, this] {
+        log_process_loop();
+    }, LogThread);
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [=,this](const Qt::ColorScheme& scheme) {
@@ -142,7 +147,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         bar->setValue(bar->maximum());
     });
     MW_show_log = [=,this](const QString &log) {
-        runOnUiThread([=,this] { show_log_impl(log); });
+        append_log(log);
     };
 
     // Listen port if random
@@ -913,6 +918,10 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
         refresh_status();
     }
     if (info.contains("UpdateConfigs::dataManager->settingsRepo")) {
+        updateLogFilterFields();
+        if (info.contains("UpdateMaxLogLines")) {
+            qvLogDocument->setMaximumBlockCount(Configs::dataManager->settingsRepo->max_log_line);
+        }
         if (info.contains("UpdateDisableTray")) {
             tray->setVisible(!Configs::dataManager->settingsRepo->disable_tray);
         }
@@ -997,7 +1006,7 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
         if (info.startsWith("finish")) {
             refresh_proxy_list({}, true);
             if (!info.contains("dingyue")) {
-                show_log_impl(tr("Imported %1 profile(s)").arg(Configs::dataManager->settingsRepo->imported_count));
+                MW_show_log(tr("Imported %1 profile(s)").arg(Configs::dataManager->settingsRepo->imported_count));
             }
         } else if (info == "NewGroup") {
             refresh_groups();
@@ -1463,6 +1472,18 @@ void MainWindow::UpdateConnectionListWithRecreate(const QList<Stats::ConnectionM
     connectionListMu.unlock();
 }
 
+void MainWindow::updateLogFilterFields() {
+    QMutexLocker locker(&logMutex);
+    includeKeywords.clear();
+    excludeKeywords.clear();
+    for (const auto& inKeyword : Configs::dataManager->settingsRepo->log_include_keyword) includeKeywords.append(inKeyword);
+    for (const auto& exKeyword : Configs::dataManager->settingsRepo->log_exclude_keyword) excludeKeywords.append(exKeyword);
+    includeCombined.setPattern(Configs::dataManager->settingsRepo->log_include_regex.join("|"));
+    excludeCombined.setPattern(Configs::dataManager->settingsRepo->log_exclude_regex.join("|"));
+    includeCombined.optimize();
+    excludeCombined.optimize();
+}
+
 void MainWindow::setSearchState(bool enable)
 {
     searchEnabled = enable;
@@ -1783,7 +1804,7 @@ void MainWindow::on_menu_copy_links_triggered() {
     }
     if (links.length() == 0) return;
     QApplication::clipboard()->setText(links.join("\n"));
-    show_log_impl(tr("Copied %1 item(s)").arg(links.length()));
+    MW_show_log(tr("Copied %1 item(s)").arg(links.length()));
 }
 
 void MainWindow::on_menu_copy_links_nkr_triggered() {
@@ -1795,7 +1816,7 @@ void MainWindow::on_menu_copy_links_nkr_triggered() {
     }
     if (links.length() == 0) return;
     QApplication::clipboard()->setText(links.join("\n"));
-    show_log_impl(tr("Copied %1 item(s)").arg(links.length()));
+    MW_show_log(tr("Copied %1 item(s)").arg(links.length()));
 }
 
 void MainWindow::on_menu_export_config_triggered() {
@@ -2002,7 +2023,7 @@ void MainWindow::parseQrImage(const QPixmap *image)
         MessageBoxInfo(software_name, tr("QR Code not found"));
     } else {
         for (const QString &text : texts) {
-            show_log_impl("QR Code Result:\n" + text);
+            MW_show_log("QR Code Result:\n" + text);
             Subscription::groupUpdater->AsyncUpdate(text);
         }
     }
@@ -2244,31 +2265,71 @@ inline void FastAppendTextDocument(const QString &message, QTextDocument *doc) {
     cursor.endEditBlock();
 }
 
-void MainWindow::show_log_impl(const QString &log) {
-    if (log.size() > 20000)
-    {
-        show_log_impl("Ignored massive log of size:" + Int2String(log.size()));
+void MainWindow::append_log(const QString &log) {
+    if (log.size() > 20000) {
+        append_log(QString("TRUNCATED LONG LOG: ") + log.first(1000) + "...");
         return;
     }
-    auto trimmed = log.trimmed();
-    if (trimmed.isEmpty()) return;
-
-    FastAppendTextDocument(trimmed, qvLogDocument);
-    // qvLogDocument->setPlainText(qvLogDocument->toPlainText() + log);
-    // From https://gist.github.com/jemyzhang/7130092
-    auto block = qvLogDocument->begin();
-
-    while (block.isValid()) {
-        if (qvLogDocument->blockCount() > Configs::dataManager->settingsRepo->max_log_line) {
-            QTextCursor cursor(block);
-            block = block.next();
-            cursor.select(QTextCursor::BlockUnderCursor);
-            cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
-            cursor.removeSelectedText();
-            continue;
-        }
-        break;
+    QMutexLocker locker(&logMutex);
+    if (logQueue.size() > 1000) {
+        // log is overloaded, just discard it
+        return;
     }
+    logQueue.enqueue(log);
+    if (logQueue.size() == 1) logWaiter.wakeOne();
+}
+
+void MainWindow::log_process_loop() {
+    while (true) {
+        logMutex.lock();
+        while (logQueue.isEmpty()) {
+            logWaiter.wait(&logMutex);
+        }
+        auto logLines = logQueue.dequeue().split("\n");
+
+        QString batchToPrint;
+        for (const auto& logLine : logLines) {
+            if (should_print_log(logLine)) {
+                batchToPrint += logLine + "\n";
+            }
+        }
+        logMutex.unlock();
+
+        if (!batchToPrint.isEmpty()) {
+            runOnUiThread([=, this] {
+               FastAppendTextDocument(batchToPrint.trimmed(), qvLogDocument);
+            });
+        }
+    }
+}
+
+bool MainWindow::should_print_log(const QString &log) {
+    if (log.trimmed().isEmpty()) return false;
+    bool result = true;
+    if (Configs::dataManager->settingsRepo->log_enable_include) {
+        result = false;
+        for (const auto& includeKeyword : includeKeywords) {
+            if (log.contains(includeKeyword)) {
+                result = true;
+                break;
+            }
+        }
+        if (!includeCombined.pattern().isEmpty() && includeCombined.match(log).hasMatch()) {
+            result = true;
+        }
+    }
+    if (result && Configs::dataManager->settingsRepo->log_enable_exclude) {
+        for (const auto& excludeKeyword : excludeKeywords) {
+            if (log.contains(excludeKeyword)) {
+                result = false;
+                break;
+            }
+            if (!excludeCombined.pattern().isEmpty() && excludeCombined.match(log).hasMatch()) {
+                result = false;
+            }
+        }
+    }
+    return result;
 }
 
 void MainWindow::on_masterLogBrowser_customContextMenuRequested(const QPoint &pos) {

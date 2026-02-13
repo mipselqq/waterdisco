@@ -40,7 +40,9 @@ namespace Configs {
             "use_custom_icons",
             "xray_mux_default_on",
             "use_dns_object",
-        "skip_delete_confirmation"
+            "skip_delete_confirmation",
+            "log_enable_include",
+            "log_enable_exclude"
         };
 
         const QSet<QString> intKeys = {
@@ -74,7 +76,11 @@ namespace Configs {
             "spmode2",
             "dns_server_rules",
             "log_ignore",  // Not in _add() but exists as QStringList in DataStore
-            "extra_core_paths"  // Extra core paths list
+            "extra_core_paths",  // Extra core paths list
+            "log_include_keyword",
+            "log_include_regex",
+            "log_exclude_keyword",
+            "log_exclude_regex"
         };
 
         const QSet<QString> stringKeys = {
@@ -240,7 +246,12 @@ namespace Configs {
                 else if (key == "font") font = varValue.toString();
                 else if (key == "font_size") font_size = varValue.toInt();
                 else if (key == "mw_size") mw_size = varValue.toString();
-                else if (key == "log_ignore") log_ignore = varValue.toStringList();
+                else if (key == "log_enable_include") log_enable_include = varValue.toBool();
+                else if (key == "log_enable_exclude") log_enable_exclude = varValue.toBool();
+                else if (key == "log_include_keyword") log_include_keyword = varValue.toStringList();
+                else if (key == "log_include_regex") log_include_regex = varValue.toStringList();
+                else if (key == "log_exclude_keyword") log_exclude_keyword = varValue.toStringList();
+                else if (key == "log_exclude_regex") log_exclude_regex = varValue.toStringList();
                 else if (key == "start_minimal") start_minimal = varValue.toBool();
                 else if (key == "max_log_line") max_log_line = varValue.toInt();
                 else if (key == "splitter_state") splitter_state = varValue.toString();
@@ -353,7 +364,12 @@ namespace Configs {
             {"font", font},
             {"font_size", font_size},
             {"mw_size", mw_size},
-            {"log_ignore", log_ignore},
+            {"log_enable_include", log_enable_include},
+            {"log_enable_exclude", log_enable_exclude},
+            {"log_include_keyword", log_include_keyword},
+            {"log_include_regex", log_include_regex},
+            {"log_exclude_keyword", log_exclude_keyword},
+            {"log_exclude_regex", log_exclude_regex},
             {"start_minimal", start_minimal},
             {"max_log_line", max_log_line},
             {"splitter_state", splitter_state},

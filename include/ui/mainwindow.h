@@ -18,6 +18,8 @@
 
 #include <QKeyEvent>
 #include <QSystemTrayIcon>
+#include <QQueue>
+#include <QWaitCondition>
 #include <QProcess>
 #include <QTextDocument>
 #include <QShortcut>
@@ -73,8 +75,6 @@ public:
     void set_spmode_vpn(bool enable, bool save = true);
 
     bool get_elevated_permissions(int reason = 3);
-
-    void show_log_impl(const QString &log);
 
     void start_select_mode(QObject *context, const std::function<void(int)> &callback);
 
@@ -162,6 +162,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
+    ProfilesTableModel *profilesTableModel = nullptr;
     QSystemTrayIcon *tray;
     QShortcut *shortcut_ctrl_f = new QShortcut(QKeySequence("Ctrl+F"), this);
     QShortcut *shortcut_esc = new QShortcut(QKeySequence("Esc"), this);
@@ -215,7 +216,22 @@ private:
     bool searchEnabled = false;
     QString searchString;
 
-    ProfilesTableModel *profilesTableModel = nullptr;
+    // log
+    QStringList includeKeywords;
+    QStringList excludeKeywords;
+    QRegularExpression includeCombined;
+    QRegularExpression excludeCombined;
+    QMutex logMutex;
+    QQueue<QString> logQueue;
+    QWaitCondition logWaiter;
+
+    void append_log(const QString &log);
+
+    void log_process_loop();
+
+    bool should_print_log(const QString &log);
+
+    void updateLogFilterFields();
 
     void setSearchState(bool enable);
 
