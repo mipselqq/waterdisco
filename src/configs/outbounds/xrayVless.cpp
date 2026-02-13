@@ -12,6 +12,7 @@ namespace Configs {
 
         outbound::ParseFromLink(link);
         uuid = url.userName();
+        encryption = GetQueryValue(query, "encryption", "none");
         flow = GetQueryValue(query, "flow", "");
         streamSetting->ParseFromLink(link);
         multiplex->ParseFromLink(link);
