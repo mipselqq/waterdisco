@@ -52,10 +52,14 @@ QByteArray DecodeB64IfValid(const QString &input, QByteArray::Base64Options opti
     return {};
 }
 
-QStringList SplitAndTrim(QString raw, QString separator) {
+QStringList SplitAndTrim(const QString& raw, const QString& separator, bool keepEmpty) {
     QStringList result;
     auto spl = raw.split(separator);
-    for (auto str : spl) result << str.trimmed();
+    for (const auto& str : spl) {
+        auto trimmed = str.trimmed();
+        if (!keepEmpty && trimmed.isEmpty()) continue;
+        result << trimmed;
+    }
     return result;
 }
 

@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QJsonObject>
+#include <QTimer>
 #include "ui_dialog_basic_settings.h"
 
 namespace Ui {
@@ -24,12 +25,15 @@ public slots:
 private:
     Ui::DialogBasicSettings *ui;
 
+    void applyRegexHighlighting();
+
     struct {
         QString custom_inbound;
         bool needRestart = false;
         bool updateDisableTray = false;
         bool updateTrayIcon = false;
         bool updateSystemDns = false;
+        bool updateMaxLogLines = false;
     } CACHE;
 
 private slots:

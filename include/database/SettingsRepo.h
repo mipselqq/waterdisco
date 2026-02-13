@@ -78,7 +78,12 @@ namespace Configs {
         QString font = "";
         int font_size = 0;
         QString mw_size = "";
-        QStringList log_ignore = {};
+        bool log_enable_include = false;
+        bool log_enable_exclude = false;
+        QStringList log_include_keyword = {};
+        QStringList log_include_regex = {};
+        QStringList log_exclude_keyword = {};
+        QStringList log_exclude_regex = {};
         bool start_minimal = false;
         int max_log_line = 200;
         QString splitter_state = "";

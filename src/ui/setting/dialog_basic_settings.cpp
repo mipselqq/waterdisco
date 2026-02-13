@@ -13,6 +13,10 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QTimer>
+#include <QBrush>
+#include <QRegularExpression>
+#include <QTextBlock>
+#include <QTextCursor>
 #include <qfontdatabase.h>
 
 
@@ -33,7 +37,6 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     ui->proxy_scheme->setCurrentText(Configs::dataManager->settingsRepo->proxy_scheme);
 
     D_LOAD_STRING(inbound_address)
-    D_LOAD_COMBO_STRING(log_level)
     CACHE.custom_inbound = Configs::dataManager->settingsRepo->custom_inbound;
     D_LOAD_INT(inbound_socks_port)
     ui->random_listen_port->setChecked(Configs::dataManager->settingsRepo->random_inbound_port);
@@ -69,6 +72,21 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     ui->windows_no_admin->hide();
 #endif
 
+    // Logging
+    ui->max_log_line->setText(QString::number(Configs::dataManager->settingsRepo->max_log_line));
+    ui->log_level->setCurrentText(Configs::dataManager->settingsRepo->log_level);
+    ui->xray_loglevel->setCurrentText(Configs::dataManager->settingsRepo->xray_log_level);
+    ui->enable_log_include->setChecked(Configs::dataManager->settingsRepo->log_enable_include);
+    ui->enable_log_exclude->setChecked(Configs::dataManager->settingsRepo->log_enable_exclude);
+    ui->log_include_keyword->setText(Configs::dataManager->settingsRepo->log_include_keyword.join("\n"));
+    ui->log_exclude_keyword->setText(Configs::dataManager->settingsRepo->log_exclude_keyword.join("\n"));
+    ui->log_include_regex->setText(Configs::dataManager->settingsRepo->log_include_regex.join("\n"));
+    ui->log_exclude_regex->setText(Configs::dataManager->settingsRepo->log_exclude_regex.join("\n"));
+    applyRegexHighlighting();
+
+    connect(ui->log_include_regex, &QTextEdit::textChanged, this, [this] { applyRegexHighlighting(); });
+    connect(ui->log_exclude_regex, &QTextEdit::textChanged, this, [this] { applyRegexHighlighting(); });
+
     // Style
     ui->connection_statistics->setChecked(Configs::dataManager->settingsRepo->enable_stats);
     ui->show_sys_dns->setChecked(Configs::dataManager->settingsRepo->show_system_dns);
@@ -81,7 +99,6 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
 #endif
     //
     D_LOAD_BOOL(start_minimal)
-    D_LOAD_INT(max_log_line)
     ui->skip_delete_confirm->setChecked(Configs::dataManager->settingsRepo->skip_delete_confirmation);
     //
     ui->language->setCurrentIndex(Configs::dataManager->settingsRepo->language);
@@ -175,7 +192,6 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_BOOL(mux_default_on)
 
     // Xray
-    ui->xray_loglevel->setCurrentText(Configs::dataManager->settingsRepo->xray_log_level);
     ui->xray_mux_concurrency->setText(Int2String(Configs::dataManager->settingsRepo->xray_mux_concurrency));
     ui->xray_default_mux->setChecked(Configs::dataManager->settingsRepo->xray_mux_default_on);
     ui->vless_xray_pref->addItems(Configs::Xray::XrayVlessPreferenceString);
@@ -210,12 +226,39 @@ DialogBasicSettings::~DialogBasicSettings() {
     delete ui;
 }
 
+static void highlightRegexLines(QTextEdit *edit) {
+    if (!edit || !edit->document()) return;
+    edit->blockSignals(true);
+    QTextDocument *doc = edit->document();
+    QRegularExpression validator;
+    for (int i = 0; i < doc->blockCount(); ++i) {
+        QTextBlock block = doc->findBlockByNumber(i);
+        QString line = block.text();
+        QTextBlockFormat fmt = block.blockFormat();
+        if (line.trimmed().isEmpty()) {
+            fmt.setBackground(Qt::NoBrush);
+            QTextCursor cur(block);
+            cur.setBlockFormat(fmt);
+            continue;
+        }
+        validator.setPattern(line);
+        fmt.setBackground(QBrush(validator.isValid() ? Qt::darkGreen : Qt::darkRed));
+        QTextCursor cur(block);
+        cur.setBlockFormat(fmt);
+    }
+    edit->blockSignals(false);
+}
+
+void DialogBasicSettings::applyRegexHighlighting() {
+    highlightRegexLines(ui->log_include_regex);
+    highlightRegexLines(ui->log_exclude_regex);
+}
+
 void DialogBasicSettings::accept() {
     // Common
     bool needChoosePort = false;
 
     D_SAVE_STRING(inbound_address)
-    D_SAVE_COMBO_STRING(log_level)
     Configs::dataManager->settingsRepo->custom_inbound = CACHE.custom_inbound;
     D_SAVE_INT(inbound_socks_port)
     if (!Configs::dataManager->settingsRepo->random_inbound_port && ui->random_listen_port->isChecked())
@@ -233,6 +276,27 @@ void DialogBasicSettings::accept() {
     Configs::dataManager->settingsRepo->speed_test_timeout_ms = ui->test_timeout->text().toInt();
     Configs::dataManager->settingsRepo->allow_beta_update = ui->allow_beta->isChecked();
 
+    // Logging
+    auto oldMaxLogLines = Configs::dataManager->settingsRepo->max_log_line;
+    Configs::dataManager->settingsRepo->max_log_line = ui->max_log_line->text().toInt();
+    if (oldMaxLogLines != Configs::dataManager->settingsRepo->max_log_line) CACHE.updateMaxLogLines = true;
+    Configs::dataManager->settingsRepo->log_level = ui->log_level->currentText();
+    Configs::dataManager->settingsRepo->xray_log_level = ui->xray_loglevel->currentText();
+    Configs::dataManager->settingsRepo->log_enable_include = ui->enable_log_include->isChecked();
+    Configs::dataManager->settingsRepo->log_enable_exclude = ui->enable_log_exclude->isChecked();
+    Configs::dataManager->settingsRepo->log_include_keyword = SplitAndTrim(ui->log_include_keyword->toPlainText(), "\n", false);
+    Configs::dataManager->settingsRepo->log_exclude_keyword = SplitAndTrim(ui->log_exclude_keyword->toPlainText(), "\n", false);
+
+    Configs::dataManager->settingsRepo->log_include_regex.clear();
+    Configs::dataManager->settingsRepo->log_exclude_regex.clear();
+    QRegularExpression regexValidator;
+    for (QStringList log_include_lines = SplitAndTrim(ui->log_include_regex->toPlainText(), "\n", false); const QString &line : log_include_lines) {
+        if (regexValidator.setPattern(line); regexValidator.isValid()) Configs::dataManager->settingsRepo->log_include_regex << line;
+    }
+    for (QStringList log_exclude_lines = SplitAndTrim(ui->log_exclude_regex->toPlainText(), "\n", false); const QString &line : log_exclude_lines) {
+        if (regexValidator.setPattern(line); regexValidator.isValid()) Configs::dataManager->settingsRepo->log_exclude_regex << line;
+    }
+
     // Style
 
     Configs::dataManager->settingsRepo->enable_stats = ui->connection_statistics->isChecked();
@@ -241,7 +305,6 @@ void DialogBasicSettings::accept() {
     Configs::dataManager->settingsRepo->use_custom_icons = ui->enable_custom_icon->isChecked();
     if (oldUseCustomIcon != Configs::dataManager->settingsRepo->use_custom_icons) CACHE.updateTrayIcon = true;
     D_SAVE_BOOL(start_minimal)
-    D_SAVE_INT(max_log_line)
     Configs::dataManager->settingsRepo->skip_delete_confirmation = ui->skip_delete_confirm->isChecked();
     Configs::dataManager->settingsRepo->show_system_dns = ui->show_sys_dns->isChecked();
 
@@ -269,7 +332,6 @@ void DialogBasicSettings::accept() {
     Configs::dataManager->settingsRepo->disable_traffic_stats = ui->disable_stats->isChecked();
 
     // Xray
-    Configs::dataManager->settingsRepo->xray_log_level = ui->xray_loglevel->currentText();
     Configs::dataManager->settingsRepo->xray_mux_concurrency = ui->xray_mux_concurrency->text().toInt();
     Configs::dataManager->settingsRepo->xray_mux_default_on = ui->xray_default_mux->isChecked();
     Configs::dataManager->settingsRepo->xray_vless_preference = static_cast<Configs::Xray::XrayVlessPreference>(ui->vless_xray_pref->currentIndex());
@@ -299,6 +361,7 @@ void DialogBasicSettings::accept() {
     if (CACHE.updateDisableTray) str << "UpdateDisableTray";
     if (CACHE.updateSystemDns) str << "UpdateSystemDns";
     if (CACHE.updateTrayIcon) str << "UpdateTrayIcon";
+    if (CACHE.updateMaxLogLines) str << "UpdateMaxLogLines";
     if (needChoosePort) str << "NeedChoosePort";
     MW_dialog_message(Dialog_DialogBasicSettings, str.join(","));
     QDialog::accept();
