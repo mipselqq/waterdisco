@@ -324,6 +324,8 @@ set(PROJECT_SOURCES
 
         include/database/SettingsRepo.h
         src/database/SettingsRepo.cpp
+        include/sys/linux/systemChecks.h
+        src/sys/linux/systemChecks.cpp
 )
 
 if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)
