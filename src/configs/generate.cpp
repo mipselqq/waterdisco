@@ -13,6 +13,7 @@
 
 
 #include "include/database/entities/Profile.h"
+#include "include/sys/linux/systemChecks.h"
 
 namespace Configs {
 
@@ -102,7 +103,7 @@ namespace Configs {
         ctx->os = getOS();
         if (ctx->os == Linux)
         {
-            ctx->isResolvedUsed = ReadFileText("/etc/resolv.conf").contains("systemd-resolved");
+            ctx->isResolvedUsed = isSystemdResolvedDefaultResolver();
         }
         auto preReqs = ctx->buildPrerequisities;
         
