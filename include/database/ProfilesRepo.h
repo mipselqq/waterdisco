@@ -66,12 +66,9 @@ namespace Configs {
         std::shared_ptr<Profile> GetProfileByName(const QString &name);
 
         QStringList GetAllProfileNames();
-
-        // Delete profile from database
-        void DeleteProfile(int id);
         
         // Delete multiple profiles
-        void BatchDeleteProfiles(const QList<int>& ids);
+        bool BatchDeleteProfiles(const QList<int>& ids);
         
         // Get all profile IDs in order
         QList<int> GetAllProfileIds() const;

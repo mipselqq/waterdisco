@@ -451,7 +451,12 @@ namespace Subscription {
             //
             if (Configs::dataManager->settingsRepo->sub_clear) {
                 MW_show_log(QObject::tr("Clearing servers..."));
-                Configs::dataManager->profilesRepo->BatchDeleteProfiles(group->Profiles());
+                if (!Configs::dataManager->profilesRepo->BatchDeleteProfiles(group->Profiles())) {
+                    runOnUiThread([=] {
+                        MessageBoxWarning("Internal Error", "DB Error when deleting profiles, Please try again.");
+                    });
+                    return;
+                }
             } else {
                 in = Configs::dataManager->profilesRepo->GetProfileBatch(group->Profiles());
             }
@@ -532,7 +537,11 @@ namespace Subscription {
                         del_ids.append(ent->id);
                     }
                 }
-                Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
+                if (!Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids)) {
+                    runOnUiThread([=] {
+                       MessageBoxWarning("Internal error", "DB Error when deleting profiles, data may be corrupted");
+                    });
+                }
 
                 change_text = "\n" + QObject::tr("Added %1 profiles:\n%2\nDeleted %3 Profiles:\n%4")
                                          .arg(only_out.length())
