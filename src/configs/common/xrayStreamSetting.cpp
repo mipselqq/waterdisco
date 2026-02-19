@@ -301,7 +301,21 @@ namespace Configs {
         return object;
     }
 
+
+    QString getXrayOutboundDomainStrategy() {
+        auto strategy = Configs::dataManager->settingsRepo->direct_dns_strategy;
+        if (strategy == "prefer_ipv4") return "UseIPv4v6";
+        if (strategy == "prefer_ipv6") return "UseIPv6v4";
+        if (strategy == "ipv4_only") return "ForceIPv4";
+        if (strategy == "ipv6_only") return "ForceIPv6";
+        return "UseIP";
+    }
+
     BuildResult xrayStreamSetting::Build() {
-        return {ExportToJson(), ""};
+        auto obj = ExportToJson();
+        obj["sockopt"] = QJsonObject{
+            {"domainStrategy", getXrayOutboundDomainStrategy()}
+        };
+        return {obj, ""};
     }
 }

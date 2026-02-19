@@ -130,8 +130,8 @@ namespace Configs {
         bool use_dns_object = false;
         QString dns_object = "";
         QString dns_final_out = "proxy";
-        QString domain_strategy = "";
-        QString outbound_domain_strategy = "";
+        QString resolve_domain_strategy = "";
+        QString default_domain_strategy = "";
         int sniffing_mode = SniffingMode::FOR_ROUTING;
         int ruleset_mirror = Mirrors::CLOUDFLARE;
 
@@ -196,6 +196,7 @@ namespace Configs {
         QString core_box_clash_listen_addr = "127.0.0.1";
         QString core_box_clash_api_secret = "";
         QString core_box_underlying_dns = "";
+        int core_dns_in_port = 5533;
 
         // Xray
         QString xray_log_level = "warning";

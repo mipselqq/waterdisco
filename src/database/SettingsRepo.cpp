@@ -42,7 +42,8 @@ namespace Configs {
             "use_dns_object",
             "skip_delete_confirmation",
             "log_enable_include",
-            "log_enable_exclude"
+            "log_enable_exclude",
+        "enable_dns_in"
         };
 
         const QSet<QString> intKeys = {
@@ -69,7 +70,8 @@ namespace Configs {
             "current_route_id",
             "sniffing_mode",
             "ruleset_mirror",
-            "xray_vless_preference"
+            "xray_vless_preference",
+            "core_dns_in_port"
         };
 
         const QSet<QString> stringListKeys = {
@@ -287,8 +289,8 @@ namespace Configs {
                 else if (key == "use_dns_object") use_dns_object = varValue.toBool();
                 else if (key == "dns_object") dns_object = varValue.toString();
                 else if (key == "dns_final_out") dns_final_out = varValue.toString();
-                else if (key == "domain_strategy") domain_strategy = varValue.toString();
-                else if (key == "outbound_domain_strategy") outbound_domain_strategy = varValue.toString();
+                else if (key == "domain_strategy") resolve_domain_strategy = varValue.toString();
+                else if (key == "outbound_domain_strategy") default_domain_strategy = varValue.toString();
                 else if (key == "sniffing_mode") sniffing_mode = varValue.toInt();
                 else if (key == "ruleset_mirror") ruleset_mirror = varValue.toInt();
                 else if (key == "inbound_address") inbound_address = varValue.toString();
@@ -335,6 +337,7 @@ namespace Configs {
                 else if (key == "extra_core_paths") extraCorePaths = varValue.toStringList();
                 else if (key == "skip_delete_confirmation") skip_delete_confirmation = varValue.toBool();
                 else if (key == "xray_vless_preference") xray_vless_preference = static_cast<Xray::XrayVlessPreference>(varValue.toInt());
+                else if (key == "core_dns_in_port") core_dns_in_port = varValue.toInt();
             }
         }
     }
@@ -405,8 +408,8 @@ namespace Configs {
             {"use_dns_object", use_dns_object},
             {"dns_object", dns_object},
             {"dns_final_out", dns_final_out},
-            {"domain_strategy", domain_strategy},
-            {"outbound_domain_strategy", outbound_domain_strategy},
+            {"domain_strategy", resolve_domain_strategy},
+            {"outbound_domain_strategy", default_domain_strategy},
             {"sniffing_mode", sniffing_mode},
             {"ruleset_mirror", ruleset_mirror},
             {"inbound_address", inbound_address},
@@ -453,6 +456,7 @@ namespace Configs {
             {"extra_core_paths", extraCorePaths},
             {"skip_delete_confirmation", skip_delete_confirmation},
             {"xray_vless_preference", xray_vless_preference},
+            {"core_dns_in_port", core_dns_in_port}
         };
 
         std::vector<std::pair<std::string, std::string>> keyValues;
