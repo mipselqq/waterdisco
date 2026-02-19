@@ -190,6 +190,8 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_COMBO_STRING(mux_protocol)
     D_LOAD_BOOL(mux_padding)
     D_LOAD_BOOL(mux_default_on)
+    ui->dns_in_port->setValidator(new QIntValidator(1, 65535, ui->dns_in_port));
+    ui->dns_in_port->setText(Int2String(Configs::dataManager->settingsRepo->core_dns_in_port));
 
     // Xray
     ui->xray_mux_concurrency->setText(Int2String(Configs::dataManager->settingsRepo->xray_mux_concurrency));
@@ -330,6 +332,7 @@ void DialogBasicSettings::accept() {
 
     // Core
     Configs::dataManager->settingsRepo->disable_traffic_stats = ui->disable_stats->isChecked();
+    Configs::dataManager->settingsRepo->core_dns_in_port = ui->dns_in_port->text().toInt();
 
     // Xray
     Configs::dataManager->settingsRepo->xray_mux_concurrency = ui->xray_mux_concurrency->text().toInt();

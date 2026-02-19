@@ -455,9 +455,17 @@ namespace Configs {
                     {"domain_keyword", dnsDeps->directKeywords},
                     {"domain_regex", dnsDeps->directRegexes},
                     {"action", "route"},
+                    {"strategy", dataManager->settingsRepo->direct_dns_strategy},
                     {"server", "dns-direct"},
                 };
         }
+
+        // final rule: proxy
+        rules += QJsonObject{
+            {"strategy", dataManager->settingsRepo->remote_dns_strategy},
+            {"action", "route"},
+            {"server", "dns-remote"},
+        };
 
         // Local
         auto dnsLocalAddress = Configs::dataManager->settingsRepo->core_box_underlying_dns.isEmpty() ? "local" : Configs::dataManager->settingsRepo->core_box_underlying_dns;
@@ -474,20 +482,20 @@ namespace Configs {
     }
 
     void buildInboundSection(std::shared_ptr<BuildSingBoxConfigContext> &ctx) {
+        if (ctx->forTest) return;
         auto tunDeps = ctx->buildPrerequisities->tunDeps;
         QJsonArray inbounds;
+
         // mixed
-        if (!ctx->forTest) {
-            QJsonObject inboundObj;
-            inboundObj["tag"] = "mixed-in";
-            inboundObj["type"] = "mixed";
-            inboundObj["listen"] = Configs::dataManager->settingsRepo->inbound_address;
-            inboundObj["listen_port"] = Configs::dataManager->settingsRepo->inbound_socks_port;
-            inbounds += inboundObj;
-        }
+        QJsonObject inboundObj;
+        inboundObj["tag"] = "mixed-in";
+        inboundObj["type"] = "mixed";
+        inboundObj["listen"] = Configs::dataManager->settingsRepo->inbound_address;
+        inboundObj["listen_port"] = Configs::dataManager->settingsRepo->inbound_socks_port;
+        inbounds += inboundObj;
 
         // Tun
-        if (Configs::dataManager->settingsRepo->spmode_vpn && !ctx->forTest) {
+        if (Configs::dataManager->settingsRepo->spmode_vpn) {
             QJsonObject inboundObj;
             inboundObj["tag"] = "tun-in";
             inboundObj["type"] = "tun";
@@ -513,8 +521,16 @@ namespace Configs {
             inbounds += inboundObj;
         }
 
+        // dns-in
+        inbounds.prepend(QJsonObject{
+            {"tag", "dns-in"},
+            {"type", "direct"},
+            {"listen", "127.0.0.1"},
+            {"listen_port", dataManager->settingsRepo->core_dns_in_port}
+        });
+
         // Hijack
-        if (Configs::dataManager->settingsRepo->enable_redirect && !ctx->forTest) {
+        if (Configs::dataManager->settingsRepo->enable_redirect) {
             inbounds.prepend(QJsonObject{
                 {"tag", "hijack"},
                 {"type", "direct"},
@@ -522,7 +538,7 @@ namespace Configs {
                 {"listen_port", Configs::dataManager->settingsRepo->redirect_listen_port},
             });
         }
-        if (Configs::dataManager->settingsRepo->enable_dns_server && !ctx->forTest) {
+        if (Configs::dataManager->settingsRepo->enable_dns_server) {
             inbounds.prepend(QJsonObject{
                 {"tag", "dns-in"},
                 {"type", "direct"},
@@ -532,7 +548,7 @@ namespace Configs {
         }
 
         // custom
-        if (!ctx->forTest) QJSONARRAY_ADD(inbounds, QString2QJsonObject(Configs::dataManager->settingsRepo->custom_inbound)["inbounds"].toArray())
+        QJSONARRAY_ADD(inbounds, QString2QJsonObject(Configs::dataManager->settingsRepo->custom_inbound)["inbounds"].toArray())
         ctx->buildConfigResult->coreConfig["inbounds"] = inbounds;
     }
 
@@ -694,11 +710,11 @@ namespace Configs {
         }
 
         // sniff and resolve
-        if (!Configs::dataManager->settingsRepo->domain_strategy.isEmpty())
+        if (!Configs::dataManager->settingsRepo->resolve_domain_strategy.isEmpty())
         {
             auto resolveRule = std::make_shared<RouteRule>();
             resolveRule->action = "resolve";
-            resolveRule->strategy = Configs::dataManager->settingsRepo->domain_strategy;
+            resolveRule->strategy = Configs::dataManager->settingsRepo->resolve_domain_strategy;
             resolveRule->inbound = {"mixed-in", "tun-in"};
             routeChain->Rules.prepend(resolveRule);
         }
@@ -717,6 +733,21 @@ namespace Configs {
             {"process_path", FindCoreRealPath()},
             {"outbound", "direct"},
         });
+        if (!ctx->forTest) {
+            routeRules.prepend(QJsonObject{
+                {"inbound", "dns-in"},
+                {"action", "reject"},
+            });
+            routeRules.prepend(QJsonObject{
+            {"action", "hijack-dns"},
+            {"protocol", "dns"},
+            {"inbound", "dns-in"},
+            });
+            routeRules.prepend(QJsonObject{
+                {"action", "sniff"},
+                {"inbound", "dns-in"},
+            });
+        }
 
         // rulesets
         auto ruleSetArray = QJsonArray();
@@ -758,7 +789,7 @@ namespace Configs {
         if (Configs::dataManager->settingsRepo->enable_stats)  route["find_process"] = true;
         route["default_domain_resolver"] = QJsonObject{
                                 {"server", "dns-direct"},
-                                {"strategy", Configs::dataManager->settingsRepo->outbound_domain_strategy}};
+                                {"strategy", Configs::dataManager->settingsRepo->default_domain_strategy}};
         if (Configs::dataManager->settingsRepo->spmode_vpn) route["auto_detect_interface"] = true;
 
         ctx->buildConfigResult->coreConfig["route"] = route;
@@ -799,9 +830,20 @@ namespace Configs {
     void buildXrayConfig(std::shared_ptr<BuildSingBoxConfigContext> &ctx) {
         if (ctx->xrayOutbounds.isEmpty()) return;
         ctx->buildConfigResult->isXrayNeeded = true;
+        QJsonObject dnsObj;
         QJsonArray inbounds;
         QJsonArray outbounds;
         QJsonArray routeRules;
+
+        dnsObj = {
+            {"servers", QJsonArray{
+                QJsonObject{
+                    {"address", "127.0.0.1"},
+                    {"port", dataManager->settingsRepo->core_dns_in_port},
+                    {"skipFallBack", true}
+                }
+            }}
+        };
 
         for (auto [port, outboundObj] : ctx->xrayOutbounds) {
             auto inboundTag = outboundObj["tag"].toString() + "-inbound";
@@ -820,10 +862,23 @@ namespace Configs {
             };
         }
 
+        // dnsRouting
+        outbounds << QJsonObject{
+            {"tag", "direct"},
+            {"protocol", "freedom"},
+        };
+        routeRules << QJsonObject{
+            {"type", "field"},
+            {"ip", QJsonArray{"127.0.0.1"}},
+            {"port", dataManager->settingsRepo->core_dns_in_port},
+            {"outboundTag", "direct"},
+        };
+
         ctx->buildConfigResult->xrayConfig["log"] = QJsonObject{
         {"loglevel", Configs::dataManager->settingsRepo->xray_log_level},
         {"access", Configs::dataManager->settingsRepo->xray_log_level == "info" ? "" : "none"}
         };
+        ctx->buildConfigResult->xrayConfig["dns"] = dnsObj;
         ctx->buildConfigResult->xrayConfig["inbounds"] = inbounds;
         ctx->buildConfigResult->xrayConfig["outbounds"] = outbounds;
         ctx->buildConfigResult->xrayConfig["routing"] = QJsonObject{
@@ -1065,7 +1120,7 @@ namespace Configs {
                 {"auto_detect_interface", true},
                 {"default_domain_resolver", QJsonObject{
                         {"server", "dns-direct"},
-                        {"strategy", Configs::dataManager->settingsRepo->outbound_domain_strategy},
+                        {"strategy", Configs::dataManager->settingsRepo->default_domain_strategy},
                    }}
         };
         res->coreConfig = ctx->buildConfigResult->coreConfig;

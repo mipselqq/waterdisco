@@ -797,25 +797,27 @@
           <item>
            <widget class="QWidget" name="assest_group" native="true">
             <layout class="QGridLayout" name="gridLayout_2">
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_6">
+               <property name="text">
+                <string>Multiplex (mux)</string>
+               </property>
+              </widget>
+             </item>
              <item row="0" column="1">
               <layout class="QHBoxLayout" name="horizontalLayout_20">
                <item>
-                <widget class="QCheckBox" name="disable_stats">
-                 <property name="minimumSize">
-                  <size>
-                   <width>411</width>
-                   <height>0</height>
-                  </size>
-                 </property>
+                <widget class="QLabel" name="label_29">
                  <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Might
-                                                                            Improve Ping and Performance&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;
-                                                                        </string>
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;A DNS server for local use will be deployed on this port&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                  </property>
                  <property name="text">
-                  <string>Disable Traffic Stats</string>
+                  <string>DNS Server Port</string>
                  </property>
                 </widget>
+               </item>
+               <item>
+                <widget class="QLineEdit" name="dns_in_port"/>
                </item>
               </layout>
              </item>
@@ -850,10 +852,21 @@
                </item>
               </layout>
              </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="label_6">
+             <item row="0" column="0">
+              <widget class="QCheckBox" name="disable_stats">
+               <property name="minimumSize">
+                <size>
+                 <width>411</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="toolTip">
+                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Might
+                                                                            Improve Ping and Performance&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;
+                                                                        </string>
+               </property>
                <property name="text">
-                <string>Multiplex (mux)</string>
+                <string>Disable Traffic Stats</string>
                </property>
               </widget>
              </item>
