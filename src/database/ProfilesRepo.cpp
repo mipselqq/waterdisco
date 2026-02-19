@@ -474,24 +474,7 @@ namespace Configs {
         return names;
     }
 
-    void ProfilesRepo::DeleteProfile(int id) {
-        if (id == dataManager->settingsRepo->started_id) {
-            GetMainWindow()->profile_stop(false, true, false);
-        }
-        auto profile = GetProfile(id);
-        if (profile) {
-            auto group = dataManager->groupsRepo->GetGroup(profile->gid);
-            if (group) {
-                group->RemoveProfile(id);
-                dataManager->groupsRepo->Save(group);
-            }
-        }
-        QMutexLocker locker(&mutex);
-        identityMap.erase(id);
-        db.exec("DELETE FROM profiles WHERE id = ?", id);
-    }
-
-    void ProfilesRepo::BatchDeleteProfiles(const QList<int>& ids) {
+    bool ProfilesRepo::BatchDeleteProfiles(const QList<int>& ids) {
         QSet<int> groupIDs;
         auto profiles = GetProfileBatch(ids);
         for (const auto& ent : profiles) {
@@ -502,7 +485,10 @@ namespace Configs {
         }
         for (auto groupID : groupIDs) {
             auto group = dataManager->groupsRepo->GetGroup(groupID);
-            if (!group) continue;
+            if (!group) {
+                MW_show_log("Could not find group with id " + Int2String(groupID));
+                return false;
+            }
             group->RemoveProfileBatch(ids);
             dataManager->groupsRepo->Save(group);
         }
@@ -512,6 +498,7 @@ namespace Configs {
             std::vector<int> idVec(ids.begin(), ids.end());
             db.execDeleteByIdIn("profiles", "id", idVec);
         }
+        return true;
     }
 
     QList<int> ProfilesRepo::GetAllProfileIds() const {
