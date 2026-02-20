@@ -196,7 +196,7 @@ namespace Configs {
             }
             if (!password.isEmpty()) object["password"] = password;
         }
-        if (tls->enabled) object["tls"] = tls->ExportToJson();
+        object["tls"] = tls->ExportToJson();
         return object;
     }
 
@@ -227,7 +227,7 @@ namespace Configs {
             }
             if (!password.isEmpty()) object["password"] = password;
         }
-        if (tls->enabled) object["tls"] = tls->Build().object;
+        object["tls"] = tls->Build().object;
         return {object, ""};
     }
 

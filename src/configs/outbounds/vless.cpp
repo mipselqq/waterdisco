@@ -75,9 +75,9 @@ namespace Configs {
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (!flow.isEmpty()) object["flow"] = flow;
         if (!packet_encoding.isEmpty()) object["packet_encoding"] = packet_encoding;
-        if (tls->enabled) object["tls"] = tls->ExportToJson();
-        if (!transport->type.isEmpty()) object["transport"] = transport->ExportToJson();
-        if (multiplex->enabled) object["multiplex"] = multiplex->ExportToJson();
+        if (auto tlsObj = tls->ExportToJson(); !tlsObj.isEmpty()) object["tls"] = tlsObj;
+        if (auto transportObj = transport->ExportToJson(); !transportObj.isEmpty()) object["transport"] = transportObj;
+        if (auto muxObj = multiplex->ExportToJson(); !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return object;
     }
 
@@ -89,9 +89,9 @@ namespace Configs {
         if (!uuid.isEmpty()) object["uuid"] = uuid;
         if (!flow.isEmpty()) object["flow"] = flow;
         if (!packet_encoding.isEmpty()) object["packet_encoding"] = packet_encoding;
-        if (tls->enabled) object["tls"] = tls->Build().object;
-        if (!transport->type.isEmpty()) object["transport"] = transport->Build().object;
-        if (auto obj = multiplex->Build().object; !obj.isEmpty()) object["multiplex"] = obj;
+        if (auto tlsObj = tls->Build().object; !tlsObj.isEmpty()) object["tls"] = tlsObj;
+        if (auto transportObj = transport->Build().object; !transportObj.isEmpty()) object["transport"] = transportObj;
+        if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
     }
 
