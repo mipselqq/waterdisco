@@ -124,7 +124,7 @@ namespace Configs {
         if (!plugin.isEmpty()) object["plugin"] = plugin;
         if (!plugin_opts.isEmpty()) object["plugin_opts"] = plugin_opts;
         if (uot) object["udp_over_tcp"] = uot;
-        if (multiplex->enabled) object["multiplex"] = multiplex->ExportToJson();
+        if (auto muxObj = multiplex->ExportToJson(); !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return object;
     }
 
@@ -142,7 +142,7 @@ namespace Configs {
         if (!plugin.isEmpty()) object["plugin"] = plugin;
         if (!plugin_opts.isEmpty()) object["plugin_opts"] = plugin_opts;
         if (uot) object["udp_over_tcp"] = uot;
-        if (auto obj = multiplex->Build().object; !obj.isEmpty()) object["multiplex"] = obj;
+        if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
     }
 

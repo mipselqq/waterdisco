@@ -59,7 +59,8 @@ namespace Configs
     }
 
         QString ProfileFilter_ent_key(const std::shared_ptr<Configs::Profile> &ent) {
-        return ent->outbound->ExportJsonLink();
+        auto key = ent->outbound->ExportJsonLink(true);
+        return key;
     }
 
     void ProfileFilter::Uniq(const QList<std::shared_ptr<Profile>> &in,

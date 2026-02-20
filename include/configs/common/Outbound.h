@@ -96,8 +96,11 @@ namespace Configs
 
         virtual BuildResult BuildXray() { return {}; }
 
-        QString ExportJsonLink() {
+        QString ExportJsonLink(bool stripMetadata = false) {
             auto json = ExportToJson();
+            if (stripMetadata) {
+                json.remove("tag");
+            }
             QUrl url;
             url.setScheme("json");
             url.setHost("throne");
