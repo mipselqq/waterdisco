@@ -136,7 +136,6 @@ require (
 	github.com/tailscale/netlink v1.1.1-0.20240822203006-4d49adab4de7 // indirect
 	github.com/tailscale/peercred v0.0.0-20250107143737-35a0c7bd7edc // indirect
 	github.com/tailscale/web-client-prebuilt v0.0.0-20250124233751-d4cd19a26976 // indirect
-	github.com/tevino/abool/v2 v2.1.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
@@ -172,6 +171,4 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260219132339-a1370ea88694
-
-replace github.com/sagernet/wireguard-go => github.com/throneproj/wireguard-go v0.0.0-20251117142642-c1bcbc4da297
+replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260220113852-99aa71795d66

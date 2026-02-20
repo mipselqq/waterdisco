@@ -118,15 +118,6 @@ namespace Configs {
                         server_port = peer->port;
                     }
                 }
-                if (key == "S1") enable_amnezia = true, init_packet_junk_size = value.toInt();
-                if (key == "S2") enable_amnezia = true, response_packet_junk_size = value.toInt();
-                if (key == "Jc") enable_amnezia = true, junk_packet_count = value.toInt();
-                if (key == "Jmin") enable_amnezia = true, junk_packet_min_size = value.toInt();
-                if (key == "Jmax") enable_amnezia = true, junk_packet_max_size = value.toInt();
-                if (key == "H1") enable_amnezia = true, init_packet_magic_header = value.toInt();
-                if (key == "H2") enable_amnezia = true, response_packet_magic_header = value.toInt();
-                if (key == "H3") enable_amnezia = true, underload_packet_magic_header = value.toInt();
-                if (key == "H4") enable_amnezia = true, transport_packet_magic_header = value.toInt();
             }
             return !private_key.isEmpty() && !peer->public_key.isEmpty();
         }
@@ -151,19 +142,6 @@ namespace Configs {
         if (query.hasQueryItem("workers")) worker_count = query.queryItemValue("workers").toInt();
         if (query.hasQueryItem("udp_timeout")) udp_timeout = query.queryItemValue("udp_timeout");
 
-        enable_amnezia = query.queryItemValue("enable_amnezia") == "true";
-        if (enable_amnezia) {
-            if (query.hasQueryItem("junk_packet_count")) junk_packet_count = query.queryItemValue("junk_packet_count").toInt();
-            if (query.hasQueryItem("junk_packet_min_size")) junk_packet_min_size = query.queryItemValue("junk_packet_min_size").toInt();
-            if (query.hasQueryItem("junk_packet_max_size")) junk_packet_max_size = query.queryItemValue("junk_packet_max_size").toInt();
-            if (query.hasQueryItem("init_packet_junk_size")) init_packet_junk_size = query.queryItemValue("init_packet_junk_size").toInt();
-            if (query.hasQueryItem("response_packet_junk_size")) response_packet_junk_size = query.queryItemValue("response_packet_junk_size").toInt();
-            if (query.hasQueryItem("init_packet_magic_header")) init_packet_magic_header = query.queryItemValue("init_packet_magic_header").toInt();
-            if (query.hasQueryItem("response_packet_magic_header")) response_packet_magic_header = query.queryItemValue("response_packet_magic_header").toInt();
-            if (query.hasQueryItem("underload_packet_magic_header")) underload_packet_magic_header = query.queryItemValue("underload_packet_magic_header").toInt();
-            if (query.hasQueryItem("transport_packet_magic_header")) transport_packet_magic_header = query.queryItemValue("transport_packet_magic_header").toInt();
-        }
-
         return !(private_key.isEmpty() || peer->public_key.isEmpty() || server.isEmpty());
     }
 
@@ -178,15 +156,6 @@ namespace Configs {
         if (object.contains("system")) system = object["system"].toBool();
         if (object.contains("worker_count")) worker_count = object["worker_count"].toInt();
         if (object.contains("udp_timeout")) udp_timeout = object["udp_timeout"].toString();
-        if (object.contains("junk_packet_count")) junk_packet_count = object["junk_packet_count"].toInt(), enable_amnezia = true;
-        if (object.contains("junk_packet_min_size")) junk_packet_min_size = object["junk_packet_min_size"].toInt(), enable_amnezia = true;
-        if (object.contains("junk_packet_max_size")) junk_packet_max_size = object["junk_packet_max_size"].toInt(), enable_amnezia = true;
-        if (object.contains("init_packet_junk_size")) init_packet_junk_size = object["init_packet_junk_size"].toInt(), enable_amnezia = true;
-        if (object.contains("response_packet_junk_size")) response_packet_junk_size = object["response_packet_junk_size"].toInt(), enable_amnezia = true;
-        if (object.contains("init_packet_magic_header")) init_packet_magic_header = object["init_packet_magic_header"].toInt(), enable_amnezia = true;
-        if (object.contains("response_packet_magic_header")) response_packet_magic_header = object["response_packet_magic_header"].toInt(), enable_amnezia = true;
-        if (object.contains("underload_packet_magic_header")) underload_packet_magic_header = object["underload_packet_magic_header"].toInt(), enable_amnezia = true;
-        if (object.contains("transport_packet_magic_header")) transport_packet_magic_header = object["transport_packet_magic_header"].toInt(), enable_amnezia = true;
         return true;
     }
 
@@ -206,19 +175,6 @@ namespace Configs {
         if (system) query.addQueryItem("use_system_interface", "true");
         if (worker_count > 0) query.addQueryItem("workers", QString::number(worker_count));
         if (!udp_timeout.isEmpty()) query.addQueryItem("udp_timeout", udp_timeout);
-
-        if (enable_amnezia) {
-            query.addQueryItem("enable_amnezia", "true");
-            if (junk_packet_count > 0) query.addQueryItem("junk_packet_count", QString::number(junk_packet_count));
-            if (junk_packet_min_size > 0) query.addQueryItem("junk_packet_min_size", QString::number(junk_packet_min_size));
-            if (junk_packet_max_size > 0) query.addQueryItem("junk_packet_max_size", QString::number(junk_packet_max_size));
-            if (init_packet_junk_size > 0) query.addQueryItem("init_packet_junk_size", QString::number(init_packet_junk_size));
-            if (response_packet_junk_size > 0) query.addQueryItem("response_packet_junk_size", QString::number(response_packet_junk_size));
-            if (init_packet_magic_header > 0) query.addQueryItem("init_packet_magic_header", QString::number(init_packet_magic_header));
-            if (response_packet_magic_header > 0) query.addQueryItem("response_packet_magic_header", QString::number(response_packet_magic_header));
-            if (underload_packet_magic_header > 0) query.addQueryItem("underload_packet_magic_header", QString::number(underload_packet_magic_header));
-            if (transport_packet_magic_header > 0) query.addQueryItem("transport_packet_magic_header", QString::number(transport_packet_magic_header));
-        }
         
         mergeUrlQuery(query, outbound::ExportToLink());
         mergeUrlQuery(query, peer->ExportToLink());
@@ -239,17 +195,6 @@ namespace Configs {
         if (system) object["system"] = system;
         if (worker_count > 0) object["worker_count"] = worker_count;
         if (!udp_timeout.isEmpty()) object["udp_timeout"] = udp_timeout;
-        if (enable_amnezia) {
-            if (junk_packet_count > 0) object["junk_packet_count"] = junk_packet_count;
-            if (junk_packet_min_size > 0) object["junk_packet_min_size"] = junk_packet_min_size;
-            if (junk_packet_max_size > 0) object["junk_packet_max_size"] = junk_packet_max_size;
-            if (init_packet_junk_size > 0) object["init_packet_junk_size"] = init_packet_junk_size;
-            if (response_packet_junk_size > 0) object["response_packet_junk_size"] = response_packet_junk_size;
-            if (init_packet_magic_header > 0) object["init_packet_magic_header"] = init_packet_magic_header;
-            if (response_packet_magic_header > 0) object["response_packet_magic_header"] = response_packet_magic_header;
-            if (underload_packet_magic_header > 0) object["underload_packet_magic_header"] = underload_packet_magic_header;
-            if (transport_packet_magic_header > 0) object["transport_packet_magic_header"] = transport_packet_magic_header;
-        }
         
         auto peerObj = peer->ExportToJson();
         if (!peerObj.isEmpty()) {
@@ -271,17 +216,6 @@ namespace Configs {
         if (system) object["system"] = system;
         if (worker_count > 0) object["worker_count"] = worker_count;
         if (!udp_timeout.isEmpty()) object["udp_timeout"] = udp_timeout;
-        if (enable_amnezia) {
-            if (junk_packet_count > 0) object["junk_packet_count"] = junk_packet_count;
-            if (junk_packet_min_size > 0) object["junk_packet_min_size"] = junk_packet_min_size;
-            if (junk_packet_max_size > 0) object["junk_packet_max_size"] = junk_packet_max_size;
-            if (init_packet_junk_size > 0) object["init_packet_junk_size"] = init_packet_junk_size;
-            if (response_packet_junk_size > 0) object["response_packet_junk_size"] = response_packet_junk_size;
-            if (init_packet_magic_header > 0) object["init_packet_magic_header"] = init_packet_magic_header;
-            if (response_packet_magic_header > 0) object["response_packet_magic_header"] = response_packet_magic_header;
-            if (underload_packet_magic_header > 0) object["underload_packet_magic_header"] = underload_packet_magic_header;
-            if (transport_packet_magic_header > 0) object["transport_packet_magic_header"] = transport_packet_magic_header;
-        }
 
         auto peerObj = peer->Build().object;
         if (!peerObj.isEmpty()) {

@@ -32,18 +32,6 @@ namespace Configs
         int worker_count = 0;
         QString udp_timeout;
 
-        // Amnezia options
-        bool enable_amnezia = false;
-        int junk_packet_count = 0;
-        int junk_packet_min_size = 0;
-        int junk_packet_max_size = 0;
-        int init_packet_junk_size = 0;
-        int response_packet_junk_size = 0;
-        int init_packet_magic_header = 0;
-        int response_packet_magic_header = 0;
-        int underload_packet_magic_header = 0;
-        int transport_packet_magic_header = 0;
-
         // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
@@ -52,7 +40,7 @@ namespace Configs
         BuildResult Build() override;
 
         void SetPort(int newPort) override;
-        QString GetPort();
+        QString GetPort() override;
         void SetAddress(QString newAddr) override;
         QString GetAddress() override;
         QString DisplayAddress() override;
