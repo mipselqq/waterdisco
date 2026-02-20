@@ -1,11 +1,7 @@
 #include "include/configs/common/xrayStreamSetting.h"
-
 #include <QUrlQuery>
 #include <QJsonArray>
-
 #include "include/configs/common/utils.h"
-
-
 
 namespace Configs {
     bool xrayTLS::ParseFromLink(const QString &link) {
@@ -254,17 +250,138 @@ namespace Configs {
         return {ExportToJson(), ""};
     }
 
+    bool xrayWS::ParseFromLink(const QString &link) {
+        auto url = QUrl(link);
+        if (!url.isValid()) return false;
+        auto query = QUrlQuery(url.query());
+        if (query.hasQueryItem("host")) host = query.queryItemValue("host");
+        if (query.hasQueryItem("path")) path = query.queryItemValue("path", QUrl::FullyDecoded);
+        if (query.hasQueryItem("ed")) ed = query.queryItemValue("ed").toInt();
+        if (query.hasQueryItem("headers")) {
+            auto raw = query.queryItemValue("headers", QUrl::FullyDecoded);
+            headers = raw.split("|");
+            if (headers.length()%2 != 0) {
+                MW_show_log("Failed to import invalid headers: " + raw);
+                headers.clear();
+            }
+        }
+        if (query.hasQueryItem("heartbeat_period")) heartbeatPeriod = query.queryItemValue("heartbeat_period").toInt();
+        return true;
+    }
+
+    bool xrayWS::ParseFromJson(const QJsonObject &object) {
+        if (object.isEmpty()) return false;
+        if (object.contains("path")) {
+            path = object["path"].toString();
+            if (path.contains("?ed=")) {
+                auto spl = path.split("?ed=");
+                path = spl[0];
+                ed = spl[1].toInt();
+            }
+        }
+        if (object.contains("host")) host = object["host"].toString();
+        if (object.contains("headers") && object["headers"].isObject())
+            headers = jsonObjectToQStringList(object["headers"].toObject());
+        if (object.contains("heartbeatPeriod")) heartbeatPeriod = object["heartbeatPeriod"].toInt(0);
+        return true;
+    }
+
+    QString xrayWS::ExportToLink() {
+        QUrlQuery query;
+        if (!host.isEmpty()) query.addQueryItem("host", host);
+        if (!path.isEmpty() && path != "/") query.addQueryItem("path", path);
+        if (ed > 0) query.addQueryItem("ed", QString::number(ed));
+        if (!headers.isEmpty()) query.addQueryItem("headers", headers.join("|"));
+        if (heartbeatPeriod > 0) query.addQueryItem("heartbeat_period", QString::number(heartbeatPeriod));
+        return query.toString(QUrl::FullyEncoded);
+    }
+
+    QJsonObject xrayWS::ExportToJson() {
+        QJsonObject obj;
+        if (!path.isEmpty()) {
+            auto fullPath = path;
+            if (ed > 0) fullPath += "?ed=" + QString::number(ed);
+            obj["path"] = fullPath;
+        }
+        if (!host.isEmpty()) obj["host"] = host;
+        if (!headers.isEmpty()) obj["headers"] = qStringListToJsonObject(headers);
+        if (heartbeatPeriod > 0) obj["heartbeatPeriod"] = heartbeatPeriod;
+        return obj;
+    }
+
+    BuildResult xrayWS::Build() {
+        return {ExportToJson(), ""};
+    }
+
+    bool xrayHttpUpgrade::ParseFromLink(const QString &link) {
+        auto url = QUrl(link);
+        if (!url.isValid()) return false;
+        auto query = QUrlQuery(url.query());
+        if (query.hasQueryItem("host")) host = query.queryItemValue("host");
+        if (query.hasQueryItem("path")) path = query.queryItemValue("path", QUrl::FullyDecoded);
+        if (query.hasQueryItem("ed")) ed = query.queryItemValue("ed").toInt();
+        if (query.hasQueryItem("headers")) {
+            auto raw = query.queryItemValue("headers", QUrl::FullyDecoded);
+            headers = raw.split("|");
+            if (headers.size() % 2 != 0) headers.clear();
+        }
+        return true;
+    }
+
+    bool xrayHttpUpgrade::ParseFromJson(const QJsonObject &object) {
+        if (object.isEmpty()) return false;
+        if (object.contains("path")) {
+            path = object["path"].toString();
+            if (path.contains("?ed=")) {
+                auto spl = path.split("?ed=");
+                path = spl[0];
+                ed = spl[1].toInt();
+            }
+        }
+        if (object.contains("host")) host = object["host"].toString();
+        if (object.contains("headers") && object["headers"].isObject())
+            headers = jsonObjectToQStringList(object["headers"].toObject());
+        return true;
+    }
+
+    QString xrayHttpUpgrade::ExportToLink() {
+        QUrlQuery query;
+        if (!host.isEmpty()) query.addQueryItem("host", host);
+        if (!path.isEmpty() && path != "/") query.addQueryItem("path", path);
+        if (ed > 0) query.addQueryItem("ed", QString::number(ed));
+        if (!headers.isEmpty()) query.addQueryItem("headers", headers.join("|"));
+        return query.toString(QUrl::FullyEncoded);
+    }
+
+    QJsonObject xrayHttpUpgrade::ExportToJson() {
+        QJsonObject obj;
+        if (!path.isEmpty()) {
+            auto fullPath = path;
+            if (ed > 0) fullPath += "?ed=" + QString::number(ed);
+            obj["path"] = fullPath;
+        }
+        if (!host.isEmpty()) obj["host"] = host;
+        if (!headers.isEmpty()) obj["headers"] = qStringListToJsonObject(headers);
+        return obj;
+    }
+
+    BuildResult xrayHttpUpgrade::Build() {
+        return {ExportToJson(), ""};
+    }
+
     bool xrayStreamSetting::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("type")) network = query.queryItemValue("type").replace("tcp", "raw");
-        if (network != "raw" && network != "xhttp") return false;
+        if (network != "raw" && network != "xhttp" && network != "ws" && network != "httpupgrade") return false;
         if (query.hasQueryItem("security")) security = query.queryItemValue("security");
         if (security == "tls") TLS->ParseFromLink(link);
         else if (security == "reality") reality->ParseFromLink(link);
-        xhttp->ParseFromLink(link);
+        if (network == "xhttp") xhttp->ParseFromLink(link);
+        else if (network == "ws") ws->ParseFromLink(link);
+        else if (network == "httpupgrade") httpupgrade->ParseFromLink(link);
 
         return true;
     }
@@ -273,11 +390,13 @@ namespace Configs {
         if (object.isEmpty()) return false;
 
         if (object.contains("network")) network = object.value("network").toString();
-        if (network != "raw" && network != "xhttp") return false;
+        if (network != "raw" && network != "xhttp" && network != "ws" && network != "httpupgrade") return false;
         if (object.contains("security")) security = object.value("security").toString();
         if (security == "tls" && object["tlsSettings"].isObject()) TLS->ParseFromJson(object["tlsSettings"].toObject());
         else if (security == "reality" && object["realitySettings"].isObject()) reality->ParseFromJson(object["realitySettings"].toObject());
         if (network == "xhttp" && object["xhttpSettings"].isObject()) xhttp->ParseFromJson(object["xhttpSettings"].toObject());
+        if (network == "ws" && object["wsSettings"].isObject()) ws->ParseFromJson(object["wsSettings"].toObject());
+        if (network == "httpupgrade" && object["httpupgradeSettings"].isObject()) httpupgrade->ParseFromJson(object["httpupgradeSettings"].toObject());
         return true;
     }
 
@@ -288,6 +407,8 @@ namespace Configs {
         if (security == "tls") mergeUrlQuery(query, TLS->ExportToLink());
         if (security == "reality") mergeUrlQuery(query, reality->ExportToLink());
         if (network == "xhttp") mergeUrlQuery(query, xhttp->ExportToLink());
+        if (network == "ws") mergeUrlQuery(query, ws->ExportToLink());
+        if (network == "httpupgrade") mergeUrlQuery(query, httpupgrade->ExportToLink());
         return query.toString(QUrl::FullyEncoded);
     }
 
@@ -298,6 +419,8 @@ namespace Configs {
         if (security == "tls") object["tlsSettings"] = TLS->ExportToJson();
         else if (security == "reality") object["realitySettings"] = reality->ExportToJson();
         if (network == "xhttp") object["xhttpSettings"] = xhttp->ExportToJson();
+        if (network == "ws") object["wsSettings"] = ws->ExportToJson();
+        if (network == "httpupgrade") object["httpupgradeSettings"] = httpupgrade->ExportToJson();
         return object;
     }
 

@@ -2,7 +2,7 @@
 #include "include/configs/baseConfig.h"
 
 namespace Configs {
-    inline QStringList XrayNetworks = {"raw", "xhttp"};
+    inline QStringList XrayNetworks = {"raw", "xhttp", "ws", "httpupgrade"};
     inline QStringList XrayXHTTPModes = {"auto", "packet-up", "stream-up", "stream-one"};
 
     class xrayTLS : public baseConfig {
@@ -63,6 +63,35 @@ namespace Configs {
         BuildResult Build() override;
     };
 
+    class xrayWS : public baseConfig {
+    public:
+        QString path;
+        QString host;
+        int ed = 0;
+        QStringList headers;
+        int heartbeatPeriod = 0;
+
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+    };
+
+    class xrayHttpUpgrade : public baseConfig {
+    public:
+        QString path;
+        int ed = 0;
+        QString host;
+        QStringList headers;
+
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+    };
+
     class xrayStreamSetting : public baseConfig {
         public:
         QString network = "raw";
@@ -70,6 +99,8 @@ namespace Configs {
         std::shared_ptr<xrayTLS> TLS = std::make_shared<xrayTLS>();
         std::shared_ptr<xrayReality> reality = std::make_shared<xrayReality>();
         std::shared_ptr<xrayXHTTP> xhttp = std::make_shared<xrayXHTTP>();
+        std::shared_ptr<xrayWS> ws = std::make_shared<xrayWS>();
+        std::shared_ptr<xrayHttpUpgrade> httpupgrade = std::make_shared<xrayHttpUpgrade>();
 
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;

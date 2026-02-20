@@ -53,6 +53,8 @@ private:
 
     void typeSelected(const QString &newType);
 
+    void updateXrayCommons(QString network);
+
     bool validateHeaders();
 
     bool onEnd();
