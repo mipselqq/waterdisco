@@ -34,7 +34,7 @@ void EditHysteria::onStart(std::shared_ptr<Configs::Profile> _ent) {
 bool EditHysteria::onEnd() {
     auto outbound = ent->Hysteria();
     outbound->protocol_version = ui->protocol_version->currentText();
-    outbound->server_ports = SplitAndTrim(ui->server_ports->text(), ",");
+    outbound->server_ports = SplitAndTrim(ui->server_ports->text(), ",", false);
     outbound->hop_interval = ui->hop_interval->text();
     outbound->up_mbps = ui->up_mbps->text().toInt();
     outbound->down_mbps = ui->down_mbps->text().toInt();
