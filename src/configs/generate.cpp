@@ -571,7 +571,7 @@ namespace Configs {
                 return;
             }
             if (ent->type == "extracore") hasExtracore = true;
-            if (ent->type == "custom") hasCustom = true;
+            if (ent->type == "custom" && ent->Custom()->type == "fullconfig") hasCustom = true;
             if (ent->outbound->IsXray()) hasXray = true;
             ents.append(ent);
         }
