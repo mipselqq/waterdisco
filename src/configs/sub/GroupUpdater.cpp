@@ -51,6 +51,28 @@ namespace Subscription {
         return res;
     }
 
+    SingBoxSubType getSingBoxSubType(const QJsonDocument &doc) {
+        if (doc.isObject()) {
+            auto obj = doc.object();
+            bool hasInbound = obj.contains("inbounds");
+            bool hasOutbound = obj.contains("outbounds") || obj.contains("endpoints");
+            if (hasInbound && hasOutbound) return SingBoxSubType::fullConfig;
+            if (hasOutbound) return SingBoxSubType::outboundInJson;
+            if (obj.contains("type")) return SingBoxSubType::outboundObject;
+            return SingBoxSubType::invalid;
+        }
+        if (doc.isArray() && !doc.array().empty()) {
+            auto arr = doc.array();
+            auto firstRaw = arr.first();
+            if (firstRaw.isObject()) {
+                auto obj = firstRaw.toObject();
+                if (obj.contains("type")) return SingBoxSubType::outboundJsonArray;
+            }
+            return SingBoxSubType::invalid;
+        }
+        return SingBoxSubType::invalid;
+    }
+
     void RawUpdater::update(const QString &str, bool needParse = true) {
         // Base64 encoded subscription
         if (auto str2 = DecodeB64IfValid(str); !str2.isEmpty()) {
@@ -58,14 +80,26 @@ namespace Subscription {
             return;
         }
 
+        std::shared_ptr<Configs::Profile> ent;
+
         // Json
         QJsonParseError error;
-        QJsonDocument::fromJson(str.toUtf8(), &error);
-        if (error.error == error.NoError) {
+        auto doc = QJsonDocument::fromJson(str.toUtf8(), &error);
+        if (error.error == QJsonParseError::NoError) {
             // SingBox
-            if (str.contains("outbounds") || str.contains("endpoints"))
-            {
-                updateSingBox(str);
+            auto subType = getSingBoxSubType(doc);
+            if (subType == SingBoxSubType::fullConfig) {
+                ent = Configs::ProfilesRepo::NewProfile("custom");
+                ent->Custom()->type = "fullconfig";
+                ent->Custom()->config = str;
+                updated_order += ent;
+            } else if (subType == SingBoxSubType::outboundObject) {
+                ent = Configs::ProfilesRepo::NewProfile("custom");
+                ent->Custom()->type = "outbound";
+                ent->Custom()->config = str;
+                updated_order += ent;
+            } else if (subType == SingBoxSubType::outboundInJson || subType == SingBoxSubType::outboundJsonArray) {
+                updateSingBox(doc, subType);
                 return;
             }
 
@@ -85,7 +119,8 @@ namespace Subscription {
             QString resp = API::defaultClient->Clash2Singbox(&ok, str);
             if (ok && !resp.isEmpty())
             {
-                updateSingBox(resp);
+                doc = QJsonDocument::fromJson(resp.toUtf8(), &error);
+                if (error.error == QJsonParseError::NoError) updateSingBox(doc, getSingBoxSubType(doc));
             }
             return;
         }
@@ -110,8 +145,6 @@ namespace Subscription {
         if (str.startsWith("//") || str.startsWith("#") || str.length() < 2) {
             return;
         }
-
-        std::shared_ptr<Configs::Profile> ent;
 
         // Json base64 link format
         if (str.startsWith("json://")) {
@@ -236,11 +269,18 @@ namespace Subscription {
         updated_order += ent;
     }
 
-    void RawUpdater::updateSingBox(const QString& str)
+    void RawUpdater::updateSingBox(const QJsonDocument &doc, SingBoxSubType type)
     {
-        auto json = QString2QJsonObject(str);
-        auto outbounds = json["outbounds"].toArray();
-        auto endpoints = json["endpoints"].toArray();
+        QJsonArray outbounds, endpoints;
+        if (type == SingBoxSubType::outboundInJson) {
+            auto json = doc.object();
+            outbounds = json["outbounds"].toArray();
+            endpoints = json["endpoints"].toArray();
+        } else if (type == SingBoxSubType::outboundJsonArray) {
+            outbounds = doc.array();
+        } else {
+            return;
+        }
         QJsonArray items;
         for (auto && outbound : outbounds)
         {
