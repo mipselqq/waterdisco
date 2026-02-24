@@ -3,11 +3,18 @@
 #include <include/database/entities/Profile.h>
 
 namespace Subscription {
+    enum class SingBoxSubType {
+        fullConfig,
+        outboundInJson,
+        outboundJsonArray,
+        outboundObject,
+        invalid,
+    };
     class RawUpdater {
     public:
         void update(const QString &str, bool needParse);
 
-        void updateSingBox(const QString &str);
+        void updateSingBox(const QJsonDocument &doc, SingBoxSubType type);
 
         void updateClash(const QString &str);
 
