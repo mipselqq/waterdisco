@@ -2,6 +2,7 @@
 
 #include <QJsonObject>
 #include "include/global/Configs.hpp"
+#include "include/configs/sub/clash.hpp"
 
 namespace Configs
 {
@@ -20,6 +21,10 @@ namespace Configs
         }
 
         virtual bool ParseFromJson(const QJsonObject& object) {
+            return false;
+        }
+
+        virtual bool ParseFromClash(const clash::Proxies& object) {
             return false;
         }
 

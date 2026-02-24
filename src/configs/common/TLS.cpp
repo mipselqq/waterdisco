@@ -26,6 +26,13 @@ namespace Configs {
         if (object.contains("fingerprint")) fingerPrint = object["fingerprint"].toString();
         return true;
     }
+    bool uTLS::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.client_fingerprint.empty()) return false;
+        enabled = true;
+        fingerPrint = QString::fromStdString(object.client_fingerprint);
+        return true;
+    }
     QString uTLS::ExportToLink()
     {
         QUrlQuery query;
@@ -119,6 +126,14 @@ namespace Configs {
         if (object.contains("enabled")) enabled = object["enabled"].toBool();
         if (object.contains("public_key")) public_key = object["public_key"].toString();
         if (object.contains("short_id")) short_id = object["short_id"].toString();
+        return true;
+    }
+    bool Reality::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.reality_opts.public_key.empty()) return false;
+        enabled = true;
+        public_key = QString::fromStdString(object.reality_opts.public_key);
+        short_id = QString::fromStdString(object.reality_opts.short_id);
         return true;
     }
     QString Reality::ExportToLink()
@@ -232,6 +247,24 @@ namespace Configs {
         if (object.contains("ech")) ech->ParseFromJson(object["ech"].toObject());
         if (object.contains("utls")) utls->ParseFromJson(object["utls"].toObject());
         if (object.contains("reality")) reality->ParseFromJson(object["reality"].toObject());
+        return true;
+    }
+    bool TLS::ParseFromClash(const clash::Proxies& object)
+    {
+        enabled = object.tls;
+        if (!object.servername.empty()) {
+            server_name = QString::fromStdString(object.servername);
+        } else if (!object.sni.empty()) {
+            server_name = QString::fromStdString(object.sni);
+        } else {
+            server_name = QString::fromStdString(object.server);
+        }
+        insecure = object.skip_cert_verify;
+        for (const auto& s : object.alpn) {
+            alpn.append(QString::fromStdString(s));
+        }
+        utls->ParseFromClash(object);
+        reality->ParseFromClash(object);
         return true;
     }
     QString TLS::ExportToLink()
