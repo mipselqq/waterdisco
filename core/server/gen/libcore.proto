@@ -22,8 +22,6 @@ service LibcoreService {
   rpc QueryCountryTest(EmptyReq) returns(QueryCountryTestResponse);
   rpc IPTest(IPTestRequest) returns (IPTestResp);
   rpc QueryIPTest(EmptyReq) returns (QueryIPTestResponse);
-  //
-  rpc Clash2Singbox(Clash2SingboxRequest) returns(Clash2SingboxResponse);
 }
 
 message EmptyReq {}
@@ -141,15 +139,6 @@ message QueryCountryTestResponse {
 
 message QueryURLTestResponse {
   repeated URLTestResp results = 1;
-}
-
-message Clash2SingboxRequest {
-  optional string clash_config = 1 [default = ""];
-}
-
-message Clash2SingboxResponse {
-  optional string singbox_config = 1 [default = ""];
-  optional string error = 2 [default = ""];
 }
 
 message IPTestRes {

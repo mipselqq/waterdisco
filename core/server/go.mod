@@ -11,12 +11,10 @@ require (
 	github.com/sagernet/sing-box v1.13.0-rc.4
 	github.com/sagernet/sing-tun v0.8.0-beta.17
 	github.com/spf13/cobra v1.10.2
-	github.com/throneproj/clash2singbox v0.1.5-0.20251204215643-2a0d5666be7e
 	github.com/xtls/xray-core v1.251208.0
 	golang.org/x/sys v0.41.0
 	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

@@ -85,6 +85,21 @@ namespace Configs {
         return true;
     }
 
+    bool vmess::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "vmess") return false;
+        outbound::ParseFromClash(object);
+        uuid = QString::fromStdString(object.uuid);
+        if (!object.cipher.empty()) security = QString::fromStdString(object.cipher);
+        alter_id = object.alterId;
+        if (!object.packet_encoding.empty()) packet_encoding = QString::fromStdString(object.packet_encoding);
+
+        tls->ParseFromClash(object);
+        transport->ParseFromClash(object);
+        multiplex->ParseFromClash(object);
+        return true;
+    }
+
     QString vmess::ExportToLink()
     {
         QUrl url;

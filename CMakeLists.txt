@@ -106,6 +106,7 @@ set(PROJECT_SOURCES
 
         include/configs/sub/GroupUpdater.hpp
         src/configs/sub/GroupUpdater.cpp
+        src/configs/sub/clash.cpp
 
         include/sys/Process.hpp
         src/sys/Process.cpp

@@ -9,7 +9,6 @@ import (
 	"ThroneCore/internal/xray"
 	"ThroneCore/test_utils"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/google/shlex"
@@ -18,11 +17,7 @@ import (
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
-	"github.com/throneproj/clash2singbox/convert"
-	"github.com/throneproj/clash2singbox/model"
-	"github.com/throneproj/clash2singbox/model/clash"
 	"github.com/xtls/xray-core/core"
-	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"runtime"
@@ -537,32 +532,5 @@ func (s *server) QueryCountryTest(ctx context.Context, _ *gen.EmptyReq) (out *ge
 			Cancelled:     To(res.Cancelled),
 		})
 	}
-	return
-}
-
-func (s *server) Clash2Singbox(ctx context.Context, in *gen.Clash2SingboxRequest) (out *gen.Clash2SingboxResponse, _ error) {
-	var convErr error
-	out = &gen.Clash2SingboxResponse{}
-
-	c := clash.Clash{}
-	err := yaml.Unmarshal([]byte(*in.ClashConfig), &c)
-	if err != nil {
-		out.Error = To(err.Error())
-		return
-	}
-
-	sing, convErr := convert.Clash2sing(c, model.SINGLATEST)
-	if convErr != nil {
-		out.Error = To(convErr.Error())
-		return
-	}
-
-	outb, err := json.Marshal(map[string]any{"outbounds": sing})
-	if err != nil {
-		out.Error = To(err.Error())
-		return
-	}
-
-	out.SingboxConfig = To(string(outb))
 	return
 }
