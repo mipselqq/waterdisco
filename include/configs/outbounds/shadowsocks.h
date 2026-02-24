@@ -28,6 +28,7 @@ namespace Configs
         // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
+        bool ParseFromClash(const clash::Proxies& object) override;
         bool ParseFromSIP008(const QJsonObject& object);
         QString ExportToLink() override;
         QJsonObject ExportToJson() override;

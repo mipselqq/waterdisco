@@ -426,25 +426,4 @@ namespace API {
         }
     }
 
-    QString Client::Clash2Singbox(bool* rpcOK, const QString& config) const
-    {
-        libcore::Clash2SingboxRequest request{config.toStdString()};
-        libcore::Clash2SingboxResponse reply;
-        std::vector<uint8_t> resp;
-        auto status = default_grpc_channel->Call("Clash2Singbox", spb::pb::serialize<std::string>(request), resp);
-
-        if (status == QNetworkReply::NoError) {
-            reply = spb::pb::deserialize<libcore::Clash2SingboxResponse>(resp);
-            *rpcOK = true;
-            QString error = QString::fromStdString(reply.error.value());
-            if (!error.isEmpty()) {
-                MW_show_log(QString("Failed to convert Clash config:\n") + error);
-            }
-            return QString::fromStdString(reply.singbox_config.value());
-        } else {
-            NOT_OK
-            return "";
-        }
-    }
-
 } // namespace API

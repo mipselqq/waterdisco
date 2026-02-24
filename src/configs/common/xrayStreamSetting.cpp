@@ -29,6 +29,22 @@ namespace Configs {
         return true;
     }
 
+    bool xrayTLS::ParseFromClash(const clash::Proxies& object) {
+        if (!object.servername.empty()) {
+            serverName = QString::fromStdString(object.servername);
+        } else if (!object.sni.empty()) {
+            serverName = QString::fromStdString(object.sni);
+        } else {
+            serverName = QString::fromStdString(object.server);
+        }
+        allowInsecure = object.skip_cert_verify;
+        for (const auto& s : object.alpn) {
+            alpn.append(QString::fromStdString(s));
+        }
+        if (!object.client_fingerprint.empty()) fingerprint = QString::fromStdString(object.client_fingerprint);
+        return true;
+    }
+
     QString xrayTLS::ExportToLink() {
         QUrlQuery query;
         query.addQueryItem("sni", serverName);
@@ -76,8 +92,21 @@ namespace Configs {
         if (object.contains("fingerprint")) fingerprint = object["fingerprint"].toString();
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("shortId")) shortId = object["shortId"].toString();
-        if (object.contains("shortId")) shortId = object["shortId"].toString();
         if (object.contains("spiderX")) spiderX = object["spiderX"].toString();
+        return true;
+    }
+
+    bool xrayReality::ParseFromClash(const clash::Proxies& object) {
+        if (!object.servername.empty()) {
+            serverName = QString::fromStdString(object.servername);
+        } else if (!object.sni.empty()) {
+            serverName = QString::fromStdString(object.sni);
+        } else {
+            serverName = QString::fromStdString(object.server);
+        }
+        if (!object.client_fingerprint.empty()) fingerprint = QString::fromStdString(object.client_fingerprint);
+        if (!object.reality_opts.public_key.empty()) password = QString::fromStdString(object.reality_opts.public_key);
+        if (!object.reality_opts.short_id.empty()) shortId = QString::fromStdString(object.reality_opts.short_id);
         return true;
     }
 
@@ -286,6 +315,28 @@ namespace Configs {
         return true;
     }
 
+    bool xrayWS::ParseFromClash(const clash::Proxies& object) {
+        if (!object.ws_opts.path.empty()) {
+            path = QString::fromStdString(object.ws_opts.path);
+            if (path.contains("?ed=")) {
+                auto spl = path.split("?ed=");
+                path = spl[0];
+                ed = spl[1].toInt();
+            }
+        }
+        if (!object.servername.empty()) {
+            host = QString::fromStdString(object.servername);
+        } else if (object.ws_opts.headers.contains("Host")) {
+            host = QString::fromStdString(object.ws_opts.headers.at("Host"));
+        }
+        if (!object.ws_opts.headers.empty()) {
+            for (const auto& [key, value] : object.ws_opts.headers) {
+                headers.append(QString::fromStdString(key) + "=" + QString::fromStdString(value));
+            }
+        }
+        return true;
+    }
+
     QString xrayWS::ExportToLink() {
         QUrlQuery query;
         if (!host.isEmpty()) query.addQueryItem("host", host);
@@ -344,6 +395,28 @@ namespace Configs {
         return true;
     }
 
+    bool xrayHttpUpgrade::ParseFromClash(const clash::Proxies& object) {
+        if (!object.ws_opts.path.empty()) {
+            path = QString::fromStdString(object.ws_opts.path);
+            if (path.contains("?ed=")) {
+                auto spl = path.split("?ed=");
+                path = spl[0];
+                ed = spl[1].toInt();
+            }
+        }
+        if (!object.servername.empty()) {
+            host = QString::fromStdString(object.servername);
+        } else if (object.ws_opts.headers.contains("Host")) {
+            host = QString::fromStdString(object.ws_opts.headers.at("Host"));
+        }
+        if (!object.ws_opts.headers.empty()) {
+            for (const auto& [key, value] : object.ws_opts.headers) {
+                headers.append(QString::fromStdString(key) + "=" + QString::fromStdString(value));
+            }
+        }
+        return true;
+    }
+
     QString xrayHttpUpgrade::ExportToLink() {
         QUrlQuery query;
         if (!host.isEmpty()) query.addQueryItem("host", host);
@@ -397,6 +470,29 @@ namespace Configs {
         if (network == "xhttp" && object["xhttpSettings"].isObject()) xhttp->ParseFromJson(object["xhttpSettings"].toObject());
         if (network == "ws" && object["wsSettings"].isObject()) ws->ParseFromJson(object["wsSettings"].toObject());
         if (network == "httpupgrade" && object["httpupgradeSettings"].isObject()) httpupgrade->ParseFromJson(object["httpupgradeSettings"].toObject());
+        return true;
+    }
+
+    bool xrayStreamSetting::ParseFromClash(const clash::Proxies& object) {
+        if (!object.network.empty()) network = QString::fromStdString(object.network);
+        if (network != "raw" && network != "ws") return false;
+        if (object.tls) {
+            if (object.reality_opts.public_key.empty()) {
+                security = "tls";
+                TLS->ParseFromClash(object);
+            } else {
+                security = "reality";
+                reality->ParseFromClash(object);
+            }
+        }
+        if (network == "ws") {
+            if (object.ws_opts.v2ray_http_upgrade) {
+                network = "httpupgrade";
+                httpupgrade->ParseFromClash(object);
+            } else {
+                ws->ParseFromClash(object);
+            }
+        }
         return true;
     }
 
