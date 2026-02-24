@@ -7,6 +7,22 @@
 #include "include/configs/common/utils.h"
 
 namespace Configs {
+    QStringList portsToPorts(const QStringList &ports) {
+        QStringList result;
+        
+        for (const QString &v : ports) {
+            QStringList range = v.split(QRegularExpression("[:-]"));
+
+            if (range.size() == 2) {
+                result.append(QString("%1:%2").arg(range[0], range[1]));
+            } else {
+                result.append(QString("%1:%2").arg(v, v));
+            }
+        }
+        
+        return result;
+    }
+
     bool hysteria::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);
@@ -18,10 +34,7 @@ namespace Configs {
             int portStartIndex = link.indexOf(authority) + authority.length();
             QRegularExpressionMatch match = QRegularExpression("^:([\\d,\\-]+)").match(link.mid(portStartIndex));
             if (match.hasMatch()) {
-                server_ports = match.captured(1).split(",");
-                for (auto & serverPort : server_ports) {
-                    serverPort.replace("-", ":");
-                }
+                server_ports = portsToPorts(match.captured(1).split(","));
             }
         }
         auto query = QUrlQuery(url.query());
@@ -54,10 +67,7 @@ namespace Configs {
         if (query.hasQueryItem("downmbps")) down_mbps = query.queryItemValue("downmbps").toInt();
         if (query.hasQueryItem("hop_interval")) hop_interval = query.queryItemValue("hop_interval");
         if (query.hasQueryItem("mport")) {
-            server_ports = query.queryItemValue("mport").split(",");
-            for (auto & server_port : server_ports) {
-                server_port.replace("-", ":");
-            }
+            server_ports = portsToPorts(query.queryItemValue("mport").split(","));
         }
         
         tls->ParseFromLink(link);
@@ -121,24 +131,7 @@ namespace Configs {
         }
         outbound::ParseFromClash(object);
 
-        auto portsToPorts = [](const QString &ports) -> QStringList {
-            QStringList result;
-            
-            QStringList parts = ports.split(QRegularExpression("[,/]"), Qt::SkipEmptyParts);
-
-            for (const QString &v : parts) {
-                QStringList range = v.split('-');
-                
-                if (range.size() == 2) {
-                    result << QString("%1:%2").arg(range[0], range[1]);
-                } else {
-                    result << QString("%1:%2").arg(v, v);
-                }
-            }
-            
-            return result;
-        };
-        if (!object.ports.empty()) server_ports = portsToPorts(QString::fromStdString(object.ports));
+        if (!object.ports.empty()) server_ports = portsToPorts(QString::fromStdString(object.ports).split(QRegularExpression("[,/]"), Qt::SkipEmptyParts));
         auto anyToMbps = [](const QString &s) -> int {
             if (s.isEmpty()) return 0;
 
@@ -264,7 +257,7 @@ namespace Configs {
         QJsonObject object;
         object["type"] = protocol_version == "1" ? "hysteria" : "hysteria2";
         mergeJsonObjects(object, outbound::ExportToJson());
-        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(server_ports);
+        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(portsToPorts(server_ports));
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
         if (down_mbps > 0) object["down_mbps"] = down_mbps;
@@ -295,7 +288,7 @@ namespace Configs {
         QJsonObject object;
         object["type"] = protocol_version == "1" ? "hysteria" : "hysteria2";
         mergeJsonObjects(object, outbound::Build().object);
-        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(server_ports);
+        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(portsToPorts(server_ports));
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
         if (down_mbps > 0) object["down_mbps"] = down_mbps;
