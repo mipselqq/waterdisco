@@ -71,6 +71,55 @@ namespace Configs {
         if (object.contains("service_name")) service_name = object["service_name"].toString();
         return true;
     }
+    bool Transport::ParseFromClash(const clash::Proxies& object)
+    {
+        if (!object.ws_opts.path.empty() || object.network == "ws") {
+            if (object.ws_opts.v2ray_http_upgrade) {
+                type = "httpupgrade";
+            } else {
+                type = "ws";
+                early_data_header_name = QString::fromStdString(object.ws_opts.early_data_header_name);
+                max_early_data = object.ws_opts.max_early_data;
+            }
+            if (!object.servername.empty()) {
+                host = QString::fromStdString(object.servername);
+            } else if (object.ws_opts.headers.contains("Host")) {
+                host = QString::fromStdString(object.ws_opts.headers.at("Host"));
+            }
+            if (!object.ws_opts.headers.empty()) {
+                for (const auto& [key, value] : object.ws_opts.headers) {
+                    headers.append(QString::fromStdString(key) + "=" + QString::fromStdString(value));
+                }
+            }
+            path = QString::fromStdString(object.ws_opts.path);
+            return true;
+        }
+        if (!object.grpc_opts.grpc_service_name.empty()) {
+            type = "grpc";
+            service_name = QString::fromStdString(object.grpc_opts.grpc_service_name);
+            return true;
+        }
+        if (!object.h2_opts.path.empty() || object.network == "h2") {
+            type = "http";
+            if (!object.h2_opts.host.empty()) {
+                host = QString::fromStdString(object.h2_opts.host[0]);
+            }
+            path = QString::fromStdString(object.h2_opts.path);
+            return true;
+        }
+        if (!object.http_opts.method.empty()) {
+            type = "http";
+            if (object.http_opts.headers.contains("Host") && !object.http_opts.headers.at("Host").empty()) {
+                host = QString::fromStdString(object.http_opts.headers.at("Host")[0]);
+            }
+            if (!object.http_opts.path.empty()) {
+                path = QString::fromStdString(object.http_opts.path[0]);
+            }
+            method = QString::fromStdString(object.http_opts.method);
+            return true;
+        }
+        return false;
+    }
     QString Transport::ExportToLink()
     {
         QUrlQuery query;

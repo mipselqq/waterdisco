@@ -110,6 +110,96 @@ namespace Configs {
         return true;
     }
 
+    bool hysteria::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type == "hysteria") {
+            protocol_version = "1";
+        } else if (object.type == "hysteria2") {
+            protocol_version = "2";
+        } else {
+            return false;
+        }
+        outbound::ParseFromClash(object);
+
+        auto portsToPorts = [](const QString &ports) -> QStringList {
+            QStringList result;
+            
+            QStringList parts = ports.split(QRegularExpression("[,/]"), Qt::SkipEmptyParts);
+
+            for (const QString &v : parts) {
+                QStringList range = v.split('-');
+                
+                if (range.size() == 2) {
+                    result << QString("%1:%2").arg(range[0], range[1]);
+                } else {
+                    result << QString("%1:%2").arg(v, v);
+                }
+            }
+            
+            return result;
+        };
+        if (!object.ports.empty()) server_ports = portsToPorts(QString::fromStdString(object.ports));
+        auto anyToMbps = [](const QString &s) -> int {
+            if (s.isEmpty()) return 0;
+
+            bool ok;
+            int directMb = s.toInt(&ok);
+            if (ok) return directMb;
+
+            static QRegularExpression re(R"(^(\d+)([KMGT]?)([Bb]?))");
+            QRegularExpressionMatch match = re.match(s);
+
+            if (!match.hasMatch()) return 0;
+
+            double v = match.captured(1).toDouble();
+            QString unit = match.captured(2).toUpper();
+            QString type = match.captured(3).toUpper();
+
+            double n = 1.0;
+
+            if (unit == "K")      n = 0.001;
+            else if (unit == "M") n = 1.0;
+            else if (unit == "G") n = 1000.0;
+            else if (unit == "T") n = 1000000.0;
+
+            if (type == "B") {
+                n *= 8.0;
+            }
+
+            return static_cast<int>(v * n);
+        };
+        if (!object.up.empty()) up_mbps = anyToMbps(QString::fromStdString(object.up));
+        if (!object.down.empty()) down_mbps = anyToMbps(QString::fromStdString(object.down));
+        if (protocol_version == "1") {
+            if (!object.auth_str.empty()) {
+                auth = QString::fromStdString(object.auth_str);
+                auth_type = "STRING";
+            } else if (!object.auth_str1.empty()) {
+                auth = QString::fromStdString(object.auth_str1);
+                auth_type = "STRING";
+            }
+            if (!object.obfs.empty()) obfs = QString::fromStdString(object.obfs);
+            if (object.recv_window > 0) {
+                recv_window = object.recv_window;
+            } else if (object.recv_window1 > 0) {
+                recv_window = object.recv_window1;
+            }
+            if (object.recv_window_conn > 0) {
+                recv_window = object.recv_window_conn;
+            } else if (object.recv_window_conn1 > 0) {
+                recv_window = object.recv_window_conn1;
+            }
+            disable_mtu_discovery = object.disable_mtu_discovery;
+        } else {
+            if (!object.password.empty()) password = QString::fromStdString(object.password);
+            if (!object.obfs_password.empty()) obfs = QString::fromStdString(object.obfs_password);
+        }
+
+        tls->ParseFromClash(object);
+        tls->enabled = true;
+        return true;
+    }
+
     QString hysteria::ExportToLink()
     {
         QUrl url;

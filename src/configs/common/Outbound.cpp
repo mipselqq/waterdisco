@@ -28,6 +28,13 @@ namespace Configs {
         dialFields->ParseFromJson(object);
         return true;
     }
+    bool outbound::ParseFromClash(const clash::Proxies& object)
+    {
+        name = QString::fromStdString(object.name);
+        server = QString::fromStdString(object.server);
+        server_port = object.port;
+        return true;
+    }
     QString outbound::ExportToLink()
     {
         QUrlQuery query;

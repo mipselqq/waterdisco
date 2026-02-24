@@ -56,6 +56,16 @@ namespace Configs {
         return true;
     }
 
+    bool socks::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "socks5") return false;
+        outbound::ParseFromClash(object);
+        username = QString::fromStdString(object.username);
+        password = QString::fromStdString(object.password);
+
+        return true;
+    }
+
     QString socks::ExportToLink()
     {
         QUrl url;
