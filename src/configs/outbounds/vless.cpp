@@ -44,6 +44,20 @@ namespace Configs {
         return true;
     }
 
+    bool vless::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "vless") return false;
+        outbound::ParseFromClash(object);
+        uuid = QString::fromStdString(object.uuid);
+        if (!object.flow.empty()) flow = QString::fromStdString(object.flow);
+        if (!object.packet_encoding.empty()) packet_encoding = QString::fromStdString(object.packet_encoding);
+
+        tls->ParseFromClash(object);
+        transport->ParseFromClash(object);
+        multiplex->ParseFromClash(object);
+        return true;
+    }
+
     QString vless::ExportToLink()
     {
         QUrl url;

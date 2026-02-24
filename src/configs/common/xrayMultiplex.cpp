@@ -22,6 +22,15 @@ namespace Configs {
         return true;
     }
 
+    bool xrayMultiplex::ParseFromClash(const clash::Proxies& object) {
+        enabled = object.smux.enabled;
+        useDefault = false;
+        if (object.smux.max_streams > 0) {
+            concurrency = object.smux.max_streams;
+        }
+        return true;
+    }
+
     QString xrayMultiplex::ExportToLink() {
         QUrlQuery query;
         if (!enabled) return "";
