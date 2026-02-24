@@ -1,8 +1,8 @@
 #include "include/database/entities/Profile.h"
 #include "include/global/HTTPRequestHelper.hpp"
-#include "include/api/RPC.h"
 
 #include "include/configs/sub/GroupUpdater.hpp"
+#include "include/configs/sub/clash.hpp"
 
 #include <QInputDialog>
 #include <QUrlQuery>
@@ -115,13 +115,7 @@ namespace Subscription {
 
         // Clash
         if (str.contains("proxies:")) {
-            bool ok;
-            QString resp = API::defaultClient->Clash2Singbox(&ok, str);
-            if (ok && !resp.isEmpty())
-            {
-                doc = QJsonDocument::fromJson(resp.toUtf8(), &error);
-                if (error.error == QJsonParseError::NoError) updateSingBox(doc, getSingBoxSubType(doc));
-            }
+            updateClash(str);
             return;
         }
 
@@ -282,18 +276,18 @@ namespace Subscription {
             return;
         }
         QJsonArray items;
-        for (auto && outbound : outbounds)
+        for (const auto& outbound : outbounds)
         {
             if (!outbound.isObject()) continue;
             items.append(outbound.toObject());
         }
-        for (auto && endpoint : endpoints)
+        for (const auto& endpoint : endpoints)
         {
             if (!endpoint.isObject()) continue;
             items.append(endpoint.toObject());
         }
 
-        for (auto o : items)
+        for (const auto& o : items)
         {
             auto out = o.toObject();
             if (out.isEmpty())
@@ -387,6 +381,97 @@ namespace Subscription {
         }
     }
 
+    void RawUpdater::updateClash(const QString& str)
+    {
+        fkyaml::node node = fkyaml::node::deserialize(str.toStdString());
+        clash::Clash clash_config = node.get_value<clash::Clash>();
+
+        for (const auto& out : clash_config.proxies)
+        {
+            std::shared_ptr<Configs::Profile> ent;
+
+            // SOCKS
+            if (out.type == "socks5") {
+                ent = Configs::ProfilesRepo::NewProfile("socks");
+                auto ok = ent->Socks()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // HTTP
+            if (out.type == "http") {
+                ent = Configs::ProfilesRepo::NewProfile("http");
+                auto ok = ent->Http()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // ShadowSocks
+            if (out.type == "ss") {
+                ent = Configs::ProfilesRepo::NewProfile("shadowsocks");
+                auto ok = ent->ShadowSocks()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // VMess
+            if (out.type == "vmess") {
+                ent = Configs::ProfilesRepo::NewProfile("vmess");
+                auto ok = ent->VMess()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // VLESS
+            if (out.type == "vless") {
+                if (!out.encryption.empty() && out.encryption != "none") {
+                    ent = Configs::ProfilesRepo::NewProfile("xrayvless");
+                    auto ok = ent->XrayVLESS()->ParseFromClash(out);
+                    if (!ok) continue;
+                } else {
+                    ent = Configs::ProfilesRepo::NewProfile("vless");
+                    auto ok = ent->VLESS()->ParseFromClash(out);
+                    if (!ok) continue;
+                }
+            }
+
+            // Trojan
+            if (out.type == "trojan") {
+                ent = Configs::ProfilesRepo::NewProfile("trojan");
+                auto ok = ent->Trojan()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // AnyTLS
+            if (out.type == "anytls") {
+                ent = Configs::ProfilesRepo::NewProfile("anytls");
+                auto ok = ent->AnyTLS()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // Hysteria
+            if (out.type == "hysteria" || out.type == "hysteria2") {
+                ent = Configs::ProfilesRepo::NewProfile("hysteria");
+                auto ok = ent->Hysteria()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // TUIC
+            if (out.type == "tuic") {
+                ent = Configs::ProfilesRepo::NewProfile("tuic");
+                auto ok = ent->TUIC()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // SSH
+            if (out.type == "ssh") {
+                ent = Configs::ProfilesRepo::NewProfile("ssh");
+                auto ok = ent->SSH()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            if (ent == nullptr) continue;
+
+            updated_order += ent;
+        }
+    }
+
     void RawUpdater::updateWireguardFileConfig(const QString& str)
     {
         auto ent = Configs::ProfilesRepo::NewProfile("wireguard");
@@ -399,7 +484,7 @@ namespace Subscription {
     {
         auto json = QString2QJsonObject(str);
 
-        for (auto o : json["servers"].toArray())
+        for (const auto& o : json["servers"].toArray())
         {
             auto out = o.toObject();
             if (out.isEmpty())

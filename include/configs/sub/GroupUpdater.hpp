@@ -16,6 +16,8 @@ namespace Subscription {
 
         void updateSingBox(const QJsonDocument &doc, SingBoxSubType type);
 
+        void updateClash(const QString &str);
+
         void updateWireguardFileConfig(const QString &str);
 
         void updateSIP008(const QString &str);

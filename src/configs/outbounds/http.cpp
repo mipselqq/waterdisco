@@ -55,6 +55,16 @@ namespace Configs {
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
         return true;
     }
+    bool http::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "http") return false;
+        outbound::ParseFromClash(object);
+        username = QString::fromStdString(object.username);
+        password = QString::fromStdString(object.password);
+
+        tls->ParseFromClash(object);
+        return true;
+    }
     QString http::ExportToLink()
     {
         QUrl url;
