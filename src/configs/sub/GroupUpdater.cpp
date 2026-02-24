@@ -276,18 +276,18 @@ namespace Subscription {
             return;
         }
         QJsonArray items;
-        for (auto && outbound : outbounds)
+        for (const auto& outbound : outbounds)
         {
             if (!outbound.isObject()) continue;
             items.append(outbound.toObject());
         }
-        for (auto && endpoint : endpoints)
+        for (const auto& endpoint : endpoints)
         {
             if (!endpoint.isObject()) continue;
             items.append(endpoint.toObject());
         }
 
-        for (auto o : items)
+        for (const auto& o : items)
         {
             auto out = o.toObject();
             if (out.isEmpty())
@@ -386,7 +386,7 @@ namespace Subscription {
         fkyaml::node node = fkyaml::node::deserialize(str.toStdString());
         clash::Clash clash_config = node.get_value<clash::Clash>();
 
-        for (auto out : clash_config.proxies)
+        for (const auto& out : clash_config.proxies)
         {
             std::shared_ptr<Configs::Profile> ent;
 
@@ -484,7 +484,7 @@ namespace Subscription {
     {
         auto json = QString2QJsonObject(str);
 
-        for (auto o : json["servers"].toArray())
+        for (const auto& o : json["servers"].toArray())
         {
             auto out = o.toObject();
             if (out.isEmpty())
