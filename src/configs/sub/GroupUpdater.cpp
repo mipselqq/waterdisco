@@ -1,8 +1,8 @@
 #include "include/database/entities/Profile.h"
 #include "include/global/HTTPRequestHelper.hpp"
-#include "include/api/RPC.h"
 
 #include "include/configs/sub/GroupUpdater.hpp"
+#include "include/configs/sub/clash.hpp"
 
 #include <QInputDialog>
 #include <QUrlQuery>
@@ -51,6 +51,28 @@ namespace Subscription {
         return res;
     }
 
+    SingBoxSubType getSingBoxSubType(const QJsonDocument &doc) {
+        if (doc.isObject()) {
+            auto obj = doc.object();
+            bool hasInbound = obj.contains("inbounds");
+            bool hasOutbound = obj.contains("outbounds") || obj.contains("endpoints");
+            if (hasInbound && hasOutbound) return SingBoxSubType::fullConfig;
+            if (hasOutbound) return SingBoxSubType::outboundInJson;
+            if (obj.contains("type")) return SingBoxSubType::outboundObject;
+            return SingBoxSubType::invalid;
+        }
+        if (doc.isArray() && !doc.array().empty()) {
+            auto arr = doc.array();
+            auto firstRaw = arr.first();
+            if (firstRaw.isObject()) {
+                auto obj = firstRaw.toObject();
+                if (obj.contains("type")) return SingBoxSubType::outboundJsonArray;
+            }
+            return SingBoxSubType::invalid;
+        }
+        return SingBoxSubType::invalid;
+    }
+
     void RawUpdater::update(const QString &str, bool needParse = true) {
         // Base64 encoded subscription
         if (auto str2 = DecodeB64IfValid(str); !str2.isEmpty()) {
@@ -58,14 +80,26 @@ namespace Subscription {
             return;
         }
 
+        std::shared_ptr<Configs::Profile> ent;
+
         // Json
         QJsonParseError error;
-        QJsonDocument::fromJson(str.toUtf8(), &error);
-        if (error.error == error.NoError) {
+        auto doc = QJsonDocument::fromJson(str.toUtf8(), &error);
+        if (error.error == QJsonParseError::NoError) {
             // SingBox
-            if (str.contains("outbounds") || str.contains("endpoints"))
-            {
-                updateSingBox(str);
+            auto subType = getSingBoxSubType(doc);
+            if (subType == SingBoxSubType::fullConfig) {
+                ent = Configs::ProfilesRepo::NewProfile("custom");
+                ent->Custom()->type = "fullconfig";
+                ent->Custom()->config = str;
+                updated_order += ent;
+            } else if (subType == SingBoxSubType::outboundObject) {
+                ent = Configs::ProfilesRepo::NewProfile("custom");
+                ent->Custom()->type = "outbound";
+                ent->Custom()->config = str;
+                updated_order += ent;
+            } else if (subType == SingBoxSubType::outboundInJson || subType == SingBoxSubType::outboundJsonArray) {
+                updateSingBox(doc, subType);
                 return;
             }
 
@@ -81,12 +115,7 @@ namespace Subscription {
 
         // Clash
         if (str.contains("proxies:")) {
-            bool ok;
-            QString resp = API::defaultClient->Clash2Singbox(&ok, str);
-            if (ok && !resp.isEmpty())
-            {
-                updateSingBox(resp);
-            }
+            updateClash(str);
             return;
         }
 
@@ -110,8 +139,6 @@ namespace Subscription {
         if (str.startsWith("//") || str.startsWith("#") || str.length() < 2) {
             return;
         }
-
-        std::shared_ptr<Configs::Profile> ent;
 
         // Json base64 link format
         if (str.startsWith("json://")) {
@@ -236,24 +263,31 @@ namespace Subscription {
         updated_order += ent;
     }
 
-    void RawUpdater::updateSingBox(const QString& str)
+    void RawUpdater::updateSingBox(const QJsonDocument &doc, SingBoxSubType type)
     {
-        auto json = QString2QJsonObject(str);
-        auto outbounds = json["outbounds"].toArray();
-        auto endpoints = json["endpoints"].toArray();
+        QJsonArray outbounds, endpoints;
+        if (type == SingBoxSubType::outboundInJson) {
+            auto json = doc.object();
+            outbounds = json["outbounds"].toArray();
+            endpoints = json["endpoints"].toArray();
+        } else if (type == SingBoxSubType::outboundJsonArray) {
+            outbounds = doc.array();
+        } else {
+            return;
+        }
         QJsonArray items;
-        for (auto && outbound : outbounds)
+        for (const auto& outbound : outbounds)
         {
             if (!outbound.isObject()) continue;
             items.append(outbound.toObject());
         }
-        for (auto && endpoint : endpoints)
+        for (const auto& endpoint : endpoints)
         {
             if (!endpoint.isObject()) continue;
             items.append(endpoint.toObject());
         }
 
-        for (auto o : items)
+        for (const auto& o : items)
         {
             auto out = o.toObject();
             if (out.isEmpty())
@@ -347,6 +381,97 @@ namespace Subscription {
         }
     }
 
+    void RawUpdater::updateClash(const QString& str)
+    {
+        fkyaml::node node = fkyaml::node::deserialize(str.toStdString());
+        clash::Clash clash_config = node.get_value<clash::Clash>();
+
+        for (const auto& out : clash_config.proxies)
+        {
+            std::shared_ptr<Configs::Profile> ent;
+
+            // SOCKS
+            if (out.type == "socks5") {
+                ent = Configs::ProfilesRepo::NewProfile("socks");
+                auto ok = ent->Socks()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // HTTP
+            if (out.type == "http") {
+                ent = Configs::ProfilesRepo::NewProfile("http");
+                auto ok = ent->Http()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // ShadowSocks
+            if (out.type == "ss") {
+                ent = Configs::ProfilesRepo::NewProfile("shadowsocks");
+                auto ok = ent->ShadowSocks()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // VMess
+            if (out.type == "vmess") {
+                ent = Configs::ProfilesRepo::NewProfile("vmess");
+                auto ok = ent->VMess()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // VLESS
+            if (out.type == "vless") {
+                if (!out.encryption.empty() && out.encryption != "none") {
+                    ent = Configs::ProfilesRepo::NewProfile("xrayvless");
+                    auto ok = ent->XrayVLESS()->ParseFromClash(out);
+                    if (!ok) continue;
+                } else {
+                    ent = Configs::ProfilesRepo::NewProfile("vless");
+                    auto ok = ent->VLESS()->ParseFromClash(out);
+                    if (!ok) continue;
+                }
+            }
+
+            // Trojan
+            if (out.type == "trojan") {
+                ent = Configs::ProfilesRepo::NewProfile("trojan");
+                auto ok = ent->Trojan()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // AnyTLS
+            if (out.type == "anytls") {
+                ent = Configs::ProfilesRepo::NewProfile("anytls");
+                auto ok = ent->AnyTLS()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // Hysteria
+            if (out.type == "hysteria" || out.type == "hysteria2") {
+                ent = Configs::ProfilesRepo::NewProfile("hysteria");
+                auto ok = ent->Hysteria()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // TUIC
+            if (out.type == "tuic") {
+                ent = Configs::ProfilesRepo::NewProfile("tuic");
+                auto ok = ent->TUIC()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            // SSH
+            if (out.type == "ssh") {
+                ent = Configs::ProfilesRepo::NewProfile("ssh");
+                auto ok = ent->SSH()->ParseFromClash(out);
+                if (!ok) continue;
+            }
+
+            if (ent == nullptr) continue;
+
+            updated_order += ent;
+        }
+    }
+
     void RawUpdater::updateWireguardFileConfig(const QString& str)
     {
         auto ent = Configs::ProfilesRepo::NewProfile("wireguard");
@@ -359,7 +484,7 @@ namespace Subscription {
     {
         auto json = QString2QJsonObject(str);
 
-        for (auto o : json["servers"].toArray())
+        for (const auto& o : json["servers"].toArray())
         {
             auto out = o.toObject();
             if (out.isEmpty())
@@ -451,7 +576,12 @@ namespace Subscription {
             //
             if (Configs::dataManager->settingsRepo->sub_clear) {
                 MW_show_log(QObject::tr("Clearing servers..."));
-                Configs::dataManager->profilesRepo->BatchDeleteProfiles(group->Profiles());
+                if (!Configs::dataManager->profilesRepo->BatchDeleteProfiles(group->Profiles())) {
+                    runOnUiThread([=] {
+                        MessageBoxWarning("Internal Error", "DB Error when deleting profiles, Please try again.");
+                    });
+                    return;
+                }
             } else {
                 in = Configs::dataManager->profilesRepo->GetProfileBatch(group->Profiles());
             }
@@ -532,7 +662,11 @@ namespace Subscription {
                         del_ids.append(ent->id);
                     }
                 }
-                Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
+                if (!Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids)) {
+                    runOnUiThread([=] {
+                       MessageBoxWarning("Internal error", "DB Error when deleting profiles, data may be corrupted");
+                    });
+                }
 
                 change_text = "\n" + QObject::tr("Added %1 profiles:\n%2\nDeleted %3 Profiles:\n%4")
                                          .arg(only_out.length())

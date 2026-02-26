@@ -7,7 +7,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("reuse_addr")) reuse_addr = query.queryItemValue("reuse_addr") == "true";
         if (query.hasQueryItem("connect_timeout")) connect_timeout = query.queryItemValue("connect_timeout");

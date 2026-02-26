@@ -2,14 +2,11 @@
 
 #include <QUrlQuery>
 
-
-
-
 namespace Configs {
     bool xrayMultiplex::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("mux")) enabled = query.queryItemValue("mux").replace("1", "true") == "true", useDefault = false;
         if (query.hasQueryItem("mux_concurrency")) concurrency = query.queryItemValue("mux_concurrency").toInt();
@@ -22,6 +19,15 @@ namespace Configs {
         if (object.contains("enabled")) enabled = object["enabled"].toBool(), useDefault = false;
         if (object.contains("concurrency")) concurrency = object["concurrency"].toInt();
         if (object.contains("xudpConcurrency")) xudpConcurrency = object["xudpConcurrency"].toInt();
+        return true;
+    }
+
+    bool xrayMultiplex::ParseFromClash(const clash::Proxies& object) {
+        enabled = object.smux.enabled;
+        useDefault = false;
+        if (object.smux.max_streams > 0) {
+            concurrency = object.smux.max_streams;
+        }
         return true;
     }
 

@@ -8,7 +8,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("brutal_enabled")) enabled = query.queryItemValue("brutal_enabled") == "true";
         if (query.hasQueryItem("brutal_up_mbps")) up_mbps = query.queryItemValue("brutal_up_mbps").toInt();
@@ -51,7 +51,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("mux")) enabled = query.queryItemValue("mux") == "true";
         else unspecified = true;
@@ -78,6 +78,19 @@ namespace Configs {
         if (object.contains("max_streams")) max_streams = object["max_streams"].toInt();
         if (object.contains("padding")) padding = object["padding"].toBool();
         if (object.contains("brutal")) brutal->ParseFromJson(object["brutal"].toObject());
+        return true;
+    }
+    bool Multiplex::ParseFromClash(const clash::Proxies& object)
+    {
+        enabled = object.smux.enabled;
+        if (!object.smux.protocol.empty()) protocol = QString::fromStdString(object.smux.protocol);
+        if (object.smux.max_streams > 0) {
+            max_streams = object.smux.max_streams;
+        } else {
+            max_connections = object.smux.max_connections;
+            min_streams = object.smux.min_streams;
+        }
+        padding = object.smux.padding;
         return true;
     }
     QString Multiplex::ExportToLink()

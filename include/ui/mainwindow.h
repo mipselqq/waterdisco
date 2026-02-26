@@ -3,7 +3,7 @@
 #include <QMainWindow>
 #include <include/global/HTTPRequestHelper.hpp>
 #ifndef Q_MOC_RUN
-#include <libcore.pb.h>
+#include <core/server/gen/libcore.pb.h>
 #endif
 
 #include "include/global/Configs.hpp"
@@ -18,6 +18,8 @@
 
 #include <QKeyEvent>
 #include <QSystemTrayIcon>
+#include <QQueue>
+#include <QWaitCondition>
 #include <QProcess>
 #include <QTextDocument>
 #include <QShortcut>
@@ -52,7 +54,7 @@ public:
 
     void prepare_exit();
 
-    void refresh_proxy_list(const int &id = -1);
+    void refresh_proxy_list(const QList<int> &ids = {}, bool mayNeedReset = false);
 
     void show_group(int gid);
 
@@ -73,8 +75,6 @@ public:
     void set_spmode_vpn(bool enable, bool save = true);
 
     bool get_elevated_permissions(int reason = 3);
-
-    void show_log_impl(const QString &log);
 
     void start_select_mode(QObject *context, const std::function<void(int)> &callback);
 
@@ -162,6 +162,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
+    ProfilesTableModel *profilesTableModel = nullptr;
     QSystemTrayIcon *tray;
     QShortcut *shortcut_ctrl_f = new QShortcut(QKeySequence("Ctrl+F"), this);
     QShortcut *shortcut_esc = new QShortcut(QKeySequence("Esc"), this);
@@ -218,7 +219,22 @@ private:
     QString typeFilterString;
     QString countryFilterString;
 
-    ProfilesTableModel *profilesTableModel = nullptr;
+    // log
+    QStringList includeKeywords;
+    QStringList excludeKeywords;
+    QRegularExpression includeCombined;
+    QRegularExpression excludeCombined;
+    QMutex logMutex;
+    QQueue<QString> logQueue;
+    QWaitCondition logWaiter;
+
+    void append_log(const QString &log);
+
+    void log_process_loop();
+
+    bool should_print_log(const QString &log);
+
+    void updateLogFilterFields();
 
     QList<int> filterProfilesList(const QList<int>& profileIDs);
 
@@ -230,9 +246,9 @@ private:
 
     void dialog_message_impl(const QString &sender, const QString &info);
 
-    void refresh_proxy_list_impl(const int &id = -1);
+    void refresh_proxy_list_impl(const QList<int> &ids = {}, bool mayNeedReset = false);
 
-    void refresh_proxy_list_impl_refresh_data(const int &id = -1, bool stopping = false);
+    void refresh_proxy_list_impl_refresh_data(const QList<int>& ids = {}, bool mayNeedReset = false);
 
     void parseQrImage(const QPixmap *image);
 

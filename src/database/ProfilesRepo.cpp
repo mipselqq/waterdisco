@@ -36,8 +36,6 @@ namespace Configs {
             )
         )");
 
-        // Create indexes for faster lookups
-        db.exec("CREATE INDEX IF NOT EXISTS idx_profiles_gid ON profiles(gid)");
         db.exec("CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name)");
     }
 
@@ -197,7 +195,7 @@ namespace Configs {
                 INSERT INTO profiles 
                 (id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
                 ip_out, outbound_json, traffic_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 profile->type.toStdString(),
@@ -476,24 +474,7 @@ namespace Configs {
         return names;
     }
 
-    void ProfilesRepo::DeleteProfile(int id) {
-        if (id == dataManager->settingsRepo->started_id) {
-            GetMainWindow()->profile_stop(false, true, false);
-        }
-        auto profile = GetProfile(id);
-        if (profile) {
-            auto group = dataManager->groupsRepo->GetGroup(profile->gid);
-            if (group) {
-                group->RemoveProfile(id);
-                dataManager->groupsRepo->Save(group);
-            }
-        }
-        QMutexLocker locker(&mutex);
-        identityMap.erase(id);
-        db.exec("DELETE FROM profiles WHERE id = ?", id);
-    }
-
-    void ProfilesRepo::BatchDeleteProfiles(const QList<int>& ids) {
+    bool ProfilesRepo::BatchDeleteProfiles(const QList<int>& ids) {
         QSet<int> groupIDs;
         auto profiles = GetProfileBatch(ids);
         for (const auto& ent : profiles) {
@@ -504,7 +485,10 @@ namespace Configs {
         }
         for (auto groupID : groupIDs) {
             auto group = dataManager->groupsRepo->GetGroup(groupID);
-            if (!group) continue;
+            if (!group) {
+                MW_show_log("Could not find group with id " + Int2String(groupID));
+                return false;
+            }
             group->RemoveProfileBatch(ids);
             dataManager->groupsRepo->Save(group);
         }
@@ -514,6 +498,7 @@ namespace Configs {
             std::vector<int> idVec(ids.begin(), ids.end());
             db.execDeleteByIdIn("profiles", "id", idVec);
         }
+        return true;
     }
 
     QList<int> ProfilesRepo::GetAllProfileIds() const {
@@ -548,20 +533,50 @@ namespace Configs {
     }
 
     bool ProfilesRepo::Save(const std::shared_ptr<Profile>& profile) {
-        if (!profile) {
+        if (!profile || profile->id < 0) {
             return false;
         }
         
-        if (profile->id < 0) {
-            return false; // Profile doesn't have an ID, use AddProfile instead
-        }
-        
-        runOnNewThread([=, this] {
-            QMutexLocker locker(&mutex);
-            saveToDatabase(profile.get(), profile->id);
-            identityMap[profile->id] = std::weak_ptr<Profile>(profile);
-        });
+        QMutexLocker locker(&mutex);
+        saveToDatabase(profile.get(), profile->id);
+        identityMap[profile->id] = std::weak_ptr<Profile>(profile);
         
         return true;
+    }
+
+    bool ProfilesRepo::SaveTraffic(const std::shared_ptr<Profile>& profile) {
+        if (!profile || profile->id < 0) {
+            return false;
+        }
+        QString trafficJson;
+        if (profile->traffic_data) {
+            trafficJson = QString::fromUtf8(QJsonDocument(profile->traffic_data->ExportToJson()).toJson(QJsonDocument::Compact));
+        }
+        const int id = profile->id;
+        runOnNewThread([=, this] {
+            db.exec("UPDATE profiles SET traffic_json = ? WHERE id = ?",
+                    trafficJson.toStdString(), id);
+        });
+        return true;
+    }
+
+    void ProfilesRepo::SaveBatch(const QList<std::shared_ptr<Profile>>& profiles) {
+        runOnNewThread([=, this] {
+            QList<std::shared_ptr<Profile>> valid;
+            for (const auto& p : profiles) {
+                if (p && p->id >= 0) valid.append(p);
+            }
+            if (valid.isEmpty()) return;
+            std::vector<ProfileInsertRow> rows;
+            rows.reserve(valid.size());
+            for (const auto& p : valid) {
+                rows.push_back(profileToInsertRow(p.get(), p->id, p->gid));
+            }
+            QMutexLocker locker(&mutex);
+            db.execBatchReplaceProfiles(rows);
+            for (const auto& p : valid) {
+                identityMap[p->id] = std::weak_ptr<Profile>(p);
+            }
+        });
     }
 }

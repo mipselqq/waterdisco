@@ -105,11 +105,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // setup log
     ui->splitter->restoreState(DecodeB64IfValid(Configs::dataManager->settingsRepo->splitter_state));
-    new SyntaxHighlighter(isDarkMode() || Configs::dataManager->settingsRepo->theme.toLower() != "qdarkstyle", qvLogDocument);
+    new SyntaxHighlighter(Configs::dataManager->settingsRepo->theme.toLower().contains("vista") ? false : (Configs::dataManager->settingsRepo->theme.toLower().contains("qdarkstyle") ? true : isDarkMode()), qvLogDocument);
     qvLogDocument->setUndoRedoEnabled(false);
+    qvLogDocument->setMaximumBlockCount(Configs::dataManager->settingsRepo->max_log_line);
     ui->masterLogBrowser->setUndoRedoEnabled(false);
     ui->masterLogBrowser->setDocument(qvLogDocument);
     ui->masterLogBrowser->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    updateLogFilterFields();
+    runOnThread([=, this] {
+        log_process_loop();
+    }, LogThread);
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [=,this](const Qt::ColorScheme& scheme) {
@@ -142,7 +147,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         bar->setValue(bar->maximum());
     });
     MW_show_log = [=,this](const QString &log) {
-        runOnUiThread([=,this] { show_log_impl(log); });
+        append_log(log);
     };
 
     // Listen port if random
@@ -159,7 +164,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     if (Configs::dataManager->settingsRepo->core_port <= 0) Configs::dataManager->settingsRepo->core_port = 19810;
 
     auto core_path = QApplication::applicationDirPath() + "/";
-    core_path += "Core";
+    core_path += "ThroneCore";
 
     QStringList args;
     args.push_back("-port");
@@ -291,7 +296,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // table UI: model-backed view with on-demand row data
     profilesTableModel = new ProfilesTableModel(this);
-    profilesTableModel->setCacheSize(100);
     ui->profilesTableView->setModel(profilesTableModel);
     ui->profilesTableView->rowsSwapped = [=,this](int row1, int row2)
     {
@@ -332,7 +336,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             }
             Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
             runOnUiThread([=, this] {
-                refresh_proxy_list();
+                refresh_proxy_list({}, true);
             });
         });
     });
@@ -433,22 +437,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::typeFilterChanged, this, [=,this](const QString& currentText)
     {
        typeFilterString = currentText;
-       refresh_proxy_list(-1);
+       refresh_proxy_list({}, true);
     });
     connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::addressFilterChanged, this, [=,this](const QString& currentText)
     {
        addressFilterString = currentText;
-       refresh_proxy_list(-1);
+       refresh_proxy_list({}, true);
     });
     connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::nameFilterChanged, this, [=,this](const QString& currentText)
     {
        nameFilterString = currentText;
-       refresh_proxy_list(-1);
+       refresh_proxy_list({}, true);
     });
     connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::testFilterChanged, this, [=,this](const QString& currentText)
     {
        countryFilterString = currentText;
-       refresh_proxy_list(-1);
+       refresh_proxy_list({}, true);
     });
 
     // refresh
@@ -704,12 +708,48 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->menu_share_item, &QMenu::aboutToShow, this, [=,this] {
         QString name;
         auto selected = get_now_selected_list();
-        if (!selected.isEmpty()) {
-            auto ent = selected.first();
-            name = software_core_name;
+
+        ui->menu_export_config->setVisible(false);
+        ui->actionExport_Xray_config->setVisible(false);
+        if (selected.isEmpty()) return;
+
+        auto profile = Configs::dataManager->profilesRepo->GetProfile(selected.first());
+        if (!profile) return;
+
+        ui->menu_export_config->setVisible(true);
+        if (profile->outbound->IsXray()) ui->actionExport_Xray_config->setVisible(true);
+    });
+    connect(ui->actionExport_Xray_config, &QAction::triggered, this, [=,this]() {
+        auto ents = get_now_selected_list();
+        if (ents.count() != 1) return;
+        auto ent = Configs::dataManager->profilesRepo->GetProfile(ents.first());
+
+        auto result = Configs::BuildSingBoxConfig(ent);
+        if (!result->error.isEmpty()) {
+            MessageBoxWarning("Build config error", result->error);
+            return;
         }
-        ui->menu_export_config->setVisible(name == software_core_name);
-        ui->menu_export_config->setText(tr("Export %1 config").arg(name));
+        QString config_core = QJsonObject2QString(result->xrayConfig, true);
+        QApplication::clipboard()->setText(config_core);
+
+        QMessageBox msg(QMessageBox::Information, tr("Config copied"), config_core);
+        QPushButton *button_1 = msg.addButton(tr("Copy core config"), QMessageBox::YesRole);
+        QPushButton *button_2 = msg.addButton(tr("Copy test config"), QMessageBox::YesRole);
+        msg.addButton(QMessageBox::Ok);
+        msg.setEscapeButton(QMessageBox::Ok);
+        msg.setDefaultButton(QMessageBox::Ok);
+        msg.exec();
+        if (msg.clickedButton() == button_1) {
+            QApplication::clipboard()->setText(config_core);
+        } else if (msg.clickedButton() == button_2) {
+            auto res = Configs::BuildTestConfig({ent});
+            if (!res->error.isEmpty()) {
+                MessageBoxWarning("Build Test config error", res->error);
+                return;
+            }
+            config_core = QJsonObject2QString(res->xrayConfig, true);
+            QApplication::clipboard()->setText(config_core);
+        }
     });
     connect(ui->actionAdd_profile_from_File, &QAction::triggered, this, [=,this]()
     {
@@ -874,7 +914,7 @@ void MainWindow::show_group(int gid) {
     }
 
     // show proxies
-    refresh_proxy_list_impl(-1);
+    refresh_proxy_list({}, true);
 
     for (int i = 0; i <= 4; i++) {
         hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
@@ -914,6 +954,10 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
         refresh_status();
     }
     if (info.contains("UpdateConfigs::dataManager->settingsRepo")) {
+        updateLogFilterFields();
+        if (info.contains("UpdateMaxLogLines")) {
+            qvLogDocument->setMaximumBlockCount(Configs::dataManager->settingsRepo->max_log_line);
+        }
         if (info.contains("UpdateDisableTray")) {
             tray->setVisible(!Configs::dataManager->settingsRepo->disable_tray);
         }
@@ -939,7 +983,6 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
         if (info.contains("NeedRestart")) {
             suggestRestartProxy = false;
         }
-        refresh_proxy_list();
         if (info.contains("VPNChanged") && Configs::dataManager->settingsRepo->spmode_vpn) {
             MessageBoxWarning(tr("Tun Settings changed"), tr("Restart Tun to take effect."));
         }
@@ -984,7 +1027,7 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
     if (sender == Dialog_DialogEditProfile) {
         auto msg = info.split(",");
         if (msg.contains("accept")) {
-            refresh_proxy_list();
+            refresh_proxy_list({}, true);
             if (msg.contains("restart")) {
                 if (QMessageBox::question(GetMessageBoxParent(), tr("Confirmation"), tr("Settings changed, restart proxy?")) == QMessageBox::StandardButton::Yes) {
                     profile_start(Configs::dataManager->settingsRepo->started_id);
@@ -997,9 +1040,9 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
         }
     } else if (sender == "SubUpdater") {
         if (info.startsWith("finish")) {
-            refresh_proxy_list();
+            refresh_proxy_list({}, true);
             if (!info.contains("dingyue")) {
-                show_log_impl(tr("Imported %1 profile(s)").arg(Configs::dataManager->settingsRepo->imported_count));
+                MW_show_log(tr("Imported %1 profile(s)").arg(Configs::dataManager->settingsRepo->imported_count));
             }
         } else if (info == "NewGroup") {
             refresh_groups();
@@ -1098,7 +1141,6 @@ void MainWindow::on_commitDataRequest() {
     if (Configs::dataManager->settingsRepo->remember_enable && last_id >= 0) {
         Configs::dataManager->settingsRepo->remember_id = last_id;
     }
-    if (running) Configs::dataManager->profilesRepo->Save(running);
     //
     Configs::dataManager->settingsRepo->Save();
     qDebug() << "End of data save";
@@ -1466,6 +1508,18 @@ void MainWindow::UpdateConnectionListWithRecreate(const QList<Stats::ConnectionM
     connectionListMu.unlock();
 }
 
+void MainWindow::updateLogFilterFields() {
+    QMutexLocker locker(&logMutex);
+    includeKeywords.clear();
+    excludeKeywords.clear();
+    for (const auto& inKeyword : Configs::dataManager->settingsRepo->log_include_keyword) includeKeywords.append(inKeyword);
+    for (const auto& exKeyword : Configs::dataManager->settingsRepo->log_exclude_keyword) excludeKeywords.append(exKeyword);
+    includeCombined.setPattern(Configs::dataManager->settingsRepo->log_include_regex.join("|"));
+    excludeCombined.setPattern(Configs::dataManager->settingsRepo->log_exclude_regex.join("|"));
+    includeCombined.optimize();
+    excludeCombined.optimize();
+}
+
 QList<int> MainWindow::filterProfilesList(const QList<int>& profileIDs)
 {
     if (addressFilterString.isEmpty() && nameFilterString.isEmpty() && typeFilterString.isEmpty() && countryFilterString.isEmpty()) return profileIDs;
@@ -1636,34 +1690,30 @@ void MainWindow::refresh_groups() {
     Configs::dataManager->settingsRepo->refreshing_group_list = false;
 }
 
-void MainWindow::refresh_proxy_list(const int &id) {
-    refresh_proxy_list_impl(id);
+void MainWindow::refresh_proxy_list(const QList<int>& ids, bool mayNeedReset) {
+    refresh_proxy_list_impl(ids, mayNeedReset);
 }
 
-void MainWindow::refresh_proxy_list_impl(const int &id) {
+void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedReset) {
     if (auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup(); currentGroup == nullptr)
     {
         MW_show_log("Could not find current group!");
         return;
     }
     // refresh data
-    refresh_proxy_list_impl_refresh_data(id);
+    refresh_proxy_list_impl_refresh_data(ids, mayNeedReset);
 }
 
-void MainWindow::refresh_proxy_list_impl_refresh_data(const int &id, bool stopping) {
+void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
     auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
     if (currentGroup == nullptr) return;
-    if (id >= 0)
-    {
-        if (!currentGroup->HasProfile(id))
+    if (!ids.isEmpty()) {
+        if (filterProfilesList(ids).isEmpty())
             return;
-        if (filterProfilesList({id}).isEmpty())
-            return;
-        profilesTableModel->refreshProfileId(id);
-    } else
-    {
+        for (auto id:ids) profilesTableModel->refreshProfileId(id);
+    } else {
         auto profileIDs = filterProfilesList(currentGroup->profiles);
-        profilesTableModel->setProfileIds(profileIDs);
+        profilesTableModel->refreshTable(profileIDs, mayNeedReset);
     }
 }
 
@@ -1732,7 +1782,7 @@ void  MainWindow::on_menu_delete_repeat_triggered () {
             del_ids += ent->id;
         }
         Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
-        refresh_proxy_list();
+        refresh_proxy_list({}, true);
     }
 }
 
@@ -1741,7 +1791,7 @@ void MainWindow::on_menu_delete_triggered() {
     if (entIDs.count() == 0) return;
     if (Configs::dataManager->settingsRepo->skip_delete_confirmation || QMessageBox::question(this, tr("Confirmation"), QString(tr("Remove %1 item(s) ?")).arg(entIDs.count()))==QMessageBox::StandardButton::Yes) {
         Configs::dataManager->profilesRepo->BatchDeleteProfiles(entIDs);
-        refresh_proxy_list();
+        refresh_proxy_list({}, true);
     }
 }
 
@@ -1751,9 +1801,9 @@ void MainWindow::on_menu_reset_traffic_triggered() {
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
     for (const auto& ent: ents) {
         ent->traffic_data->Reset();
-        Configs::dataManager->profilesRepo->Save(ent);
-        refresh_proxy_list(ent->id);
+        Configs::dataManager->profilesRepo->SaveTraffic(ent);
     }
+    refresh_proxy_list(entIDs);
 }
 
 void MainWindow::on_menu_copy_links_triggered() {
@@ -1769,7 +1819,7 @@ void MainWindow::on_menu_copy_links_triggered() {
     }
     if (links.length() == 0) return;
     QApplication::clipboard()->setText(links.join("\n"));
-    show_log_impl(tr("Copied %1 item(s)").arg(links.length()));
+    MW_show_log(tr("Copied %1 item(s)").arg(links.length()));
 }
 
 void MainWindow::on_menu_copy_links_nkr_triggered() {
@@ -1781,7 +1831,7 @@ void MainWindow::on_menu_copy_links_nkr_triggered() {
     }
     if (links.length() == 0) return;
     QApplication::clipboard()->setText(links.join("\n"));
-    show_log_impl(tr("Copied %1 item(s)").arg(links.length()));
+    MW_show_log(tr("Copied %1 item(s)").arg(links.length()));
 }
 
 void MainWindow::on_menu_export_config_triggered() {
@@ -1988,7 +2038,7 @@ void MainWindow::parseQrImage(const QPixmap *image)
         MessageBoxInfo(software_name, tr("QR Code not found"));
     } else {
         for (const QString &text : texts) {
-            show_log_impl("QR Code Result:\n" + text);
+            MW_show_log("QR Code Result:\n" + text);
             Subscription::groupUpdater->AsyncUpdate(text);
         }
     }
@@ -2015,8 +2065,8 @@ void MainWindow::on_menu_clear_test_result_triggered() {
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
     for (const auto &ent: ents) {
         ent->ClearTestResults();
-        Configs::dataManager->profilesRepo->Save(ent);
     }
+    Configs::dataManager->profilesRepo->SaveBatch(ents);
     refresh_proxy_list();
 }
 
@@ -2089,7 +2139,7 @@ void MainWindow::on_menu_remove_invalid_triggered() {
              del_ids += ent->id;
          }
          Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
-         refresh_proxy_list();
+         refresh_proxy_list({}, true);
      }
      });
     });
@@ -2107,12 +2157,12 @@ void MainWindow::on_menu_resolve_selected_triggered() {
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(profiles);
     for (const auto &profile: ents) {
         profile->outbound->ResolveDomainToIP([=,this] {
-            Configs::dataManager->profilesRepo->Save(profile);
+            refresh_proxy_list({profile->id});
             if (--Configs::dataManager->settingsRepo->resolve_count != 0) return;
-            refresh_proxy_list();
             mw_sub_updating = false;
         });
     }
+    Configs::dataManager->profilesRepo->SaveBatch(ents);
 }
 
 void MainWindow::on_menu_resolve_domain_triggered() {
@@ -2136,8 +2186,8 @@ void MainWindow::on_menu_resolve_domain_triggered() {
         auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
         profile->outbound->ResolveDomainToIP([=,this] {
             Configs::dataManager->profilesRepo->Save(profile);
+            refresh_proxy_list({profile->id});
             if (--Configs::dataManager->settingsRepo->resolve_count != 0) return;
-            refresh_proxy_list();
             mw_sub_updating = false;
         });
     }
@@ -2184,16 +2234,15 @@ void MainWindow::clearUnavailableProfiles(bool confirm, QList<int> profileIDs) {
     for (const auto &profile: profiles) {
         if (profile->latency < 0) {
             del_ids += profile->id;
-            remove_display += profile->outbound->DisplayTypeAndName() + "\n";
             if (++remove_display_count == 20) {
                 remove_display += "...";
-            }
+            }else if (remove_display_count < 20) remove_display += profile->outbound->DisplayTypeAndName() + "\n";
         }
     }
 
     auto clearFunc = [=, this] {
         Configs::dataManager->profilesRepo->BatchDeleteProfiles(del_ids);
-        refresh_proxy_list();
+        refresh_proxy_list({}, true);
     };
 
     if (!del_ids.isEmpty()) {
@@ -2231,31 +2280,71 @@ inline void FastAppendTextDocument(const QString &message, QTextDocument *doc) {
     cursor.endEditBlock();
 }
 
-void MainWindow::show_log_impl(const QString &log) {
-    if (log.size() > 20000)
-    {
-        show_log_impl("Ignored massive log of size:" + Int2String(log.size()));
+void MainWindow::append_log(const QString &log) {
+    if (log.size() > 20000) {
+        append_log(QString("TRUNCATED LONG LOG: ") + log.first(1000) + "...");
         return;
     }
-    auto trimmed = log.trimmed();
-    if (trimmed.isEmpty()) return;
-
-    FastAppendTextDocument(trimmed, qvLogDocument);
-    // qvLogDocument->setPlainText(qvLogDocument->toPlainText() + log);
-    // From https://gist.github.com/jemyzhang/7130092
-    auto block = qvLogDocument->begin();
-
-    while (block.isValid()) {
-        if (qvLogDocument->blockCount() > Configs::dataManager->settingsRepo->max_log_line) {
-            QTextCursor cursor(block);
-            block = block.next();
-            cursor.select(QTextCursor::BlockUnderCursor);
-            cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
-            cursor.removeSelectedText();
-            continue;
-        }
-        break;
+    QMutexLocker locker(&logMutex);
+    if (logQueue.size() > 1000) {
+        // log is overloaded, just discard it
+        return;
     }
+    logQueue.enqueue(log);
+    if (logQueue.size() == 1) logWaiter.wakeOne();
+}
+
+void MainWindow::log_process_loop() {
+    while (true) {
+        logMutex.lock();
+        while (logQueue.isEmpty()) {
+            logWaiter.wait(&logMutex);
+        }
+        auto logLines = logQueue.dequeue().split("\n");
+
+        QString batchToPrint;
+        for (const auto& logLine : logLines) {
+            if (should_print_log(logLine)) {
+                batchToPrint += logLine + "\n";
+            }
+        }
+        logMutex.unlock();
+
+        if (!batchToPrint.isEmpty()) {
+            runOnUiThread([=, this] {
+               FastAppendTextDocument(batchToPrint.trimmed(), qvLogDocument);
+            });
+        }
+    }
+}
+
+bool MainWindow::should_print_log(const QString &log) {
+    if (log.trimmed().isEmpty()) return false;
+    bool result = true;
+    if (Configs::dataManager->settingsRepo->log_enable_include) {
+        result = false;
+        for (const auto& includeKeyword : includeKeywords) {
+            if (log.contains(includeKeyword)) {
+                result = true;
+                break;
+            }
+        }
+        if (!includeCombined.pattern().isEmpty() && includeCombined.match(log).hasMatch()) {
+            result = true;
+        }
+    }
+    if (result && Configs::dataManager->settingsRepo->log_enable_exclude) {
+        for (const auto& excludeKeyword : excludeKeywords) {
+            if (log.contains(excludeKeyword)) {
+                result = false;
+                break;
+            }
+            if (!excludeCombined.pattern().isEmpty() && excludeCombined.match(log).hasMatch()) {
+                result = false;
+            }
+        }
+    }
+    return result;
 }
 
 void MainWindow::on_masterLogBrowser_customContextMenuRequested(const QPoint &pos) {

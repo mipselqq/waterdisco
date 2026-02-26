@@ -45,7 +45,7 @@ Section "Install"
 
   !insertmacro AbortOnRunningApp "$INSTDIR\Throne.exe"
 
-  File /r ".\deployment\windows64\Core.exe"
+  File /r ".\deployment\windows64\ThroneCore.exe"
   File /r ".\deployment\windows64\Throne.exe"
   File /r ".\deployment\windows64\updater.exe"
 

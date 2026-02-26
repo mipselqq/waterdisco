@@ -40,7 +40,10 @@ namespace Configs {
             "use_custom_icons",
             "xray_mux_default_on",
             "use_dns_object",
-        "skip_delete_confirmation"
+            "skip_delete_confirmation",
+            "log_enable_include",
+            "log_enable_exclude",
+        "enable_dns_in"
         };
 
         const QSet<QString> intKeys = {
@@ -66,14 +69,20 @@ namespace Configs {
             "xray_mux_concurrency",
             "current_route_id",
             "sniffing_mode",
-            "ruleset_mirror"
+            "ruleset_mirror",
+            "xray_vless_preference",
+            "core_dns_in_port"
         };
 
         const QSet<QString> stringListKeys = {
             "spmode2",
             "dns_server_rules",
             "log_ignore",  // Not in _add() but exists as QStringList in DataStore
-            "extra_core_paths"  // Extra core paths list
+            "extra_core_paths",  // Extra core paths list
+            "log_include_keyword",
+            "log_include_regex",
+            "log_exclude_keyword",
+            "log_exclude_regex"
         };
 
         const QSet<QString> stringKeys = {
@@ -239,7 +248,12 @@ namespace Configs {
                 else if (key == "font") font = varValue.toString();
                 else if (key == "font_size") font_size = varValue.toInt();
                 else if (key == "mw_size") mw_size = varValue.toString();
-                else if (key == "log_ignore") log_ignore = varValue.toStringList();
+                else if (key == "log_enable_include") log_enable_include = varValue.toBool();
+                else if (key == "log_enable_exclude") log_enable_exclude = varValue.toBool();
+                else if (key == "log_include_keyword") log_include_keyword = varValue.toStringList();
+                else if (key == "log_include_regex") log_include_regex = varValue.toStringList();
+                else if (key == "log_exclude_keyword") log_exclude_keyword = varValue.toStringList();
+                else if (key == "log_exclude_regex") log_exclude_regex = varValue.toStringList();
                 else if (key == "start_minimal") start_minimal = varValue.toBool();
                 else if (key == "max_log_line") max_log_line = varValue.toInt();
                 else if (key == "splitter_state") splitter_state = varValue.toString();
@@ -275,8 +289,8 @@ namespace Configs {
                 else if (key == "use_dns_object") use_dns_object = varValue.toBool();
                 else if (key == "dns_object") dns_object = varValue.toString();
                 else if (key == "dns_final_out") dns_final_out = varValue.toString();
-                else if (key == "domain_strategy") domain_strategy = varValue.toString();
-                else if (key == "outbound_domain_strategy") outbound_domain_strategy = varValue.toString();
+                else if (key == "domain_strategy") resolve_domain_strategy = varValue.toString();
+                else if (key == "outbound_domain_strategy") default_domain_strategy = varValue.toString();
                 else if (key == "sniffing_mode") sniffing_mode = varValue.toInt();
                 else if (key == "ruleset_mirror") ruleset_mirror = varValue.toInt();
                 else if (key == "inbound_address") inbound_address = varValue.toString();
@@ -322,6 +336,8 @@ namespace Configs {
                 else if (key == "xray_mux_default_on") xray_mux_default_on = varValue.toBool();
                 else if (key == "extra_core_paths") extraCorePaths = varValue.toStringList();
                 else if (key == "skip_delete_confirmation") skip_delete_confirmation = varValue.toBool();
+                else if (key == "xray_vless_preference") xray_vless_preference = static_cast<Xray::XrayVlessPreference>(varValue.toInt());
+                else if (key == "core_dns_in_port") core_dns_in_port = varValue.toInt();
             }
         }
     }
@@ -351,7 +367,12 @@ namespace Configs {
             {"font", font},
             {"font_size", font_size},
             {"mw_size", mw_size},
-            {"log_ignore", log_ignore},
+            {"log_enable_include", log_enable_include},
+            {"log_enable_exclude", log_enable_exclude},
+            {"log_include_keyword", log_include_keyword},
+            {"log_include_regex", log_include_regex},
+            {"log_exclude_keyword", log_exclude_keyword},
+            {"log_exclude_regex", log_exclude_regex},
             {"start_minimal", start_minimal},
             {"max_log_line", max_log_line},
             {"splitter_state", splitter_state},
@@ -387,8 +408,8 @@ namespace Configs {
             {"use_dns_object", use_dns_object},
             {"dns_object", dns_object},
             {"dns_final_out", dns_final_out},
-            {"domain_strategy", domain_strategy},
-            {"outbound_domain_strategy", outbound_domain_strategy},
+            {"domain_strategy", resolve_domain_strategy},
+            {"outbound_domain_strategy", default_domain_strategy},
             {"sniffing_mode", sniffing_mode},
             {"ruleset_mirror", ruleset_mirror},
             {"inbound_address", inbound_address},
@@ -434,6 +455,8 @@ namespace Configs {
             {"xray_mux_default_on", xray_mux_default_on},
             {"extra_core_paths", extraCorePaths},
             {"skip_delete_confirmation", skip_delete_confirmation},
+            {"xray_vless_preference", xray_vless_preference},
+            {"core_dns_in_port", core_dns_in_port}
         };
 
         std::vector<std::pair<std::string, std::string>> keyValues;
@@ -469,9 +492,7 @@ namespace Configs {
     }
 
     bool SettingsRepo::Save() {
-        runOnNewThread([=, this] {
-            saveAllSettings();
-        });
+        saveAllSettings();
         return true;
     }
 

@@ -17,31 +17,31 @@ jobs:
         include:
           - cross_os: windows
             cross_arch: amd64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: windows
             cross_arch: arm64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: linux
             cross_arch: amd64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: linux
             cross_arch: arm64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: darwin
             cross_arch: amd64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: darwin
             cross_arch: arm64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: darwin-legacy
             cross_arch: amd64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: windowslegacy
             cross_arch: amd64
-            go_version: "1.25.7"
+            go_version: "1.26.0"
           - cross_os: windowslegacy
             cross_arch: 386
-            go_version: "1.25.7"
+            go_version: "1.26.0"
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
@@ -74,7 +74,7 @@ jobs:
       - name: Installing protoc-gen-go
         run: |
           go install github.com/golang/protobuf/protoc-gen-go@latest
-          go install github.com/chai2010/protorpc/protoc-gen-protorpc@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
       - name: Build golang parts
         if: steps.cache-common.outputs.cache-hit != 'true'
         shell: bash
@@ -186,7 +186,6 @@ jobs:
         shell: cmd
         if: matrix.platform == 'windows-latest' && steps.cache-static-Qt.outputs.cache-hit != 'true' && matrix.qt_version != '6.2.12'
         run: |
-          set "OPENSSL_ROOT_DIR=%cd%\openssl"
           ./script/build_qt_static_windows.bat ${{ matrix.qt_version }}
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.0
@@ -221,7 +220,7 @@ jobs:
           mkdir build
           cd build
           curl -fLso srslist.h "https://raw.githubusercontent.com/throneproj/routeprofiles/rule-set/srslist.h"
-          cmake -GNinja -DCMAKE_CXX_FLAGS="-static" -DCMAKE_BUILD_TYPE=Release ..
+          cmake -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS="-static -s" ..
           ninja
           cd ..
           ./script/deploy_windows.sh ${{ matrix.target }}

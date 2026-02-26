@@ -28,6 +28,18 @@ namespace Configs {
         if (object.contains("multiplex")) multiplex->ParseFromJson(object["multiplex"].toObject());
         return true;
     }
+    bool Trojan::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "trojan") return false;
+        outbound::ParseFromClash(object);
+        password = QString::fromStdString(object.password);
+
+        tls->ParseFromClash(object);
+        tls->enabled = true;
+        transport->ParseFromClash(object);
+        multiplex->ParseFromClash(object);
+        return true;
+    }
     QString Trojan::ExportToLink()
     {
         QUrl url;
@@ -49,9 +61,9 @@ namespace Configs {
         object["type"] = "trojan";
         mergeJsonObjects(object, outbound::ExportToJson());
         if (!password.isEmpty()) object["password"] = password;
-        if (tls->enabled) object["tls"] = tls->ExportToJson();
-        if (!transport->type.isEmpty()) object["transport"] = transport->ExportToJson();
-        if (multiplex->enabled) object["multiplex"] = multiplex->ExportToJson();
+        if (auto tlsObj = tls->ExportToJson(); !tlsObj.isEmpty()) object["tls"] = tlsObj;
+        if (auto transportObj = transport->ExportToJson(); !transportObj.isEmpty()) object["transport"] = transportObj;
+        if (auto muxObj = multiplex->ExportToJson(); !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return object;
     }
     BuildResult Trojan::Build()
@@ -60,9 +72,9 @@ namespace Configs {
         object["type"] = "trojan";
         mergeJsonObjects(object, outbound::Build().object);
         if (!password.isEmpty()) object["password"] = password;
-        if (tls->enabled) object["tls"] = tls->Build().object;
-        if (!transport->type.isEmpty()) object["transport"] = transport->Build().object;
-        if (auto obj = multiplex->Build().object; !obj.isEmpty()) object["multiplex"] = obj;
+        if (auto tlsObj = tls->Build().object; !tlsObj.isEmpty()) object["tls"] = tlsObj;
+        if (auto transportObj = transport->Build().object; !transportObj.isEmpty()) object["transport"] = transportObj;
+        if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
     }
 

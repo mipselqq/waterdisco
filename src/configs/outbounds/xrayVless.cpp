@@ -8,10 +8,11 @@ namespace Configs {
     bool xrayVless::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         uuid = url.userName();
+        encryption = GetQueryValue(query, "encryption", "none");
         flow = GetQueryValue(query, "flow", "");
         streamSetting->ParseFromLink(link);
         multiplex->ParseFromLink(link);
@@ -34,6 +35,17 @@ namespace Configs {
         if (auto muxObj = object["mux"].toObject(); !muxObj.isEmpty()) {
             multiplex->ParseFromJson(muxObj);
         }
+        return true;
+    }
+
+    bool xrayVless::ParseFromClash(const clash::Proxies& object) {
+        if (object.type != "vless") return false;
+        outbound::ParseFromClash(object);
+        uuid = QString::fromStdString(object.uuid);
+        if (!object.flow.empty()) flow = QString::fromStdString(object.flow);
+        if (!object.encryption.empty()) encryption = QString::fromStdString(object.encryption);
+        streamSetting->ParseFromClash(object);
+        multiplex->ParseFromClash(object);
         return true;
     }
 
