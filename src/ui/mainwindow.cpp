@@ -223,6 +223,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->splitter->installEventFilter(this);
     ui->tabWidget->installEventFilter(this);
     //
+    auto btnFilter = new QToolButton(this);
+    btnFilter->setIcon(QIcon(":/icon/filter.png"));
+    btnFilter->setToolTip(QString("%1\n%2").arg(tr("Enable Filter"), QKeySequence(QKeySequence::Find).toString(QKeySequence::NativeText)));
+    btnFilter->setShortcut(QKeySequence::Find);
+    btnFilter->setCheckable(true);
+    connect(btnFilter, &QToolButton::toggled, static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::setFiltersVisible);
+    ui->tabWidget->setCornerWidget(btnFilter, Qt::TopRightCorner);
+    //
     RegisterHotkey(false);
     //
     auto last_size = Configs::dataManager->settingsRepo->mw_size.split("x");

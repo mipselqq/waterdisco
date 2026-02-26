@@ -4,6 +4,7 @@
 #include <QLineEdit>
 #include <QVector>
 #include <QScrollBar>
+#include <QToolButton>
 
 class ProfilesTableFilterHeader : public QHeaderView {
     Q_OBJECT
@@ -43,11 +44,15 @@ public:
         });
 
         connect(this, &QHeaderView::sectionResized, this, &ProfilesTableFilterHeader::adjustPositions);
+
+        setFiltersVisible(false);
     }
 
     QSize sizeHint() const override {
         QSize s = QHeaderView::sizeHint();
-        s.setHeight(s.height() + 32);
+        if (m_filtersVisible) {
+            s.setHeight(s.height() + 32);
+        }
         return s;
     }
 
@@ -57,9 +62,33 @@ protected:
         adjustPositions();
     }
 
+public slots:
+    void setFiltersVisible(bool visible) {
+        m_filtersVisible = visible;
+
+        if (!visible) {
+            type_filter->clear();
+            address_filter->clear();
+            name_filter->clear();
+            test_filter->clear();
+        }
+
+        if (auto btn = qobject_cast<QToolButton*>(sender())) {
+            btn->setToolTip(QString("%1\n%2").arg(visible ? tr("Disable Filter") : tr("Enable Filter"), QKeySequence(QKeySequence::Find).toString(QKeySequence::NativeText)));
+        }
+        
+        type_filter->setVisible(visible);
+        address_filter->setVisible(visible);
+        name_filter->setVisible(visible);
+        test_filter->setVisible(visible);
+
+        updateGeometries();
+        emit geometriesChanged(); 
+    }
+
 private slots:
     void adjustPositions() {
-        if (!address_filter || !name_filter || !type_filter || !test_filter || count() < 4) {
+        if (!m_filtersVisible || !address_filter || !name_filter || !type_filter || !test_filter || count() < 4) {
 	        return;
 	    }
 
@@ -83,4 +112,5 @@ private:
     QLineEdit* address_filter;
     QLineEdit* name_filter;
     QLineEdit* test_filter;
+    bool m_filtersVisible = false;
 };
