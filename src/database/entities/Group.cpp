@@ -81,7 +81,7 @@ namespace Configs
         return true;
     }
 
-    bool Group::AddProfileBatch(QList<int> IDs) {
+    bool Group::AddProfileBatch(const QList<int>& IDs) {
         QSet<int> currentProfiles;
         for (const auto& profileID : profiles) {
             currentProfiles.insert(profileID);
@@ -104,7 +104,7 @@ namespace Configs
         return true;
     }
 
-    bool Group::RemoveProfileBatch(QList<int> IDs) {
+    bool Group::RemoveProfileBatch(const QList<int>& IDs) {
         QSet<int> toDel;
         for (auto ID : IDs) {
             toDel.insert(ID);

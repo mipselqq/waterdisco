@@ -10,7 +10,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         password = url.userName();
@@ -36,6 +36,20 @@ namespace Configs {
         if (object.contains("idle_session_timeout")) idle_session_timeout = object["idle_session_timeout"].toString();
         if (object.contains("min_idle_session")) min_idle_session = object["min_idle_session"].toInt();
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
+        return true;
+    }
+
+    bool anyTLS::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "anytls") return false;
+        outbound::ParseFromClash(object);
+        password = QString::fromStdString(object.password);
+        if (object.idle_session_check_interval > 0) idle_session_check_interval = QString::number(object.idle_session_check_interval) + "s";
+        if (object.idle_session_timeout > 0) idle_session_timeout = QString::number(object.idle_session_timeout) + "s";
+        if (object.min_idle_session > 0) min_idle_session = object.min_idle_session;
+
+        tls->ParseFromClash(object);
+        tls->enabled = true;
         return true;
     }
 

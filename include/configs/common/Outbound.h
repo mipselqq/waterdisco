@@ -96,8 +96,11 @@ namespace Configs
 
         virtual BuildResult BuildXray() { return {}; }
 
-        QString ExportJsonLink() {
+        QString ExportJsonLink(bool stripMetadata = false) {
             auto json = ExportToJson();
+            if (stripMetadata) {
+                json.remove("tag");
+            }
             QUrl url;
             url.setScheme("json");
             url.setHost("throne");
@@ -110,6 +113,7 @@ namespace Configs
         // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
+        bool ParseFromClash(const clash::Proxies& object) override;
         QString ExportToLink() override;
         QJsonObject ExportToJson() override;
         BuildResult Build() override;

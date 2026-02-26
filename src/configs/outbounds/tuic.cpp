@@ -10,7 +10,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         uuid = url.userName();
@@ -42,6 +42,23 @@ namespace Configs {
         if (object.contains("zero_rtt_handshake")) zero_rtt_handshake = object["zero_rtt_handshake"].toBool();
         if (object.contains("heartbeat")) heartbeat = object["heartbeat"].toString();
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
+        return true;
+    }
+
+    bool tuic::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "tuic") return false;
+        outbound::ParseFromClash(object);
+        uuid = QString::fromStdString(object.uuid);
+        password = QString::fromStdString(object.password);
+        if (!object.congestion_controller.empty()) congestion_control = QString::fromStdString(object.congestion_controller);
+        if (!object.udp_relay_mode.empty()) udp_relay_mode = QString::fromStdString(object.udp_relay_mode);
+        zero_rtt_handshake = object.reduce_rtt;
+        if (object.heartbeat_interval > 0) heartbeat = QString::number(object.heartbeat_interval) + "ms";
+        if (!object.ip.empty()) server = QString::fromStdString(object.ip);
+
+        tls->ParseFromClash(object);
+        tls->enabled = true;
         return true;
     }
 

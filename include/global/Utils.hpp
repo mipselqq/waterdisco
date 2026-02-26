@@ -26,6 +26,7 @@ inline std::function<void(QString, QString)> MW_dialog_message;
 
 class QThread;
 inline QThread *DS_cores;
+inline QThread *LogThread;
 
 // Timers
 
@@ -57,7 +58,7 @@ QStringList SplitLines(const QString &_string);
 
 QStringList SplitLinesSkipSharp(const QString &_string, int maxLine = 0);
 
-QStringList SplitAndTrim(QString raw, QString seperator);
+QStringList SplitAndTrim(const QString& raw, const QString& seperator, bool keepEmpty = true);
 
 // Base64
 

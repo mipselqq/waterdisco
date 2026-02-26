@@ -10,11 +10,30 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         username = url.userName();
         password = url.password();
+
+        // Handle v2rayN format: credentials are base64-encoded in the username field
+        // e.g. http://base64(token)@server:port
+        // If decoded string has no ':', SubStrBefore/After both return the full string,
+        // so username == password == decoded_token (matches expected behavior).
+        if (password.isEmpty() && !username.isEmpty()) {
+            QString decoded = DecodeB64IfValid(username);
+            if (!decoded.isEmpty()) {
+                username = SubStrBefore(decoded, ":");
+                password = SubStrAfter(decoded, ":");
+            }
+        }
+
+        // Handle single-credential format: http://:token@server:port
+        // Some providers set password only; username should equal password.
+        if (username.isEmpty() && !password.isEmpty()) {
+            username = password;
+        }
+
         if (query.hasQueryItem("path")) path = query.queryItemValue("path");
         if (query.hasQueryItem("headers")) headers = query.queryItemValue("headers").split(",");
         if (url.scheme() == "https" || query.queryItemValue("security") == "tls")
@@ -34,6 +53,16 @@ namespace Configs {
         if (object.contains("path")) path = object["path"].toString();
         if (object.contains("headers") && object["headers"].isObject()) headers = jsonObjectToQStringList(object["headers"].toObject());
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
+        return true;
+    }
+    bool http::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "http") return false;
+        outbound::ParseFromClash(object);
+        username = QString::fromStdString(object.username);
+        password = QString::fromStdString(object.password);
+
+        tls->ParseFromClash(object);
         return true;
     }
     QString http::ExportToLink()

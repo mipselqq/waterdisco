@@ -2,6 +2,143 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ru_RU">
 <context>
+    <name></name>
+    <message>
+        <source>Request with proxy but no profile started.</source>
+        <translation>Запрос через прокси, но профиль не запущен.</translation>
+    </message>
+    <message>
+        <source>Could not open file.</source>
+        <translation>Не удалось открыть файл.</translation>
+    </message>
+    <message>
+        <source>Proxy: %1
+Direct: %2</source>
+        <translation>Прокси: %1
+Напрямую: %2</translation>
+    </message>
+    <message>
+        <source>Add profiles to this group</source>
+        <translation>Добавить профили в эту группу</translation>
+    </message>
+    <message>
+        <source>Create new subscription group</source>
+        <translation>Создать новую группу подписки</translation>
+    </message>
+    <message>
+        <source>url detected</source>
+        <translation>Обнаружен URL</translation>
+    </message>
+    <message>
+        <source>%1
+How to update?</source>
+        <translation>%1
+Как обновить?</translation>
+    </message>
+    <message>
+        <source>Requesting subscription: %1</source>
+        <translation>Запрос подписки: %1</translation>
+    </message>
+    <message>
+        <source>Requesting subscription %1 error: %2</source>
+        <translation>Ошибка запроса подписки %1: %2</translation>
+    </message>
+    <message>
+        <source>Subscription request fininshed: %1</source>
+        <translation>Запрос подписки завершён: %1</translation>
+    </message>
+    <message>
+        <source>Clearing servers...</source>
+        <translation>Очистка серверов...</translation>
+    </message>
+    <message>
+        <source>Processing subscription data...</source>
+        <translation>Идёт обработка данных подписки...</translation>
+    </message>
+    <message>
+        <source>Process complete, applying...</source>
+        <translation>Процесс завершён, применение...</translation>
+    </message>
+    <message>
+        <source>Added %1 profiles:
+%2
+Deleted %3 Profiles:
+%4</source>
+        <translation>Добавлено %1 профилей:
+%2
+Удалено %3 профилей:
+%4</translation>
+    </message>
+    <message>
+        <source>Nothing</source>
+        <translation>Ничего</translation>
+    </message>
+    <message>
+        <source>Change of %1:</source>
+        <translation>Изменение %1:</translation>
+    </message>
+    <message>
+        <source>Core exited, cleaning up...</source>
+        <translation>Ядро завершило работу, очистка...</translation>
+    </message>
+    <message>
+        <source>Core exits too frequently, stop automatic restart this profile.</source>
+        <translation>Ядро слишком часто останавливается, отмена автоматического перезапуска этого профиля.</translation>
+    </message>
+    <message>
+        <source>Restarting the core ...</source>
+        <translation>Перезапуск ядра...</translation>
+    </message>
+    <message>
+        <source>Download Profiles</source>
+        <translation>Скачать профили</translation>
+    </message>
+    <message>
+        <source>Requesting profile error: %1</source>
+        <translation>Ошибка запроса профиля: %1</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Обновление</translation>
+    </message>
+    <message>
+        <source>Not official support platform</source>
+        <translation>Платформа официально не поддерживается</translation>
+    </message>
+    <message>
+        <source>Requesting update error: %1</source>
+        <translation>Ошибка запроса обновления: %1</translation>
+    </message>
+    <message>
+        <source>No update</source>
+        <translation>Обновлений нет</translation>
+    </message>
+    <message>
+        <source>Update found: %1
+Release note:
+%2</source>
+        <translation>Найдено обновление: %1
+Список изменений:
+%2</translation>
+    </message>
+    <message>
+        <source>Open in browser</source>
+        <translation>Открыть в браузере</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Закрыть</translation>
+    </message>
+    <message>
+        <source>Update is ready, restart to install?</source>
+        <translation>Обновление готово, перезапустить программу для установки?</translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation>Выбор</translation>
+    </message>
+</context>
+<context>
     <name>DialogBasicSettings</name>
     <message>
         <source>Basic Settings</source>
@@ -33,7 +170,7 @@
     </message>
     <message>
         <source>Simple Download URL</source>
-        <translation>URL для простого теста загрузки</translation>
+        <translation>URL для простого теста скачивания</translation>
     </message>
     <message>
         <source>Concurrent</source>
@@ -100,6 +237,30 @@
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;HWID=%1&lt;/p&gt;&lt;p&gt;ОС=%2&lt;/p&gt;&lt;p&gt;Версия ОС=%3&lt;/p&gt;&lt;p&gt;Модель=%4&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
+        <source>Skip confirmation When Deleting Profiles</source>
+        <translation>Пропустить подтверждение при удалении профилей</translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation>Выбор</translation>
+    </message>
+    <message>
+        <source>Enable Custom Icons</source>
+        <translation>Включить собст. иконки</translation>
+    </message>
+    <message>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Format: hwid=value,os=value,osVersion=value,model=value&lt;/p&gt;&lt;p&gt;Leave empty to use default values. Only specify the parameters you want to override.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Формат: hwid=значение,os=значение,osVersion=значение,model=значение&lt;/p&gt;&lt;p&gt;Оставьте пустым для использования значений по умолчанию. Указывайте только те параметры, которые хотите переназначить.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <source>Custom System Parameters (optional)</source>
+        <translation>Указать параметры системы вручную (опционально)</translation>
+    </message>
+    <message>
+        <source>hwid=custom_value,os=custom_os,osVersion=custom_version,model=custom_model</source>
+        <translation>hwid=ваше_значение,os=ваша_система,osVersion=ваша_версия_ос,model=ваша_модель</translation>
+    </message>
+    <message>
         <source>Core</source>
         <translation>Ядро</translation>
     </message>
@@ -118,6 +279,30 @@
     <message>
         <source>Core Options</source>
         <translation>Параметры ядра</translation>
+    </message>
+    <message>
+        <source>Xray Core</source>
+        <translation>Ядро Xray</translation>
+    </message>
+    <message>
+        <source>Loglevel</source>
+        <translation>Уровень логирования</translation>
+    </message>
+    <message>
+        <source>Mux Concurrency</source>
+        <translation>Кол-во одновременных соединений (mux)</translation>
+    </message>
+    <message>
+        <source>Default Mux On</source>
+        <translation>Вкл. mux по умолчанию</translation>
+    </message>
+    <message>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;When to choose Xray when importing vless profiles&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Когда выбирать ядро Xray при импорте профилей с протоколом VLESS&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <source>Xray VLESS Preference</source>
+        <translation>Предпочтение Xray для VLESS</translation>
     </message>
     <message>
         <source>Security</source>
@@ -211,7 +396,7 @@
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Settings for the
                                             sing-box&apos;s built-in NTP client&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;
                                         </source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Настройки для встроенного в
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Настройки встроенного
                                             NTP-клиента sing-box&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;
                                         </translation>
     </message>
@@ -237,15 +422,15 @@
     </message>
     <message>
         <source>Download + Upload</source>
-        <translation>Скачивание + загрузка</translation>
+        <translation>Скачивание (↓) + загрузка (↑)</translation>
     </message>
     <message>
         <source>Only Download</source>
-        <translation>Только скачивание</translation>
+        <translation>Только скачивание (↓)</translation>
     </message>
     <message>
         <source>Only Upload</source>
-        <translation>Только загрузка</translation>
+        <translation>Только загрузка (↑)</translation>
     </message>
     <message>
         <source>Disable Privilege request</source>
@@ -253,7 +438,7 @@
     </message>
     <message>
         <source>Simple Download</source>
-        <translation>Простая загрузка</translation>
+        <translation>Простое скачивание</translation>
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Selects a random available port on every run&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
@@ -295,6 +480,14 @@
         <source>Show System DNS option</source>
         <translation>Отображать режим «Системный DNS»</translation>
     </message>
+    <message>
+        <source>Select png icons</source>
+        <translation>Выберите иконки в формате PNG</translation>
+    </message>
+    <message>
+        <source>Image Files (*.png)</source>
+        <translation>Изображения (*.png)</translation>
+    </message>
 </context>
 <context>
     <name>DialogEditGroup</name>
@@ -305,14 +498,6 @@
     <message>
         <source>Name</source>
         <translation>Название</translation>
-    </message>
-    <message>
-        <source>Manually column width</source>
-        <translation>Уст. ширину колонок вручную</translation>
-    </message>
-    <message>
-        <source>Archive</source>
-        <translation>Архив</translation>
     </message>
     <message>
         <source>Type</source>
@@ -329,6 +514,10 @@
     <message>
         <source>Front Proxy</source>
         <translation>Фронт-прокси</translation>
+    </message>
+    <message>
+        <source>Auto Clear Unavailable Profiles</source>
+        <translation>Автоочистка недоступных профилей</translation>
     </message>
     <message>
         <source>URL</source>
@@ -398,18 +587,6 @@
         <translation>Название</translation>
     </message>
     <message>
-        <source>Custom Outbound Settings</source>
-        <translation>Доп. настройки outbound</translation>
-    </message>
-    <message>
-        <source>Custom Config Settings</source>
-        <translation>Доп. настройки конфигурации</translation>
-    </message>
-    <message>
-        <source>Apply settings to this group</source>
-        <translation>Применить настройки к этой группе</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>Настройки</translation>
     </message>
@@ -430,14 +607,6 @@
         <translation>Безопасность</translation>
     </message>
     <message>
-        <source>UDP FullCone Packet encoding for implementing features such as UDP FullCone. Server support is required, if the wrong selection is made, the connection cannot be made. Please leave it blank.</source>
-        <translation>Кодирование пакетов UDP Full-Cone для реализации функций вроде UDP Full-Cone. Поддержка со стороны сервера обязательна — если выбрано неверное значение, соединение установить не удастся. Рекомендуется оставить пустым.</translation>
-    </message>
-    <message>
-        <source>Packet Encoding</source>
-        <translation>Кодирование пакетов</translation>
-    </message>
-    <message>
         <source>Server support is required</source>
         <translation>Необходима поддержка со стороны сервера</translation>
     </message>
@@ -450,6 +619,14 @@
         <translation>По умолчанию</translation>
     </message>
     <message>
+        <source>Enabled</source>
+        <translation>Включено</translation>
+    </message>
+    <message>
+        <source>Disabled</source>
+        <translation>Выключено</translation>
+    </message>
+    <message>
         <source>On</source>
         <translation>Вкл.</translation>
     </message>
@@ -458,8 +635,24 @@
         <translation>Выкл.</translation>
     </message>
     <message>
+        <source>Brutal Download Speed</source>
+        <translation>Скорость скачивания (Brutal)</translation>
+    </message>
+    <message>
+        <source>Brutal Upload Speed</source>
+        <translation>Скорость загрузки (Brutal)</translation>
+    </message>
+    <message>
+        <source>Advanced Settings</source>
+        <translation>Доп. настройки</translation>
+    </message>
+    <message>
         <source>Network Settings (%1)</source>
         <translation>Настройки соединения (%1)</translation>
+    </message>
+    <message>
+        <source>Service Name</source>
+        <translation>Название сервиса</translation>
     </message>
     <message>
         <source>TLS Security Settings</source>
@@ -471,7 +664,7 @@
     </message>
     <message>
         <source>Allow insecure</source>
-        <translation>Разрешить небезопасн.</translation>
+        <translation>Разрешить небезопасные</translation>
     </message>
     <message>
         <source>Certificate</source>
@@ -480,6 +673,94 @@
     <message>
         <source>Server name indication, clear text.</source>
         <translation>SNI — идентификатор сервера, открытый текст.</translation>
+    </message>
+    <message>
+        <source>Security Settings</source>
+        <translation>Настройки безопасности</translation>
+    </message>
+    <message>
+        <source>SNI</source>
+        <translation>SNI</translation>
+    </message>
+    <message>
+        <source>Fingerprint</source>
+        <translation>Отпечаток (fingerprint)</translation>
+    </message>
+    <message>
+        <source>ALPN</source>
+        <translation>ALPN</translation>
+    </message>
+    <message>
+        <source>Reality Pbk</source>
+        <translation>Reality Pbk</translation>
+    </message>
+    <message>
+        <source>Reality SpiderX</source>
+        <translation>Reality SpiderX</translation>
+    </message>
+    <message>
+        <source>Network Settings</source>
+        <translation>Настройки соединения</translation>
+    </message>
+    <message>
+        <source>Headers</source>
+        <translation>Заголовки</translation>
+    </message>
+    <message>
+        <source>Max Concurrency</source>
+        <translation>Макс. одновр. соединений</translation>
+    </message>
+    <message>
+        <source>Max Post Bytes</source>
+        <translation>Макс. кол-во байт в POST</translation>
+    </message>
+    <message>
+        <source>Max Reusable Secs</source>
+        <translation>Макс. время для переиспользования соед.</translation>
+    </message>
+    <message>
+        <source>Max Request Times</source>
+        <translation>Макс. кол-во запросов</translation>
+    </message>
+    <message>
+        <source>Host</source>
+        <translation>Хост</translation>
+    </message>
+    <message>
+        <source>X Padding Bytes</source>
+        <translation>X байтов заполнения</translation>
+    </message>
+    <message>
+        <source>Min Post Interval</source>
+        <translation>Мин. интервал POST</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation>Режим</translation>
+    </message>
+    <message>
+        <source>No GRPC Headers</source>
+        <translation>Без заголовков gRPC</translation>
+    </message>
+    <message>
+        <source>Max Reuse times</source>
+        <translation>Макс. переиспользований</translation>
+    </message>
+    <message>
+        <source>Keep Alive Period</source>
+        <translation>Период поддерж. активности</translation>
+    </message>
+    <message>
+        <source>Download Settings</source>
+        <translation>Настройки скачивания</translation>
+    </message>
+    <message>
+        <source>Max Connections</source>
+        <translation>Макс. подключений</translation>
+    </message>
+    <message>
+        <source>Path</source>
+        <translation>Путь</translation>
     </message>
     <message>
         <source>Application layer protocol negotiation, clear text. Please separate them with commas.</source>
@@ -510,10 +791,6 @@
         <translation>Уже задано</translation>
     </message>
     <message>
-        <source>Confirm</source>
-        <translation>Подтвердить</translation>
-    </message>
-    <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Overrides mux to On&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Принудительно включает мультиплексирование&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
@@ -524,10 +801,6 @@
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Server to Client TCP Brutal Speed&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Скорость TCP Brutal от сервера к клиенту&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <source>TCP Brutal Speed</source>
-        <translation>Скорость TCP Brutal</translation>
     </message>
     <message>
         <source>Mb/s</source>
@@ -548,10 +821,6 @@
     <message>
         <source>Reality SID</source>
         <translation>Reality SID</translation>
-    </message>
-    <message>
-        <source>header type</source>
-        <translation>Тип заголовка</translation>
     </message>
     <message>
         <source>Extra Core</source>
@@ -876,7 +1145,7 @@ For more information, see the document &quot;Configuration/DNS&quot;.</source>
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Local DNS can not be used in some configurations, you will have to set an ip here to be used as local dns in such situations&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Локальный DNS невозможно использовать в некоторых конфигурациях — в подобных ситуациях вам потребуется вручную ввести IP в этом поле для использования в качестве локального DNS&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Локальный DNS невозможно использовать в некоторых конфигурациях —&#xa0;в подобных ситуациях вам потребуется вручную ввести IP в этом поле для использования в качестве локального DNS&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Local Override</source>
@@ -926,6 +1195,81 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     <message>
         <source>Enable Tun Routing</source>
         <translation>Вкл. TUN-маршрутизацию</translation>
+    </message>
+</context>
+<context>
+    <name>EditAdvanced</name>
+    <message>
+        <source>Dialog</source>
+        <translation>Диалог</translation>
+    </message>
+    <message>
+        <source>Dial Fields</source>
+        <translation>Поля запроса</translation>
+    </message>
+    <message>
+        <source>Connect Timeout</source>
+        <translation>Таймаут подключения</translation>
+    </message>
+    <message>
+        <source>TCP Fast Open</source>
+        <translation>TCP Fast Open</translation>
+    </message>
+    <message>
+        <source>TCP MultiPath</source>
+        <translation>TCP MultiPath</translation>
+    </message>
+    <message>
+        <source>Reuse Address</source>
+        <translation>Адрес переиспользования</translation>
+    </message>
+    <message>
+        <source>UDP Fragment</source>
+        <translation>Фрагментирование UDP</translation>
+    </message>
+    <message>
+        <source>TLS</source>
+        <translation>TLS</translation>
+    </message>
+    <message>
+        <source>Enable ECH</source>
+        <translation>Вкл. ECH</translation>
+    </message>
+    <message>
+        <source>ECH Config</source>
+        <translation>Конфигурация ECH</translation>
+    </message>
+    <message>
+        <source>Not Set</source>
+        <translation>Не задано</translation>
+    </message>
+    <message>
+        <source>Certificate SHA256</source>
+        <translation>Сертификат SHA256</translation>
+    </message>
+    <message>
+        <source>Client Certificate</source>
+        <translation>Сертификат клиента</translation>
+    </message>
+    <message>
+        <source>Client Key</source>
+        <translation>Ключ клиента</translation>
+    </message>
+    <message>
+        <source>Disable SNI</source>
+        <translation>Отключить SNI</translation>
+    </message>
+    <message>
+        <source>TLS Min Version</source>
+        <translation>Мин. версия TLS</translation>
+    </message>
+    <message>
+        <source>TLS Max Version</source>
+        <translation>Макс. версия TLS</translation>
+    </message>
+    <message>
+        <source>Certificate sha256</source>
+        <translation>Сертификат SHA256</translation>
     </message>
 </context>
 <context>
@@ -1041,86 +1385,73 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     </message>
 </context>
 <context>
-    <name>EditQUIC</name>
+    <name>EditHttp</name>
     <message>
-        <source>Auth Type</source>
-        <translation>Тип авторизации</translation>
+        <source>Form</source>
+        <translation>Форма</translation>
     </message>
     <message>
-        <source>Download (Mbps)</source>
-        <translation>Скорость загрузки (Мбит/с)</translation>
-    </message>
-    <message>
-        <source>Disable MTU Discovery</source>
-        <translation>Выкл. MTU Discovery</translation>
-    </message>
-    <message>
-        <source>Certificate</source>
-        <translation>Сертификат</translation>
-    </message>
-    <message>
-        <source>Allow Insecure</source>
-        <translation>Разрешить небезопасные</translation>
-    </message>
-    <message>
-        <source>Upload (Mbps)</source>
-        <translation>Скорость загрузки (Мбит/с)</translation>
-    </message>
-    <message>
-        <source>Obfs Password</source>
-        <translation>Пароль обфускации</translation>
-    </message>
-    <message>
-        <source>SNI</source>
-        <translation>SNI</translation>
-    </message>
-    <message>
-        <source>Auth Payload</source>
-        <translation>Payload для авторизации</translation>
-    </message>
-    <message>
-        <source>Disable SNI</source>
-        <translation>Отключить SNI</translation>
+        <source>Username</source>
+        <translation>Имя пользователя</translation>
     </message>
     <message>
         <source>Password</source>
         <translation>Пароль</translation>
     </message>
+</context>
+<context>
+    <name>EditHysteria</name>
     <message>
-        <source>Generate UUID</source>
-        <translation>Сгенерировать UUID</translation>
+        <source>Form</source>
+        <translation>Форма</translation>
     </message>
     <message>
-        <source>Heartbeat</source>
-        <translation>Сердцебиение (Heartbeat)</translation>
+        <source>Protocol Version</source>
+        <translation>Версия протокола</translation>
     </message>
     <message>
-        <source>Zero Rtt Handshake</source>
-        <translation>Рукопожатие 0-RTT</translation>
+        <source>Down Mbps</source>
+        <translation>Скачивание (↓ Мбит/с)</translation>
     </message>
     <message>
-        <source>Congestion Control</source>
-        <translation>Контроль перегрузки</translation>
-    </message>
-    <message>
-        <source>UDP Relay Mode</source>
-        <translation>Режим ретрансляции UDP</translation>
-    </message>
-    <message>
-        <source>Port range</source>
-        <translation>Диапазон портов</translation>
+        <source>Recv window conn</source>
+        <translation>Окно приёма подкл.</translation>
     </message>
     <message>
         <source>Hop Interval</source>
         <translation>Интервал узлов</translation>
     </message>
     <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;100ms&lt;br/&gt;1s&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;100 мс&lt;br/&gt;1s&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <source>Server Ports</source>
+        <translation>Порты сервера</translation>
     </message>
     <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Comma seperated ranges: 100:200,500:600&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Диапазоны, разделенные запятыми: 100:200,500:600&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <source>Authentication Type</source>
+        <translation>Тип авторизации</translation>
+    </message>
+    <message>
+        <source>Up Mbps</source>
+        <translation>Загрузка (↑ Мбит/с)</translation>
+    </message>
+    <message>
+        <source>Authentication Payload</source>
+        <translation>Пейлоад авторизации</translation>
+    </message>
+    <message>
+        <source>Obfuscation Password</source>
+        <translation>Пароль обфускации</translation>
+    </message>
+    <message>
+        <source>Recv window</source>
+        <translation>Окно приёма</translation>
+    </message>
+    <message>
+        <source>Disable Mtu Discovery</source>
+        <translation>Отключить MTU Discovery</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
     </message>
 </context>
 <context>
@@ -1181,20 +1512,24 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Пароль</translation>
     </message>
     <message>
+        <source>UDP over TCP</source>
+        <translation>UDP поверх TCP</translation>
+    </message>
+    <message>
         <source>Plugin Args</source>
         <translation>Аргументы</translation>
     </message>
-    <message>
-        <source>Version of UDP over TCP protocol, server support is required.</source>
-        <translation>Версия протокола UDP over TCP, требуется поддержка со стороны сервера.</translation>
-    </message>
-    <message>
-        <source>Off</source>
-        <translation>Выкл.</translation>
-    </message>
 </context>
 <context>
-    <name>EditSocksHttp</name>
+    <name>EditSocks</name>
+    <message>
+        <source>Form</source>
+        <translation>Форма</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
     <message>
         <source>Version</source>
         <translation>Версия</translation>
@@ -1204,8 +1539,12 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Имя пользователя</translation>
     </message>
     <message>
-        <source>Password</source>
-        <translation>Пароль</translation>
+        <source>5</source>
+        <translation>5</translation>
+    </message>
+    <message>
+        <source>4</source>
+        <translation>4</translation>
     </message>
 </context>
 <context>
@@ -1268,10 +1607,69 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     </message>
 </context>
 <context>
-    <name>EditTrojanVLESS</name>
+    <name>EditTrojan</name>
+    <message>
+        <source>Form</source>
+        <translation>Форма</translation>
+    </message>
     <message>
         <source>Password</source>
         <translation>Пароль</translation>
+    </message>
+</context>
+<context>
+    <name>EditTuic</name>
+    <message>
+        <source>Form</source>
+        <translation>Форма</translation>
+    </message>
+    <message>
+        <source>Heartbeat</source>
+        <translation>Сердцебиение (Heartbeat)</translation>
+    </message>
+    <message>
+        <source>UDP Relay Mode</source>
+        <translation>Режим ретрансляции UDP</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
+    <message>
+        <source>Zero RTT Handshake</source>
+        <translation>Хендшейк 0-RTT</translation>
+    </message>
+    <message>
+        <source>UUID</source>
+        <translation>UUID</translation>
+    </message>
+    <message>
+        <source>bbr</source>
+        <translation>BBR</translation>
+    </message>
+    <message>
+        <source>cubic</source>
+        <translation>CUBIC</translation>
+    </message>
+    <message>
+        <source>new_reno</source>
+        <translation>New Reno</translation>
+    </message>
+    <message>
+        <source>Congestion Control</source>
+        <translation>Контроль перегрузки</translation>
+    </message>
+    <message>
+        <source>native</source>
+        <translation>нативный</translation>
+    </message>
+    <message>
+        <source>quic</source>
+        <translation>QUIC</translation>
+    </message>
+    <message>
+        <source>UDP over Stream</source>
+        <translation>UDP через поток</translation>
     </message>
 </context>
 <context>
@@ -1289,8 +1687,23 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>UUID</translation>
     </message>
     <message>
+        <source>Packet Encoding</source>
+        <translation>Кодирование пакетов</translation>
+    </message>
+    <message>
         <source>Generate UUID</source>
         <translation>Сгенерировать UUID</translation>
+    </message>
+</context>
+<context>
+    <name>EditVless</name>
+    <message>
+        <source>UUID</source>
+        <translation>UUID</translation>
+    </message>
+    <message>
+        <source>Packet Encoding</source>
+        <translation>Кодирование пакетов</translation>
     </message>
 </context>
 <context>
@@ -1394,6 +1807,29 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     <message>
         <source>Amnezia Settings</source>
         <translation>Настройки Amnezia</translation>
+    </message>
+</context>
+<context>
+    <name>EditXrayVless</name>
+    <message>
+        <source>Form</source>
+        <translation>Форма</translation>
+    </message>
+    <message>
+        <source>UUID</source>
+        <translation>UUID</translation>
+    </message>
+    <message>
+        <source>Encryption</source>
+        <translation>Шифрование</translation>
+    </message>
+    <message>
+        <source>none</source>
+        <translation>нет</translation>
+    </message>
+    <message>
+        <source>Flow</source>
+        <translation>Flow</translation>
     </message>
 </context>
 <context>
@@ -1509,18 +1945,6 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Системный прокси</translation>
     </message>
     <message>
-        <source>Type</source>
-        <translation>Протокол</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Адрес</translation>
-    </message>
-    <message>
-        <source>Name</source>
-        <translation>Название</translation>
-    </message>
-    <message>
         <source>Test Result</source>
         <translation>Результат теста</translation>
     </message>
@@ -1565,6 +1989,10 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Настройки маршрутизации</translation>
     </message>
     <message>
+        <source>Restart Core</source>
+        <translation>Перезапуск ядра</translation>
+    </message>
+    <message>
         <source>Hide window</source>
         <translation>Скрыть окно</translation>
     </message>
@@ -1573,7 +2001,15 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Добавить профиль из буфера обмена</translation>
     </message>
     <message>
+        <source>Return</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
         <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Del</source>
         <translation>Удалить</translation>
     </message>
     <message>
@@ -1653,6 +2089,10 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Выбрать все</translation>
     </message>
     <message>
+        <source>Copy links of selected (Json Links)</source>
+        <translation>Копировать ссылки выбранных (JSON)</translation>
+    </message>
+    <message>
         <source>Copy links of selected</source>
         <translation>Скопировать ссылки выбранных</translation>
     </message>
@@ -1685,8 +2125,16 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Открыть папку конфигурации</translation>
     </message>
     <message>
-        <source>Restart Proxy</source>
-        <translation>Перезапустить прокси</translation>
+        <source>Resolve Out IP</source>
+        <translation>Разрешить выход. IP</translation>
+    </message>
+    <message>
+        <source>Resolve Selected Out IP</source>
+        <translation>Разрешить выход. IP выбранных</translation>
+    </message>
+    <message>
+        <source>Refresh Column Widths</source>
+        <translation>Обновить ширину колонок</translation>
     </message>
     <message>
         <source>Error</source>
@@ -1761,6 +2209,14 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>[%1] ошибка теста: %2</translation>
     </message>
     <message>
+        <source>[%1] IP test error: %2</source>
+        <translation>[%1] Ошибка теста IP: %2</translation>
+    </message>
+    <message>
+        <source>Failed to build test config for batch: </source>
+        <translation>Не удалось собрать общую тестовую конфигурацию для группы: </translation>
+    </message>
+    <message>
         <source>Testing</source>
         <translation>Проверка...</translation>
     </message>
@@ -1769,8 +2225,24 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Недоступен</translation>
     </message>
     <message>
+        <source>The last test did not exit completely, please wait. If it persists, please restart the program.</source>
+        <translation>Последний тест не завершился до конца — пожалуйста, подождите. Если ошибка продолжается, пожалуйста, перезапустите программу.</translation>
+    </message>
+    <message>
+        <source>IP test finished!</source>
+        <translation>Тест IP завершён!</translation>
+    </message>
+    <message>
+        <source>The last test did not finish completely, please wait. If it persists, please restart the program.</source>
+        <translation>Последний тест не завершился до конца — пожалуйста, подождите. Если ошибка продолжается, пожалуйста, перезапустите программу.</translation>
+    </message>
+    <message>
+        <source>Failed to build batch test config: </source>
+        <translation>Не удалось собрать общую тестовую конфигурацию для группы: </translation>
+    </message>
+    <message>
         <source>If there is no response for a long time, it is recommended to restart the software.</source>
-        <translation>Если нет ответа в течении долгого времени, рекомендуем перезапустить приложение.</translation>
+        <translation>Если нет ответа в течении долгого времени, рекомендуем перезапустить программу.</translation>
     </message>
     <message>
         <source>Starting profile %1</source>
@@ -1786,7 +2258,7 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     </message>
     <message>
         <source>Failed to stop, please restart the program.</source>
-        <translation>Не удалось остановить, пожалуйста, перезапустите приложение.</translation>
+        <translation>Не удалось остановить, пожалуйста, перезапустите программу.</translation>
     </message>
     <message>
         <source>Stop Testing</source>
@@ -1857,20 +2329,44 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Если у вас возникли проблемы с запуском режима TUN, можете принудительно сбросить процесс ядра здесь и попробовать перезапустить профиль. Ошибка: %1</translation>
     </message>
     <message>
-        <source> Confirmation </source>
-        <translation> Подтверждение </translation>
-    </message>
-    <message>
-        <source> Remove %1 item(s) ? </source>
-        <translation> Удалить %1 элемент(ов)? </translation>
-    </message>
-    <message>
         <source>Remove %1 Unavailable item(s) ?</source>
         <translation>Удалить %1 недоступных элемент(ов)?</translation>
     </message>
     <message>
         <source>Remove %1 Invalid item(s) ?</source>
         <translation>Удалить %1 неверных элемент(ов)?</translation>
+    </message>
+    <message>
+        <source>Include:</source>
+        <translation>Включить:</translation>
+    </message>
+    <message>
+        <source>Out IP</source>
+        <translation>Выходной IP</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Скорость</translation>
+    </message>
+    <message>
+        <source>Sort By:</source>
+        <translation>Сортировать по:</translation>
+    </message>
+    <message>
+        <source>Latency</source>
+        <translation>Пингу (задержке)</translation>
+    </message>
+    <message>
+        <source>Download Speed</source>
+        <translation>Скорости скачивания (↓)</translation>
+    </message>
+    <message>
+        <source>Upload Speed</source>
+        <translation>Скорости загрузки (↑)</translation>
+    </message>
+    <message>
+        <source>IP Out</source>
+        <translation>Выходному IP</translation>
     </message>
     <message>
         <source>Replace domain server addresses with their resolved IPs?</source>
@@ -1957,14 +2453,6 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Данные менеджера профилей повреждены, попробуйте еще раз.</translation>
     </message>
     <message>
-        <source>The last speed test did not exit completely, please wait. If it persists, please restart the program.</source>
-        <translation>Последний тест скорости не завершился полностью, пожалуйста, подождите. Если проблема сохраняется, пожалуйста, перезапустите программу.</translation>
-    </message>
-    <message>
-        <source>Failed to build test config: </source>
-        <translation>Не удалось создать тестовую конфигурацию: </translation>
-    </message>
-    <message>
         <source>Speedtest finished!</source>
         <translation>Тест скорости завершён!</translation>
     </message>
@@ -2014,7 +2502,7 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     </message>
     <message>
         <source>Last download request has not finished yet</source>
-        <translation>Последний запрос на загрузку еще не завершён</translation>
+        <translation>Последняя попытка скачивания ещё не завершилась</translation>
     </message>
     <message>
         <source>Traffic Graph</source>
@@ -2022,7 +2510,7 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     </message>
     <message>
         <source>Failed to download update assets</source>
-        <translation>Не удалось загрузить обновлённые ресурсы</translation>
+        <translation>Не удалось скачать обновлённые ресурсы</translation>
     </message>
     <message>
         <source>Speedtest Current</source>
@@ -2069,10 +2557,6 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>Нажмите для сортировки по трафику</translation>
     </message>
     <message>
-        <source>Copy links of selected (Custom Links)</source>
-        <translation>Скопировать ссылки выбранных профилей (польз. ссылки)</translation>
-    </message>
-    <message>
         <source>Invalid JSON Array</source>
         <translation>Неверный массив JSON</translation>
     </message>
@@ -2100,6 +2584,29 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     </message>
 </context>
 <context>
+    <name>ProfilesTableModel</name>
+    <message>
+        <source>Type</source>
+        <translation>Тип</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адрес</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Название</translation>
+    </message>
+    <message>
+        <source>Test Result</source>
+        <translation>Результат теста</translation>
+    </message>
+    <message>
+        <source>Traffic</source>
+        <translation>Трафик</translation>
+    </message>
+</context>
+<context>
     <name>ProxyItem</name>
     <message>
         <source>Confirmation</source>
@@ -2120,98 +2627,8 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
 <context>
     <name>QObject</name>
     <message>
-        <source>Proxy: %1
-Direct: %2</source>
-        <translation>Прокси: %1
-Напрямую: %2</translation>
-    </message>
-    <message>
         <source>Chain Proxy</source>
         <translation>Цепочка прокси</translation>
-    </message>
-    <message>
-        <source>Request with proxy but no profile started.</source>
-        <translation>Запрос через прокси, но профиль не запущен.</translation>
-    </message>
-    <message>
-        <source>url detected</source>
-        <translation>Обнаружен URL</translation>
-    </message>
-    <message>
-        <source>%1
-How to update?</source>
-        <translation>%1
-Как обновить?</translation>
-    </message>
-    <message>
-        <source>Requesting subscription: %1</source>
-        <translation>Запрос подписки: %1</translation>
-    </message>
-    <message>
-        <source>Requesting subscription %1 error: %2</source>
-        <translation>Ошибка запроса подписки %1: %2</translation>
-    </message>
-    <message>
-        <source>Subscription request fininshed: %1</source>
-        <translation>Запрос подписки завершён: %1</translation>
-    </message>
-    <message>
-        <source>Clearing servers...</source>
-        <translation>Очистка серверов...</translation>
-    </message>
-    <message>
-        <source>Added %1 profiles:
-%2
-Deleted %3 Profiles:
-%4</source>
-        <translation>Добавлено %1 профилей:
-%2
-Удалено %3 профилей:
-%4</translation>
-    </message>
-    <message>
-        <source>Nothing</source>
-        <translation>Ничего</translation>
-    </message>
-    <message>
-        <source>Change of %1:</source>
-        <translation>Изменение %1:</translation>
-    </message>
-    <message>
-        <source>Core exits too frequently, stop automatic restart this profile.</source>
-        <translation>Ядро слишком часто останавливается, отмена автоматического перезапуска этого профиля.</translation>
-    </message>
-    <message>
-        <source>Select</source>
-        <translation>Выбор</translation>
-    </message>
-    <message>
-        <source>Update</source>
-        <translation>Обновление</translation>
-    </message>
-    <message>
-        <source>No update</source>
-        <translation>Обновлений нет</translation>
-    </message>
-    <message>
-        <source>Update found: %1
-Release note:
-%2</source>
-        <translation>Найдено обновление: %1
-Список изменений:
-%2</translation>
-    </message>
-    <message>
-        <source>Open in browser</source>
-        <translation>Открыть в браузере</translation>
-    </message>
-    <message>
-        <source>Close</source>
-        <translation>Закрыть</translation>
-    </message>
-    <message>
-        <source>Update is ready, restart to install?</source>
-        <translation>Обновление готово, перезапустить программу для установки?</translation>
     </message>
     <message>
         <source>Used: %1 Remain: %2 Expire: %3</source>
@@ -2222,56 +2639,8 @@ Release note:
         <translation>По умолчанию</translation>
     </message>
     <message>
-        <source>Add profiles to this group</source>
-        <translation>Добавить профили в эту группу</translation>
-    </message>
-    <message>
-        <source>Create new subscription group</source>
-        <translation>Создать новую группу подписки</translation>
-    </message>
-    <message>
-        <source>Could not open file.</source>
-        <translation>Не удалось открыть файл.</translation>
-    </message>
-    <message>
-        <source>Not official support platform</source>
-        <translation>Платформа официально не поддерживается</translation>
-    </message>
-    <message>
-        <source>Requesting update error: %1</source>
-        <translation>Ошибка запроса обновления: %1</translation>
-    </message>
-    <message>
-        <source>Tun mode cannot be used with Custom configs</source>
-        <translation>Режим TUN нельзя использовать с польз. конфигурациями</translation>
-    </message>
-    <message>
-        <source>Processing subscription data...</source>
-        <translation>Идёт обработка данных подписки...</translation>
-    </message>
-    <message>
-        <source>Process complete, applying...</source>
-        <translation>Процесс завершён, применение...</translation>
-    </message>
-    <message>
-        <source>Download Profiles</source>
-        <translation>Загрузка профилей</translation>
-    </message>
-    <message>
-        <source>Requesting profile error: %1</source>
-        <translation>Ошибка запроса профиля: %1</translation>
-    </message>
-    <message>
         <source>Local DNS and Tun mode do not work together, please set an IP to be used as the Local DNS server in the Routing Settings -&gt; Local override</source>
         <translation>Локальный DNS и режим TUN не могут работать вместе. Пожалуйста, введите IP для использования в качестве локального DNS в меню «Настройки маршрутизации» → «Назначить локал. DNS»</translation>
-    </message>
-    <message>
-        <source>Core exited, cleaning up...</source>
-        <translation>Ядро завершило работу, очистка...</translation>
-    </message>
-    <message>
-        <source>Restarting the core ...</source>
-        <translation>Перезапуск ядра...</translation>
     </message>
 </context>
 <context>

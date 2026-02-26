@@ -78,7 +78,12 @@ namespace Configs {
         QString font = "";
         int font_size = 0;
         QString mw_size = "";
-        QStringList log_ignore = {};
+        bool log_enable_include = false;
+        bool log_enable_exclude = false;
+        QStringList log_include_keyword = {};
+        QStringList log_include_regex = {};
+        QStringList log_exclude_keyword = {};
+        QStringList log_exclude_regex = {};
         bool start_minimal = false;
         int max_log_line = 200;
         QString splitter_state = "";
@@ -117,7 +122,7 @@ namespace Configs {
         QMap<QString, QKeySequence> shortcuts;
 
         // Routing
-        int current_route_id = 0;
+        int current_route_id = 1;
         QString remote_dns = "tls://8.8.8.8";
         QString remote_dns_strategy = "";
         QString direct_dns = "localhost";
@@ -125,8 +130,8 @@ namespace Configs {
         bool use_dns_object = false;
         QString dns_object = "";
         QString dns_final_out = "proxy";
-        QString domain_strategy = "AsIs";
-        QString outbound_domain_strategy = "AsIs";
+        QString resolve_domain_strategy = "";
+        QString default_domain_strategy = "";
         int sniffing_mode = SniffingMode::FOR_ROUTING;
         int ruleset_mirror = Mirrors::CLOUDFLARE;
 
@@ -147,14 +152,16 @@ namespace Configs {
         bool enable_tun_routing = false;
 #ifdef Q_OS_MACOS
         QString vpn_implementation = "gvisor";
+        bool vpn_strict_route = true;
 #elif defined(Q_OS_WIN)
         QString vpn_implementation = WinVersion::IsBuildNumGreaterOrEqual(BuildNumber::Windows_10_1507) ? "system" : "gvisor";
+        bool vpn_strict_route = WinVersion::IsBuildNumGreaterOrEqual(BuildNumber::Windows_10_1507);
 #else
         QString vpn_implementation = "system";
+        bool vpn_strict_route = true;
 #endif
         int vpn_mtu = 1500;
         bool vpn_ipv6 = false;
-        bool vpn_strict_route = true;
         bool disable_privilege_req = false;
 
         // NTP
@@ -189,11 +196,13 @@ namespace Configs {
         QString core_box_clash_listen_addr = "127.0.0.1";
         QString core_box_clash_api_secret = "";
         QString core_box_underlying_dns = "";
+        int core_dns_in_port = 5533;
 
         // Xray
         QString xray_log_level = "warning";
         int xray_mux_concurrency = 8;
         bool xray_mux_default_on = false;
+        Xray::XrayVlessPreference xray_vless_preference = Xray::XhttpOnly;
 
         // Extra Core Paths
         QStringList extraCorePaths = {};

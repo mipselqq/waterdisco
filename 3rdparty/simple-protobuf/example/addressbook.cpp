@@ -1,8 +1,8 @@
 //- this example is based on https://protobuf.dev/getting-started/cpptutorial/
 
-#include <addressbook.pb.h>
 #include <filesystem>
 #include <iostream>
+#include <proto/addressbook.pb.h>
 #include <string>
 #include <system_error>
 
@@ -48,9 +48,7 @@ void save_file( const std::filesystem::path & file_path, std::string_view file_c
 void PromptForAddress( tutorial::Person & person )
 {
     std::cout << "Enter person ID number: ";
-    int id;
-    std::cin >> id;
-    person.id = id;
+    std::cin >> person.id.emplace( );
     std::cin.ignore( 256, '\n' );
 
     std::cout << "Enter name: ";

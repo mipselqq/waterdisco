@@ -7,6 +7,22 @@
 #include "include/configs/common/utils.h"
 
 namespace Configs {
+    QStringList portsToPorts(const QStringList &ports) {
+        QStringList result;
+        
+        for (const QString &v : ports) {
+            QStringList range = v.split(QRegularExpression("[:-]"));
+
+            if (range.size() == 2) {
+                result.append(QString("%1:%2").arg(range[0], range[1]));
+            } else {
+                result.append(QString("%1:%2").arg(v, v));
+            }
+        }
+        
+        return result;
+    }
+
     bool hysteria::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);
@@ -18,19 +34,16 @@ namespace Configs {
             int portStartIndex = link.indexOf(authority) + authority.length();
             QRegularExpressionMatch match = QRegularExpression("^:([\\d,\\-]+)").match(link.mid(portStartIndex));
             if (match.hasMatch()) {
-                server_ports = match.captured(1).split(",");
-                for (auto & serverPort : server_ports) {
-                    serverPort.replace("-", ":");
-                }
+                server_ports = portsToPorts(match.captured(1).split(","));
             }
         }
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         
         if (url.scheme() == "hysteria") {
             protocol_version = "1";
-            if (query.hasQueryItem("obfsParam")) obfs = QUrl::fromPercentEncoding(query.queryItemValue("obfsParam").toUtf8());
+            if (query.hasQueryItem("obfsParam")) obfs = query.queryItemValue("obfsParam", QUrl::FullyDecoded);
             if (query.hasQueryItem("auth")) {
                 auth = query.queryItemValue("auth");
                 auth_type = "STRING";
@@ -46,7 +59,7 @@ namespace Configs {
                 password = url.userName() + ":" + url.password();
             }
             if (query.hasQueryItem("obfs-password")) {
-                obfs = QUrl::fromPercentEncoding(query.queryItemValue("obfs-password").toUtf8());
+                obfs = query.queryItemValue("obfs-password", QUrl::FullyDecoded);
             }
         }
         
@@ -54,10 +67,7 @@ namespace Configs {
         if (query.hasQueryItem("downmbps")) down_mbps = query.queryItemValue("downmbps").toInt();
         if (query.hasQueryItem("hop_interval")) hop_interval = query.queryItemValue("hop_interval");
         if (query.hasQueryItem("mport")) {
-            server_ports = query.queryItemValue("mport").split(",");
-            for (auto & server_port : server_ports) {
-                server_port.replace("-", ":");
-            }
+            server_ports = portsToPorts(query.queryItemValue("mport").split(","));
         }
         
         tls->ParseFromLink(link);
@@ -107,6 +117,79 @@ namespace Configs {
             if (object.contains("password")) password = object["password"].toString();
         }
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
+        return true;
+    }
+
+    bool hysteria::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type == "hysteria") {
+            protocol_version = "1";
+        } else if (object.type == "hysteria2") {
+            protocol_version = "2";
+        } else {
+            return false;
+        }
+        outbound::ParseFromClash(object);
+
+        if (!object.ports.empty()) server_ports = portsToPorts(QString::fromStdString(object.ports).split(QRegularExpression("[,/]"), Qt::SkipEmptyParts));
+        auto anyToMbps = [](const QString &s) -> int {
+            if (s.isEmpty()) return 0;
+
+            bool ok;
+            int directMb = s.toInt(&ok);
+            if (ok) return directMb;
+
+            static QRegularExpression re(R"(^(\d+)([KMGT]?)([Bb]?))");
+            QRegularExpressionMatch match = re.match(s);
+
+            if (!match.hasMatch()) return 0;
+
+            double v = match.captured(1).toDouble();
+            QString unit = match.captured(2).toUpper();
+            QString type = match.captured(3).toUpper();
+
+            double n = 1.0;
+
+            if (unit == "K")      n = 0.001;
+            else if (unit == "M") n = 1.0;
+            else if (unit == "G") n = 1000.0;
+            else if (unit == "T") n = 1000000.0;
+
+            if (type == "B") {
+                n *= 8.0;
+            }
+
+            return static_cast<int>(v * n);
+        };
+        if (!object.up.empty()) up_mbps = anyToMbps(QString::fromStdString(object.up));
+        if (!object.down.empty()) down_mbps = anyToMbps(QString::fromStdString(object.down));
+        if (protocol_version == "1") {
+            if (!object.auth_str.empty()) {
+                auth = QString::fromStdString(object.auth_str);
+                auth_type = "STRING";
+            } else if (!object.auth_str1.empty()) {
+                auth = QString::fromStdString(object.auth_str1);
+                auth_type = "STRING";
+            }
+            if (!object.obfs.empty()) obfs = QString::fromStdString(object.obfs);
+            if (object.recv_window > 0) {
+                recv_window = object.recv_window;
+            } else if (object.recv_window1 > 0) {
+                recv_window = object.recv_window1;
+            }
+            if (object.recv_window_conn > 0) {
+                recv_window = object.recv_window_conn;
+            } else if (object.recv_window_conn1 > 0) {
+                recv_window = object.recv_window_conn1;
+            }
+            disable_mtu_discovery = object.disable_mtu_discovery;
+        } else {
+            if (!object.password.empty()) password = QString::fromStdString(object.password);
+            if (!object.obfs_password.empty()) obfs = QString::fromStdString(object.obfs_password);
+        }
+
+        tls->ParseFromClash(object);
+        tls->enabled = true;
         return true;
     }
 
@@ -174,7 +257,7 @@ namespace Configs {
         QJsonObject object;
         object["type"] = protocol_version == "1" ? "hysteria" : "hysteria2";
         mergeJsonObjects(object, outbound::ExportToJson());
-        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(server_ports);
+        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(portsToPorts(server_ports));
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
         if (down_mbps > 0) object["down_mbps"] = down_mbps;
@@ -196,7 +279,7 @@ namespace Configs {
             }
             if (!password.isEmpty()) object["password"] = password;
         }
-        if (tls->enabled) object["tls"] = tls->ExportToJson();
+        object["tls"] = tls->ExportToJson();
         return object;
     }
 
@@ -205,7 +288,7 @@ namespace Configs {
         QJsonObject object;
         object["type"] = protocol_version == "1" ? "hysteria" : "hysteria2";
         mergeJsonObjects(object, outbound::Build().object);
-        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(server_ports);
+        if (!server_ports.isEmpty()) object["server_ports"] = QListStr2QJsonArray(portsToPorts(server_ports));
         if (!hop_interval.isEmpty()) object["hop_interval"] = hop_interval;
         if (up_mbps > 0) object["up_mbps"] = up_mbps;
         if (down_mbps > 0) object["down_mbps"] = down_mbps;
@@ -227,7 +310,7 @@ namespace Configs {
             }
             if (!password.isEmpty()) object["password"] = password;
         }
-        if (tls->enabled) object["tls"] = tls->Build().object;
+        object["tls"] = tls->Build().object;
         return {object, ""};
     }
 

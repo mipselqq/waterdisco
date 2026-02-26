@@ -1,13 +1,14 @@
 package main
 
 import (
-	"Core/gen"
-	"Core/internal/boxmain"
-	"Core/test_utils"
+	"ThroneCore/gen"
+	"ThroneCore/internal/boxmain"
+	"ThroneCore/test_utils"
 	"context"
 	"flag"
 	"fmt"
 	"github.com/xtls/xray-core/core"
+	"google.golang.org/grpc"
 	"log"
 	"net"
 	"os"
@@ -17,7 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "Core/internal/distro/all"
+	_ "ThroneCore/internal/distro/all"
 	C "github.com/sagernet/sing-box/constant"
 )
 
@@ -47,21 +48,21 @@ func RunCore() {
 	}()
 	boxmain.DisableColor()
 
-	// RPC
-	go func() {
-		for {
-			time.Sleep(100 * time.Millisecond)
-			conn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(*_port))
-			if err == nil {
-				conn.Close()
-				fmt.Printf("Core listening at %v\n", "127.0.0.1:"+strconv.Itoa(*_port))
-				return
-			}
-		}
-	}()
-	err := gen.ListenAndServeLibcoreService("tcp", "127.0.0.1:"+strconv.Itoa(*_port), new(server))
+	// GRPC
+	lis, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(*_port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
+	}
+
+	s := grpc.NewServer(
+		grpc.MaxRecvMsgSize(1024*1024*1024), // 1 gigaByte
+		grpc.MaxSendMsgSize(1024*1024*1024), // 1 gigaByte
+	)
+	gen.RegisterLibcoreServiceServer(s, &server{})
+
+	fmt.Printf("Core listening at %v\n", lis.Addr())
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
 

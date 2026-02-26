@@ -19,7 +19,7 @@ namespace Configs {
             url = QUrl("https://" + linkN);
         }
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
         outbound::ParseFromLink(url.toString());
 
         // Traditional SS format
@@ -59,6 +59,38 @@ namespace Configs {
             if (object["udp_over_tcp"].isObject()) uot = object["udp_over_tcp"].toObject()["enabled"].toBool();
         }
         if (object.contains("multiplex")) multiplex->ParseFromJson(object["multiplex"].toObject());
+        return true;
+    }
+
+    bool shadowsocks::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "ss") return false;
+        outbound::ParseFromClash(object);
+        method = QString::fromStdString(object.cipher);
+        password = QString::fromStdString(object.password);
+        uot = object.udp_over_tcp;
+        if (!object.plugin.empty()) {
+            if (object.plugin == "v2ray-plugin") {
+                plugin = "v2ray-plugin";
+                QStringList ssPlugin;
+                clash::v2rayPlugin plugin_config = object.plugin_opts.get_value<clash::v2rayPlugin>();
+                if (plugin_config.tls) ssPlugin << "tls";
+                if (!plugin_config.host.empty()) ssPlugin << "host=" + QString::fromStdString(plugin_config.host);
+                if (!plugin_config.path.empty()) ssPlugin << "path=" + QString::fromStdString(plugin_config.path);
+                if (!plugin_config.mode.empty()) ssPlugin << "mode=" + QString::fromStdString(plugin_config.mode);
+                if (plugin_config.mux) ssPlugin << "mux";
+                plugin_opts = ssPlugin.join(";");
+            } else if (object.plugin == "obfs") {
+                plugin = "obfs-local";
+                QStringList ssPlugin;
+                clash::obfs plugin_config = object.plugin_opts.get_value<clash::obfs>();
+                if (!plugin_config.host.empty()) ssPlugin << "host=" + QString::fromStdString(plugin_config.host);
+                if (!plugin_config.mode.empty()) ssPlugin << "mode=" + QString::fromStdString(plugin_config.mode);
+                plugin_opts = ssPlugin.join(";");
+            }
+        }
+
+        multiplex->ParseFromClash(object);
         return true;
     }
 
@@ -124,7 +156,7 @@ namespace Configs {
         if (!plugin.isEmpty()) object["plugin"] = plugin;
         if (!plugin_opts.isEmpty()) object["plugin_opts"] = plugin_opts;
         if (uot) object["udp_over_tcp"] = uot;
-        if (multiplex->enabled) object["multiplex"] = multiplex->ExportToJson();
+        if (auto muxObj = multiplex->ExportToJson(); !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return object;
     }
 
@@ -142,7 +174,7 @@ namespace Configs {
         if (!plugin.isEmpty()) object["plugin"] = plugin;
         if (!plugin_opts.isEmpty()) object["plugin_opts"] = plugin_opts;
         if (uot) object["udp_over_tcp"] = uot;
-        if (auto obj = multiplex->Build().object; !obj.isEmpty()) object["multiplex"] = obj;
+        if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
     }
 

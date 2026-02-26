@@ -1,7 +1,7 @@
 package boxdns
 
 import (
-	"Core/internal/boxdns/winipcfg"
+	"ThroneCore/internal/boxdns/winipcfg"
 	"encoding/binary"
 	"github.com/gofrs/uuid/v5"
 	"github.com/sagernet/sing/common/control"

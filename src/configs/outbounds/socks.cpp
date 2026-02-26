@@ -10,7 +10,7 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
         if (query.hasQueryItem("version"))
@@ -53,6 +53,16 @@ namespace Configs {
         if (object.contains("password")) password = object["password"].toString();
         if (object.contains("version")) version = object["version"].toInt();
         if (object.contains("uot")) uot = object["uot"].toBool();
+        return true;
+    }
+
+    bool socks::ParseFromClash(const clash::Proxies& object)
+    {
+        if (object.type != "socks5") return false;
+        outbound::ParseFromClash(object);
+        username = QString::fromStdString(object.username);
+        password = QString::fromStdString(object.password);
+
         return true;
     }
 

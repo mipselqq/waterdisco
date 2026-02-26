@@ -66,12 +66,9 @@ namespace Configs {
         std::shared_ptr<Profile> GetProfileByName(const QString &name);
 
         QStringList GetAllProfileNames();
-
-        // Delete profile from database
-        void DeleteProfile(int id);
         
         // Delete multiple profiles
-        void BatchDeleteProfiles(const QList<int>& ids);
+        bool BatchDeleteProfiles(const QList<int>& ids);
         
         // Get all profile IDs in order
         QList<int> GetAllProfileIds() const;
@@ -79,5 +76,11 @@ namespace Configs {
         // Save profile to database (manual save, like old Save() method)
         // Only saves if profile has a valid ID (id >= 0)
         bool Save(const std::shared_ptr<Profile>& profile);
+
+        // Update only the traffic field of the profile in the database (no existence check, just UPDATE).
+        bool SaveTraffic(const std::shared_ptr<Profile>& profile);
+
+        // Batch save: runs on a new thread, filters to non-null and id >= 0, then batch replace (same chunking as AddProfileBatch).
+        void SaveBatch(const QList<std::shared_ptr<Profile>>& profiles);
     };
 }

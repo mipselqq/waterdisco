@@ -11,20 +11,20 @@ namespace Configs {
     {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
-        auto query = QUrlQuery(url.query(QUrl::ComponentFormattingOption::FullyDecoded));
+        auto query = QUrlQuery(url.query());
 
         outbound::ParseFromLink(link);
 
-        if (query.hasQueryItem("state_directory")) state_directory = QUrl::fromPercentEncoding(query.queryItemValue("state_directory").toUtf8());
-        if (query.hasQueryItem("auth_key")) auth_key = QUrl::fromPercentEncoding(query.queryItemValue("auth_key").toUtf8());
-        if (query.hasQueryItem("control_url")) control_url = QUrl::fromPercentEncoding(query.queryItemValue("control_url").toUtf8());
+        if (query.hasQueryItem("state_directory")) state_directory = query.queryItemValue("state_directory", QUrl::FullyDecoded);
+        if (query.hasQueryItem("auth_key")) auth_key = query.queryItemValue("auth_key", QUrl::FullyDecoded);
+        if (query.hasQueryItem("control_url")) control_url = query.queryItemValue("control_url", QUrl::FullyDecoded);
         if (query.hasQueryItem("ephemeral")) ephemeral = query.queryItemValue("ephemeral") == "true";
-        if (query.hasQueryItem("hostname")) hostname = QUrl::fromPercentEncoding(query.queryItemValue("hostname").toUtf8());
+        if (query.hasQueryItem("hostname")) hostname = query.queryItemValue("hostname", QUrl::FullyDecoded);
         if (query.hasQueryItem("accept_routes")) accept_routes = query.queryItemValue("accept_routes") == "true";
         if (query.hasQueryItem("exit_node")) exit_node = query.queryItemValue("exit_node");
         if (query.hasQueryItem("exit_node_allow_lan_access")) exit_node_allow_lan_access = query.queryItemValue("exit_node_allow_lan_access") == "true";
         if (query.hasQueryItem("advertise_routes")) {
-            advertise_routes = QUrl::fromPercentEncoding(query.queryItemValue("advertise_routes").toUtf8()).split(",");
+            advertise_routes = query.queryItemValue("advertise_routes", QUrl::FullyDecoded).split(",");
         }
         if (query.hasQueryItem("advertise_exit_node")) advertise_exit_node = query.queryItemValue("advertise_exit_node") == "true";
         if (query.hasQueryItem("globalDNS")) globalDNS = query.queryItemValue("globalDNS") == "true";

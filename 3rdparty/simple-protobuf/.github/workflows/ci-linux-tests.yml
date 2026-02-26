@@ -87,6 +87,7 @@ jobs:
           sudo apt-get install
           protobuf-compiler
           ninja-build
+    
     - name: Install gcc
       if: matrix.compiler == 'gcc'
       run: |

@@ -91,11 +91,6 @@ set(PROJECT_SOURCES
         3rdparty/quirc/quirc.c
         3rdparty/quirc/version_db.c
 
-        3rdparty/protorpc/rpc_client.cc
-        3rdparty/protorpc/rpc_conn.cc
-        3rdparty/protorpc/rpc_wire.cc
-        3rdparty/protorpc/wire.pb/wire.pb.cc
-
         3rdparty/SQLiteCpp/src/Backup.cpp
         3rdparty/SQLiteCpp/src/Column.cpp
         3rdparty/SQLiteCpp/src/Database.cpp
@@ -111,6 +106,7 @@ set(PROJECT_SOURCES
 
         include/configs/sub/GroupUpdater.hpp
         src/configs/sub/GroupUpdater.cpp
+        src/configs/sub/clash.cpp
 
         include/sys/Process.hpp
         src/sys/Process.cpp
@@ -330,6 +326,8 @@ set(PROJECT_SOURCES
 
         include/database/SettingsRepo.h
         src/database/SettingsRepo.cpp
+        include/sys/linux/systemChecks.h
+        src/sys/linux/systemChecks.cpp
 )
 
 if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)

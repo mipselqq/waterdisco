@@ -114,8 +114,8 @@ namespace Stats {
                     m->update_traffic_graph(proxy->downlink_rate, proxy->uplink_rate, direct->downlink_rate, direct->uplink_rate);
                 }
                 for (const auto &profile: profiles) {
-                    m->refresh_proxy_list(profile->id);
-                    Configs::dataManager->profilesRepo->Save(profile);
+                    m->refresh_proxy_list({profile->id});
+                    Configs::dataManager->profilesRepo->SaveTraffic(profile);
                 }
             });
         }
