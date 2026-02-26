@@ -1,5 +1,6 @@
 #include "include/ui/utils/ProfilesTableView.h"
 #include "include/ui/utils/ProfilesTableVerticalHeader.h"
+#include "include/ui/utils/ProfilesTableFilterHeader.h"
 #include "include/ui/utils/ProfilesTableModel.h"
 #include <QDragMoveEvent>
 #include <QHeaderView>
@@ -16,6 +17,8 @@ ProfilesTableView::ProfilesTableView(QWidget *parent)
 
     m_verticalHeader = new ProfilesTableVerticalHeader(this);
     setVerticalHeader(m_verticalHeader);
+    m_filterHeader = new ProfilesTableFilterHeader(this);
+    setHorizontalHeader(m_filterHeader);
 }
 
 void ProfilesTableView::setModel(QAbstractItemModel *model) {

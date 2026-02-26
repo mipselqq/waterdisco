@@ -25,7 +25,7 @@
 
 #include "include/database/RoutesRepo.h"
 
-
+#include "include/ui/utils/ProfilesTableFilterHeader.h"
 
 #include "include/ui/group/dialog_edit_group.h"
 
@@ -223,6 +223,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->splitter->installEventFilter(this);
     ui->tabWidget->installEventFilter(this);
     //
+    auto btnFilter = new QToolButton(this);
+    btnFilter->setIcon(QIcon(":/icon/filter.png"));
+    btnFilter->setToolTip(QString("%1\n%2").arg(tr("Enable Filter"), QKeySequence(QKeySequence::Find).toString(QKeySequence::NativeText)));
+    btnFilter->setShortcut(QKeySequence::Find);
+    btnFilter->setCheckable(true);
+    connect(btnFilter, &QToolButton::toggled, static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::setFiltersVisible);
+    ui->tabWidget->setCornerWidget(btnFilter, Qt::TopRightCorner);
+    //
     RegisterHotkey(false);
     //
     auto last_size = Configs::dataManager->settingsRepo->mw_size.split("x");
@@ -299,7 +307,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->profilesTableView->setModel(profilesTableModel);
     ui->profilesTableView->rowsSwapped = [=,this](int row1, int row2)
     {
-        if (!searchString.isEmpty()) return;
+        if (!addressFilterString.isEmpty() || !nameFilterString.isEmpty() || !typeFilterString.isEmpty() || !countryFilterString.isEmpty()) return;
         if (row1 == row2) return;
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         group->EmplaceProfile(row1, row2);
@@ -387,7 +395,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         menu.addSeparator();
         auto* sortByLabel = menu.addAction(tr("Sort By:"));
         sortByLabel->setEnabled(false);
-        menu.addSeparator();
 
         struct SortOption { int value; QString label; };
         QList<SortOption> options = {
@@ -435,24 +442,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->profilesTableView->setTabKeyNavigation(false);
 
     // search box
-    setSearchState(false);
-    connect(shortcut_ctrl_f, &QShortcut::activated, this, [=, this]
+    connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::typeFilterChanged, this, [=,this](const QString& currentText)
     {
-        setSearchState(true);
-        ui->search_input->setFocus();
-    });
-    connect(ui->search_input, &QLineEdit::textChanged, this, [=,this](const QString& currentText)
-    {
-       searchString = currentText;
+       typeFilterString = currentText;
        refresh_proxy_list({}, true);
     });
-    connect(shortcut_esc, &QShortcut::activated, this, [=,this] {
-        if (select_mode) {
-            emit profile_selected(-1);
-            select_mode = false;
-            refresh_status();
-        }
-        if (searchEnabled) setSearchState(false);
+    connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::addressFilterChanged, this, [=,this](const QString& currentText)
+    {
+       addressFilterString = currentText;
+       refresh_proxy_list({}, true);
+    });
+    connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::nameFilterChanged, this, [=,this](const QString& currentText)
+    {
+       nameFilterString = currentText;
+       refresh_proxy_list({}, true);
+    });
+    connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::testFilterChanged, this, [=,this](const QString& currentText)
+    {
+       countryFilterString = currentText;
+       refresh_proxy_list({}, true);
     });
 
     // refresh
@@ -1520,32 +1528,9 @@ void MainWindow::updateLogFilterFields() {
     excludeCombined.optimize();
 }
 
-void MainWindow::setSearchState(bool enable)
-{
-    searchEnabled = enable;
-    if (enable)
-    {
-        ui->data_view->hide();
-        ui->search_input->show();
-    } else
-    {
-        ui->search_input->blockSignals(true);
-        ui->search_input->clear();
-        ui->search_input->blockSignals(false);
-
-        ui->search_input->hide();
-        ui->data_view->show();
-        if (!searchString.isEmpty())
-        {
-            searchString.clear();
-            refresh_proxy_list({}, true);
-        }
-    }
-}
-
 QList<int> MainWindow::filterProfilesList(const QList<int>& profileIDs)
 {
-    if (searchString.isEmpty()) return profileIDs;
+    if (addressFilterString.isEmpty() && nameFilterString.isEmpty() && typeFilterString.isEmpty() && countryFilterString.isEmpty()) return profileIDs;
     QList<int> res;
     auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
     for (const auto& profile : profiles)
@@ -1555,8 +1540,10 @@ QList<int> MainWindow::filterProfilesList(const QList<int>& profileIDs)
             MW_show_log("Null profile, maybe data is corrupted");
             continue;
         }
-        if (searchString.isEmpty() || profile->outbound->name.contains(searchString, Qt::CaseInsensitive) || profile->outbound->server.contains(searchString, Qt::CaseInsensitive)
-            || (searchString.startsWith("CODE:") && searchString.mid(5) == profile->test_country))
+        if ((addressFilterString.isEmpty() || profile->outbound->server.contains(addressFilterString, Qt::CaseInsensitive))
+            && (nameFilterString.isEmpty() || profile->outbound->name.contains(nameFilterString, Qt::CaseInsensitive))
+            && (typeFilterString.isEmpty() || profile->type.contains(typeFilterString, Qt::CaseInsensitive))
+            && (countryFilterString.isEmpty() || profile->test_country.contains(countryFilterString, Qt::CaseInsensitive)))
             res.append(profile->id);
     }
     return res;
