@@ -82,7 +82,6 @@ public slots:
         name_filter->setVisible(visible);
         test_filter->setVisible(visible);
 
-        updateGeometries();
         emit geometriesChanged(); 
     }
 
