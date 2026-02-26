@@ -214,7 +214,10 @@ private:
 
     // search
     bool searchEnabled = false;
-    QString searchString;
+    QString addressFilterString;
+    QString nameFilterString;
+    QString typeFilterString;
+    QString countryFilterString;
 
     // log
     QStringList includeKeywords;
@@ -232,8 +235,6 @@ private:
     bool should_print_log(const QString &log);
 
     void updateLogFilterFields();
-
-    void setSearchState(bool enable);
 
     QList<int> filterProfilesList(const QList<int>& profileIDs);
 

@@ -23,4 +23,5 @@ protected:
 
 private:
     class ProfilesTableVerticalHeader *m_verticalHeader = nullptr;
+    class ProfilesTableFilterHeader *m_filterHeader = nullptr;
 };

@@ -126,6 +126,7 @@ set(PROJECT_SOURCES
         src/ui/utils/ProfilesTableView.cpp
         include/ui/utils/ProfilesTableVerticalHeader.h
         src/ui/utils/ProfilesTableVerticalHeader.cpp
+        include/ui/utils/ProfilesTableFilterHeader.h
 
         include/ui/profile/dialog_edit_profile.h
         src/ui/profile/dialog_edit_profile.cpp
