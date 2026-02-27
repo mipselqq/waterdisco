@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"time"
 )
 
@@ -28,8 +27,7 @@ func (s *Box) CloseWithTimeout(cancal context.CancelFunc, d time.Duration, logFu
 
 	select {
 	case <-t.C:
-		logFunc("[Warning] sing-box close takes longer than expected, force exiting to prevent lockup.")
-		os.Exit(0)
+		logFunc("[Warning] sing-box close takes longer than expected")
 	case <-done:
 		printCloseTime()
 	}
