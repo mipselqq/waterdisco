@@ -727,8 +727,6 @@ void MainWindow::profile_start(int _id) {
             return false;
         }
         //
-        Stats::trafficLooper->proxy = std::make_shared<Stats::TrafficData>("proxy");
-        Stats::trafficLooper->direct = std::make_shared<Stats::TrafficData>("direct");
         Stats::trafficLooper->SetEnts(result->outboundEntsForTraffic);
         Stats::trafficLooper->isChain = ent->type == "chain";
         Stats::trafficLooper->loop_enabled = true;

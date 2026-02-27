@@ -22,7 +22,7 @@ void ProxyItem::refresh_data() {
     ui->type->setText(ent->outbound->DisplayType());
     ui->name->setText(ent->outbound->DisplayName());
     ui->address->setText(ent->outbound->DisplayAddress());
-    ui->traffic->setText(ent->traffic_data->DisplayTraffic());
+    ui->traffic->setText(ent->DisplayTraffic());
     ui->test_result->setText(ent->DisplayTestResult());
 
     runOnThread(
