@@ -61,7 +61,7 @@ namespace Stats {
 
         if (isChain) {
             for (auto& e : entries) {
-                if (e.ent && e.tag != entries.last().tag && e.tag != "direct" && !e.tag.contains("route")) {
+                if (e.ent && e.tag != entries.last().tag && e.tag != "direct" && e.tag != "proxy" && !e.tag.contains("route")) {
                     e.ent->traffic_downlink += proxyDown;
                     e.ent->traffic_uplink += proxyUp;
                 }
