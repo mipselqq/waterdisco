@@ -533,7 +533,6 @@ namespace Configs {
         const long long dl = static_cast<long long>(profile->traffic_downlink);
         const long long up = static_cast<long long>(profile->traffic_uplink);
         runOnNewThread([=, this] {
-            QMutexLocker locker(&mutex);
             db.exec("UPDATE profiles SET traffic_dl = ?, traffic_up = ? WHERE id = ?", dl, up, id);
         });
         return true;
