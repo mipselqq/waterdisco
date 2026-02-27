@@ -426,4 +426,20 @@ namespace API {
         }
     }
 
+    libcore::GenWgKeyPairResponse Client::GenWgKeyPair(bool *rpcOK)
+    {
+        const libcore::EmptyReq request;
+        std::vector<uint8_t> resp;
+        auto status = default_grpc_channel->Call("GenWgKeyPair", spb::pb::serialize<std::string>(request),  resp);
+
+        if (status == QNetworkReply::NoError) {
+            auto reply = spb::pb::deserialize<libcore::GenWgKeyPairResponse>(resp);
+            *rpcOK = true;
+            return reply;
+        } else {
+            NOT_OK
+            return {};
+        }
+    }
+
 } // namespace API

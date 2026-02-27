@@ -15,8 +15,6 @@ namespace Stats {
         long long last_update = 0;
         double downlink_rate = 0;
         double uplink_rate = 0;
-        bool is_chain_tail = false;
-        bool ignore_for_rate = false;
     };
 
     inline QString DisplaySpeed(const std::shared_ptr<TrafficLooperEntry> &entry) {

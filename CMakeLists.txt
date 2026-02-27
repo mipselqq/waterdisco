@@ -328,6 +328,8 @@ set(PROJECT_SOURCES
         src/database/SettingsRepo.cpp
         include/sys/linux/systemChecks.h
         src/sys/linux/systemChecks.cpp
+        include/configs/sub/warp.h
+        src/configs/sub/warp.cpp
 )
 
 if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)

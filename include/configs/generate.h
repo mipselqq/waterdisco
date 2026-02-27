@@ -6,14 +6,6 @@
 
 namespace Configs
 {
-    enum OSType
-    {
-        Unknown = 0,
-        Linux = 1,
-        Windows = 2,
-        Darwin = 3,
-    };
-
     class ExtraCoreData
     {
         public:
@@ -72,6 +64,7 @@ namespace Configs
     class BuildConfigResult {
     public:
         QString error;
+        bool isChained = false;
         QJsonObject coreConfig;
         bool isXrayNeeded = false;
         QJsonObject xrayConfig;
@@ -131,6 +124,9 @@ namespace Configs
         }
         return link;
     }
+
+    constexpr int warpProfileID = -2408;
+    std::shared_ptr<Profile> getWarpProfile();
 
     void CalculatePrerequisities(std::shared_ptr<BuildSingBoxConfigContext> &ctx);
 
