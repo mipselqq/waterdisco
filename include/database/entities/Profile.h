@@ -20,7 +20,6 @@
 #include "include/configs/outbounds/xrayVless.h"
 
 #include "include/global/CountryHelper.hpp"
-#include "include/stats/traffic/TrafficData.hpp"
 
 namespace Configs {
     class Profile {
@@ -35,7 +34,9 @@ namespace Configs {
         QString ul_speed;
         QString test_country;
         std::shared_ptr<Configs::outbound> outbound;
-        std::shared_ptr<Stats::TrafficData> traffic_data = std::make_shared<Stats::TrafficData>("");
+
+        qint64 traffic_downlink = 0;
+        qint64 traffic_uplink = 0;
 
         QString ip_out;
 
@@ -47,6 +48,9 @@ namespace Configs {
         [[nodiscard]] QString DisplayTestResult() const;
 
         [[nodiscard]] QColor DisplayLatencyColor() const;
+
+        [[nodiscard]] QString DisplayTraffic() const;
+        void ResetTraffic();
 
         [[nodiscard]] Configs::socks *Socks() const {
             return dynamic_cast<Configs::socks *>(outbound.get());

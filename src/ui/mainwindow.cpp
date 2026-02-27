@@ -1808,7 +1808,7 @@ void MainWindow::on_menu_reset_traffic_triggered() {
     if (entIDs.count() == 0) return;
     auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
     for (const auto& ent: ents) {
-        ent->traffic_data->Reset();
+        ent->ResetTraffic();
         Configs::dataManager->profilesRepo->SaveTraffic(ent);
     }
     refresh_proxy_list(entIDs);

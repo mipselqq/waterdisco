@@ -1,9 +1,6 @@
 #pragma once
 #include <QJsonArray>
 #include <QJsonObject>
-#include <include/stats/traffic/TrafficData.hpp>
-
-
 
 #include "include/database/entities/Profile.h"
 
@@ -80,7 +77,7 @@ namespace Configs
         QJsonObject xrayConfig;
         std::shared_ptr<ExtraCoreData> extraCoreData = std::make_shared<ExtraCoreData>();
 
-        QList<std::shared_ptr<Profile>> outboundEntsForTraffic;
+        QList<std::pair<std::shared_ptr<Profile>, QString>> outboundEntsForTraffic;
     };
 
     class BuildSingBoxConfigContext

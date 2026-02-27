@@ -29,7 +29,8 @@ namespace Configs {
                 test_country TEXT,
                 ip_out TEXT,
                 outbound_json TEXT NOT NULL,
-                traffic_json TEXT,
+                traffic_dl INTEGER NOT NULL DEFAULT 0,
+                traffic_up INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 FOREIGN KEY(gid) REFERENCES groups(id) ON DELETE CASCADE
@@ -58,9 +59,8 @@ namespace Configs {
             json["outbound"] = profile->outbound->ExportToJson();
         }
         
-        if (profile->traffic_data) {
-            json["traffic"] = profile->traffic_data->ExportToJson();
-        }
+        json["traffic_dl"] = static_cast<qint64>(profile->traffic_downlink);
+        json["traffic_up"] = static_cast<qint64>(profile->traffic_uplink);
         
         return json;
     }
@@ -126,16 +126,14 @@ namespace Configs {
         }
         
         profile->outbound = std::shared_ptr<Configs::outbound>(outbound);
-        profile->traffic_data = std::make_shared<Stats::TrafficData>("");
         
         // Parse complex objects from JSON
         if (json.contains("outbound") && json["outbound"].isObject()) {
             profile->outbound->ParseFromJson(json["outbound"].toObject());
         }
         
-        if (json.contains("traffic") && json["traffic"].isObject() && profile->traffic_data) {
-            profile->traffic_data->ParseFromJson(json["traffic"].toObject());
-        }
+        if (json.contains("traffic_dl")) profile->traffic_downlink = json["traffic_dl"].toVariant().toLongLong();
+        if (json.contains("traffic_up")) profile->traffic_uplink = json["traffic_up"].toVariant().toLongLong();
         
         profile->name = profile->outbound->name;
         
@@ -147,34 +145,24 @@ namespace Configs {
         QJsonDocument doc(json);
         QString jsonStr = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
         
-        // Serialize complex objects separately for easier querying
-        QString outboundJson = "";
-        QString trafficJson = "";
-        
+        QString outboundJson;
         if (profile->outbound) {
             QJsonDocument outboundDoc(profile->outbound->ExportToJson());
             outboundJson = QString::fromUtf8(outboundDoc.toJson(QJsonDocument::Compact));
         }
+        QString name = profile->outbound ? profile->outbound->name : QString();
+        const long long traffic_dl = static_cast<long long>(profile->traffic_downlink);
+        const long long traffic_up = static_cast<long long>(profile->traffic_uplink);
         
-        if (profile->traffic_data) {
-            QJsonDocument trafficDoc(profile->traffic_data->ExportToJson());
-            trafficJson = QString::fromUtf8(trafficDoc.toJson(QJsonDocument::Compact));
-        }
-        
-        // Sync name with outbound->name if outbound exists
-        QString name = profile->outbound->name;
-        
-        // Check if profile exists
         auto checkQuery = db.query("SELECT id FROM profiles WHERE id = ?", id);
         bool exists = checkQuery && checkQuery->executeStep();
         
         if (exists) {
-            // Update
             db.exec(R"(
                 UPDATE profiles 
                 SET type = ?, name = ?, gid = ?, latency = ?, dl_speed = ?, ul_speed = ?, 
                     test_country = ?, ip_out = ?, outbound_json = ?,
-                    traffic_json = ?, updated_at = strftime('%s', 'now')
+                    traffic_dl = ?, traffic_up = ?, updated_at = strftime('%s', 'now')
                 WHERE id = ?
             )", 
                 profile->type.toStdString(),
@@ -186,16 +174,16 @@ namespace Configs {
                 profile->test_country.toStdString(),
                 profile->ip_out.toStdString(),
                 outboundJson.toStdString(),
-                trafficJson.toStdString(),
+                traffic_dl,
+                traffic_up,
                 id
             );
         } else {
-            // Insert
             db.exec(R"(
                 INSERT INTO profiles 
                 (id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
-                ip_out, outbound_json, traffic_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ip_out, outbound_json, traffic_dl, traffic_up)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 profile->type.toStdString(),
@@ -207,19 +195,16 @@ namespace Configs {
                 profile->test_country.toStdString(),
                 profile->ip_out.toStdString(),
                 outboundJson.toStdString(),
-                trafficJson.toStdString()
+                traffic_dl,
+                traffic_up
             );
         }
     }
 
     ProfileInsertRow ProfilesRepo::profileToInsertRow(const Profile* profile, int id, int gid) const {
         QString outboundJson;
-        QString trafficJson;
         if (profile->outbound) {
             outboundJson = QString::fromUtf8(QJsonDocument(profile->outbound->ExportToJson()).toJson(QJsonDocument::Compact));
-        }
-        if (profile->traffic_data) {
-            trafficJson = QString::fromUtf8(QJsonDocument(profile->traffic_data->ExportToJson()).toJson(QJsonDocument::Compact));
         }
         QString name = profile->outbound ? profile->outbound->name : QString();
         ProfileInsertRow row;
@@ -233,7 +218,8 @@ namespace Configs {
         row.test_country = profile->test_country.toStdString();
         row.ip_out = profile->ip_out.toStdString();
         row.outbound_json = outboundJson.toStdString();
-        row.traffic_json = trafficJson.toStdString();
+        row.traffic_dl = static_cast<long long>(profile->traffic_downlink);
+        row.traffic_up = static_cast<long long>(profile->traffic_uplink);
         return row;
     }
 
@@ -255,13 +241,8 @@ namespace Configs {
             json["outbound"] = outboundDoc.object();
         }
         
-        QString trafficJsonStr = QString::fromStdString(stmt.getColumn(10).getText());
-        if (!trafficJsonStr.isEmpty()) {
-            QJsonDocument trafficDoc = QJsonDocument::fromJson(trafficJsonStr.toUtf8());
-            if (!trafficDoc.isNull() && trafficDoc.isObject()) {
-                json["traffic"] = trafficDoc.object();
-            }
-        }
+        json["traffic_dl"] = static_cast<qint64>(stmt.getColumn(10).getInt64());
+        json["traffic_up"] = static_cast<qint64>(stmt.getColumn(11).getInt64());
         
         return profileFromJson(json);
     }
@@ -269,7 +250,7 @@ namespace Configs {
     std::shared_ptr<Profile> ProfilesRepo::loadFromDatabase(int id) const {
         auto query = db.query(R"(
             SELECT id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
-                   ip_out, outbound_json, traffic_json
+                   ip_out, outbound_json, traffic_dl, traffic_up
             FROM profiles WHERE id = ?
         )", id);
         if (!query || !query->executeStep()) {
@@ -400,7 +381,7 @@ namespace Configs {
             idList += QString::number(chunkIds[i]);
         }
         std::string sql = "SELECT id, type, name, gid, latency, dl_speed, ul_speed, test_country, "
-                         "ip_out, outbound_json, traffic_json FROM profiles WHERE id IN (" +
+                         "ip_out, outbound_json, traffic_dl, traffic_up FROM profiles WHERE id IN (" +
                          idList.toStdString() + ") ORDER BY id";
         auto query = db.query(sql);
         if (!query) return result;
@@ -548,14 +529,12 @@ namespace Configs {
         if (!profile || profile->id < 0) {
             return false;
         }
-        QString trafficJson;
-        if (profile->traffic_data) {
-            trafficJson = QString::fromUtf8(QJsonDocument(profile->traffic_data->ExportToJson()).toJson(QJsonDocument::Compact));
-        }
         const int id = profile->id;
+        const long long dl = static_cast<long long>(profile->traffic_downlink);
+        const long long up = static_cast<long long>(profile->traffic_uplink);
         runOnNewThread([=, this] {
-            db.exec("UPDATE profiles SET traffic_json = ? WHERE id = ?",
-                    trafficJson.toStdString(), id);
+            QMutexLocker locker(&mutex);
+            db.exec("UPDATE profiles SET traffic_dl = ?, traffic_up = ? WHERE id = ?", dl, up, id);
         });
         return true;
     }

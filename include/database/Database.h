@@ -20,7 +20,8 @@ namespace Configs {
         std::string test_country;
         std::string ip_out;
         std::string outbound_json;
-        std::string traffic_json;
+        long long traffic_dl = 0;
+        long long traffic_up = 0;
     };
     // Max bound parameters per statement (SQLite default SQLITE_MAX_VARIABLE_NUMBER is 999).
     constexpr int BATCH_LIMIT_WRITE = 1500;

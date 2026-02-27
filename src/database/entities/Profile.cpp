@@ -1,6 +1,7 @@
 #include <include/database/entities/Profile.h>
 
 #include "include/database/GroupsRepo.h"
+#include "include/global/Configs.hpp"
 
 namespace Configs
 {
@@ -56,6 +57,16 @@ namespace Configs
         } else {
             return {};
         }
+    }
+
+    QString Profile::DisplayTraffic() const {
+        if (traffic_downlink + traffic_uplink == 0) return "";
+        return UNICODE_LRO + QString("%1↑ %2↓").arg(ReadableSize(traffic_uplink), ReadableSize(traffic_downlink));
+    }
+
+    void Profile::ResetTraffic() {
+        traffic_downlink = 0;
+        traffic_uplink = 0;
     }
 
         QString ProfileFilter_ent_key(const std::shared_ptr<Configs::Profile> &ent) {

@@ -2,7 +2,6 @@
 #include "include/global/Configs.hpp"
 #include "include/database/entities/Profile.h"
 #include "include/configs/common/Outbound.h"
-#include "include/stats/traffic/TrafficData.hpp"
 #include <QApplication>
 #include <QMimeData>
 #include <QPalette>
@@ -105,7 +104,7 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         case 1: return profile->outbound ? profile->outbound->DisplayAddress() : QString();
         case 2: return profile->outbound ? profile->outbound->name : QString();
         case 3: return profile->DisplayTestResult();
-        case 4: return profile->traffic_data ? profile->traffic_data->DisplayTraffic() : QString();
+        case 4: return profile->DisplayTraffic();
         default: return {};
         }
     }

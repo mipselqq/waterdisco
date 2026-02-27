@@ -1,7 +1,6 @@
 #include "include/configs/generate.h"
 #include "include/api/RPC.h"
 #include "include/global/Configs.hpp"
-#include "include/global/Utils.hpp"
 
 #include <QApplication>
 #include <QFileInfo>
@@ -632,9 +631,7 @@ namespace Configs {
             {
                 ctx->outbounds.append(object);
             }
-            ent->traffic_data->id = ent->id;
-            ent->traffic_data->tag = tag.toStdString();
-            ctx->buildConfigResult->outboundEntsForTraffic += ent;
+            ctx->buildConfigResult->outboundEntsForTraffic.append({ent, tag});
         }
     }
 
