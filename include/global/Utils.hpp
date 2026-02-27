@@ -14,7 +14,7 @@
 //
 
 // OS
-enum OSType
+enum osType
 {
     Unknown = 0,
     Linux = 1,
@@ -22,7 +22,7 @@ enum OSType
     Darwin = 3,
 };
 
-inline OSType getOS()
+inline osType getOS()
 {
 #ifdef Q_OS_MACOS
     return Darwin;

@@ -82,7 +82,7 @@ namespace Configs
         bool isResolvedUsed = false;
         std::shared_ptr<Profile> ent = std::make_shared<Profile>(nullptr, nullptr);
         std::shared_ptr<BuildPrerequisities> buildPrerequisities = std::make_shared<BuildPrerequisities>();
-        OSType os;
+        osType os;
 
         QString error;
         QStringList warnings;
