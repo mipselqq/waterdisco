@@ -12,9 +12,8 @@
 #include <QToolTip>
 #include <include/api/RPC.h>
 
+#include "include/configs/sub/warp.h"
 #include "include/database/RoutesRepo.h"
-
-
 
 void DialogManageRoutes::reloadProfileItems() {
     if (chainList.empty()) {
@@ -170,6 +169,41 @@ DialogManageRoutes::DialogManageRoutes(QWidget *parent) : QDialog(parent), ui(ne
         ui->redirect_listenport->setEnabled(state);
     });
 
+    // warp
+    ui->enable_warp->setChecked(Configs::dataManager->settingsRepo->enable_warp);
+    ui->warp_private_key->setText(Configs::dataManager->settingsRepo->warp_private_key);
+    ui->warp_public_key->setText(Configs::dataManager->settingsRepo->warp_public_key);
+    ui->warp_ifc_addrs->setText(Configs::dataManager->settingsRepo->warp_ifc_addrs.join(","));
+    ui->warp_ep->setText(Configs::dataManager->settingsRepo->warp_ep);
+    connect(ui->warp_autogen, &QPushButton::clicked, this, [=,this] {
+        auto originalText = ui->warp_autogen->text();
+        ui->warp_autogen->setText("Getting keypair...");
+        bool ok;
+        auto keyPair = API::defaultClient->GenWgKeyPair(&ok);
+        if (!ok) {
+            runOnUiThread([=] {
+               MessageBoxWarning("Failed to get key pair", keyPair.error->c_str());
+            });
+            ui->warp_autogen->setText(originalText);
+            return;
+        }
+        ui->warp_autogen->setText("Generating config...");
+        QString error;
+        auto conf = Configs_network::genWarpConfig(&error, keyPair.private_key->c_str(), keyPair.public_key->c_str());
+        if (!error.isEmpty()) {
+            runOnUiThread([=] {
+                MessageBoxWarning("Failed to generate warp config", error);
+            });
+            ui->warp_autogen->setText(originalText);
+            return;
+        }
+        ui->warp_private_key->setText(conf->privateKey);
+        ui->warp_public_key->setText(conf->publicKey);
+        ui->warp_ep->setText(conf->endpoint);
+        ui->warp_autogen->setText("Success!");
+        setTimeout([=,this] { ui->warp_autogen->setText(originalText); }, this, 2000);
+    });
+
     ADD_ASTERISK(this)
 }
 
@@ -224,6 +258,13 @@ void DialogManageRoutes::accept() {
     Configs::dataManager->settingsRepo->enable_redirect = ui->redirect_enable->isChecked();
     Configs::dataManager->settingsRepo->redirect_listen_address = ui->redirect_listenaddr->text();
     Configs::dataManager->settingsRepo->redirect_listen_port = ui->redirect_listenport->text().toInt();
+
+    // warp
+    Configs::dataManager->settingsRepo->enable_warp = ui->enable_warp->isChecked();
+    Configs::dataManager->settingsRepo->warp_ep = ui->warp_ep->text();
+    Configs::dataManager->settingsRepo->warp_ifc_addrs = SplitAndTrim(ui->warp_ifc_addrs->text(), ",", false);
+    Configs::dataManager->settingsRepo->warp_private_key = ui->warp_private_key->text();
+    Configs::dataManager->settingsRepo->warp_public_key = ui->warp_public_key->text();
 
     //
     QStringList msg{"UpdateConfigs::dataManager->settingsRepo"};

@@ -619,6 +619,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         });
         ui->menuRouting_Menu->addAction(actionAdblock);
 
+        auto* actionWarp = new QAction(ui->menuRouting_Menu);
+        actionWarp->setText("Enable Warp");
+        actionWarp->setCheckable(true);
+        actionWarp->setChecked(Configs::dataManager->settingsRepo->enable_warp);
+        connect(actionWarp, &QAction::triggered, this, [=,this](bool checked) {
+            Configs::dataManager->settingsRepo->enable_warp = checked;
+            actionWarp->setChecked(checked);
+            Configs::dataManager->settingsRepo->Save();
+            if (Configs::dataManager->settingsRepo->started_id >= 0) profile_start(Configs::dataManager->settingsRepo->started_id);
+        });
+        ui->menuRouting_Menu->addAction(actionWarp);
+
         mu_remoteRouteProfiles.lock();
         if(!remoteRouteProfiles.isEmpty()) {
             QMenu* profilesMenu = ui->menuRouting_Menu->addMenu(QObject::tr("Download Profiles"));

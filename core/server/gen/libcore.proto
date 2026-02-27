@@ -22,6 +22,8 @@ service LibcoreService {
   rpc QueryCountryTest(EmptyReq) returns(QueryCountryTestResponse);
   rpc IPTest(IPTestRequest) returns (IPTestResp);
   rpc QueryIPTest(EmptyReq) returns (QueryIPTestResponse);
+  //
+  rpc GenWgKeyPair(EmptyReq) returns (GenWgKeyPairResponse);
 }
 
 message EmptyReq {}
@@ -166,3 +168,8 @@ message QueryIPTestResponse {
   repeated IPTestRes results = 1;
 }
 
+message GenWgKeyPairResponse {
+  optional string private_key = 1 [default = ""];
+  optional string public_key = 2 [default = ""];
+  optional string error = 3 [default = ""];
+}

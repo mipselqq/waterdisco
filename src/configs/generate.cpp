@@ -44,20 +44,6 @@ namespace Configs {
         }
     }
 
-    inline OSType getOS()
-    {
-#ifdef Q_OS_MACOS
-        return Darwin;
-#endif
-#ifdef Q_OS_LINUX
-        return Linux;
-#endif
-#ifdef Q_OS_WIN
-        return Windows;
-#endif
-        return Unknown;
-    }
-
     QStringList getChainDomains (const std::shared_ptr<Profile>& ent, QString &error)
     {
         QStringList domains;
@@ -95,6 +81,28 @@ namespace Configs {
         }
 
         return domains;
+    }
+
+    std::shared_ptr<Profile> getWarpProfile() {
+        auto warpProfile = std::make_shared<Profile>();
+        warpProfile->name = "warp";
+        warpProfile->id = warpProfileID;
+        warpProfile->type = "wireguard";
+        auto outbound = std::make_shared<wireguard>();
+        outbound->name = "warp";
+        outbound->server = dataManager->settingsRepo->warp_ep.contains(":") ? SubStrBefore(dataManager->settingsRepo->warp_ep, ":") : dataManager->settingsRepo->warp_ep;
+        outbound->server_port = dataManager->settingsRepo->warp_ep.contains(":") ? SubStrAfter(dataManager->settingsRepo->warp_ep, ":").toInt() : 2408;
+        outbound->private_key = dataManager->settingsRepo->warp_private_key;
+        outbound->address = dataManager->settingsRepo->warp_ifc_addrs;
+        auto peer = std::make_shared<Peer>();
+        peer->public_key = dataManager->settingsRepo->warp_public_key;
+        peer->address = outbound->server;
+        peer->port = outbound->server_port;
+        outbound->peer = peer;
+        outbound->mtu = 1280;
+
+        warpProfile->outbound = outbound;
+        return warpProfile;
     }
 
     void CalculatePrerequisities(std::shared_ptr<BuildSingBoxConfigContext> &ctx) {
@@ -558,6 +566,10 @@ namespace Configs {
         bool hasXray = false;
         for (auto id : entIDs)
         {
+            if (id == warpProfileID) {
+                ents.append(getWarpProfile());
+                continue;
+            }
             auto ent = Configs::dataManager->profilesRepo->GetProfile(id);
             if (ent == nullptr)
             {
@@ -660,6 +672,9 @@ namespace Configs {
             entIDs.append(ctx->ent->id);
         }
         if (group->front_proxy_id >= 0 && !noChain) entIDs.append(group->front_proxy_id);
+        if (dataManager->settingsRepo->enable_warp) {
+            entIDs.prepend(warpProfileID);
+        }
         buildOutboundChain(ctx, entIDs, "config", true, true);
 
         // Now, build the outbounds needed by the route profile
@@ -671,6 +686,7 @@ namespace Configs {
         {"tag", "direct"}
         });
 
+        if (entIDs.size() > 1) ctx->buildConfigResult->isChained = true;
         ctx->buildConfigResult->coreConfig["endpoints"] = ctx->endpoints;
         ctx->buildConfigResult->coreConfig["outbounds"] = ctx->outbounds;
     }

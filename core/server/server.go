@@ -6,6 +6,7 @@ import (
 	"ThroneCore/internal/boxmain"
 	"ThroneCore/internal/process"
 	"ThroneCore/internal/sys"
+	"ThroneCore/internal/wg"
 	"ThroneCore/internal/xray"
 	"ThroneCore/test_utils"
 	"context"
@@ -533,4 +534,16 @@ func (s *server) QueryCountryTest(ctx context.Context, _ *gen.EmptyReq) (out *ge
 		})
 	}
 	return
+}
+
+func (s *server) GenWgKeyPair(ctx context.Context, _ *gen.EmptyReq) (out *gen.GenWgKeyPairResponse, _ error) {
+	var res gen.GenWgKeyPairResponse
+	privateKey, err := wg.GeneratePrivateKey()
+	if err != nil {
+		res.Error = To(err.Error())
+		return &res, nil
+	}
+	res.PrivateKey = To(privateKey.String())
+	res.PublicKey = To(privateKey.PublicKey().String())
+	return &res, nil
 }

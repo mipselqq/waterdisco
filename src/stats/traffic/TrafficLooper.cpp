@@ -25,50 +25,45 @@ namespace Stats {
         proxy->downlink_rate = 0;
 
         int proxyUp = 0, proxyDown = 0;
-        const auto now = static_cast<long long>(elapsedTimer.elapsed());
 
         for (auto& e : entries) {
             const QString tag = e.tag;
             if (!resp.ups.contains(tag.toStdString())) continue;
+            auto now = elapsedTimer.elapsed();
+            auto interval = now - e.last_update;
+            e.last_update = now;
+            if (interval <= 0) continue;
             const auto up = resp.ups.at(tag.toStdString());
             const auto down = resp.downs.at(tag.toStdString());
-            if (tag == "proxy") {
+            if (e.tag == "proxy")
+            {
                 proxyUp = up;
                 proxyDown = down;
             }
-
-            const auto interval = now - e.last_update;
-            e.last_update = now;
-            if (interval <= 0) continue;
-
             e.uplink += up;
             e.downlink += down;
+            if (e.ent) {
+                e.ent->traffic_uplink += up;
+                e.ent->traffic_downlink += down;
+            }
             e.uplink_rate = static_cast<double>(up) * 1000.0 / static_cast<double>(interval);
             e.downlink_rate = static_cast<double>(down) * 1000.0 / static_cast<double>(interval);
-
-            if (e.ent) {
-                e.ent->traffic_downlink = e.downlink;
-                e.ent->traffic_uplink = e.uplink;
-                if (!e.ignore_for_rate) {
-                    proxy->uplink_rate += e.uplink_rate;
-                    proxy->downlink_rate += e.downlink_rate;
-                }
-            } else {
-                direct->last_update = now;
-                direct->uplink += up;
-                direct->downlink += down;
+            if (e.tag == "direct")
+            {
                 direct->uplink_rate = e.uplink_rate;
                 direct->downlink_rate = e.downlink_rate;
+            } else
+            {
+                proxy->uplink_rate += e.uplink_rate;
+                proxy->downlink_rate += e.downlink_rate;
             }
         }
 
         if (isChain) {
             for (auto& e : entries) {
-                if (e.ent && e.is_chain_tail) {
-                    e.downlink += proxyDown;
-                    e.uplink += proxyUp;
-                    e.ent->traffic_downlink = e.downlink;
-                    e.ent->traffic_uplink = e.uplink;
+                if (e.ent && e.tag != entries.last().tag && e.tag != "direct" && !e.tag.contains("route")) {
+                    e.ent->traffic_downlink += proxyDown;
+                    e.ent->traffic_uplink += proxyUp;
                 }
             }
         }

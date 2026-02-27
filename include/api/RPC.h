@@ -46,6 +46,8 @@ namespace API {
 
         libcore::QueryCountryTestResponse QueryCountryTestResults(bool *rpcOK);
 
+        libcore::GenWgKeyPairResponse GenWgKeyPair(bool *rpcOK);
+
     private:
         std::function<std::unique_ptr<QtGrpc::Http2GrpcChannelPrivate>()> make_grpc_channel;
         std::unique_ptr<QtGrpc::Http2GrpcChannelPrivate> default_grpc_channel;

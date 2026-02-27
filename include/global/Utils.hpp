@@ -13,6 +13,46 @@
 #endif
 //
 
+// OS
+enum OSType
+{
+    Unknown = 0,
+    Linux = 1,
+    Windows = 2,
+    Darwin = 3,
+};
+
+inline OSType getOS()
+{
+#ifdef Q_OS_MACOS
+    return Darwin;
+#endif
+#ifdef Q_OS_LINUX
+    return Linux;
+#endif
+#ifdef Q_OS_WIN
+    return Windows;
+#endif
+    return Unknown;
+}
+
+inline QString getOSString() {
+    auto os = getOS();
+    if (os == Linux) {
+        return "Linux";
+    }
+    if (os == Darwin) {
+        return "Darwin";
+    }
+    if (os == Windows) {
+        return "Windows";
+    }
+    if (os == Unknown) {
+        return "Unknown";
+    }
+    return "Unknown";
+}
+
 inline QString software_name;
 inline QString software_core_name;
 
