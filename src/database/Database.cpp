@@ -95,8 +95,8 @@ namespace Configs {
                 stmt.bind(idx++, r.test_country);
                 stmt.bind(idx++, r.ip_out);
                 stmt.bind(idx++, r.outbound_json);
-                stmt.bind(idx++, r.traffic_dl);
-                stmt.bind(idx++, r.traffic_up);
+                stmt.bind(idx++, static_cast<int64_t>(r.traffic_dl));
+                stmt.bind(idx++, static_cast<int64_t>(r.traffic_up));
             }
             stmt.exec();
             maybeCheckpoint(static_cast<int>(rows.size()));
@@ -127,8 +127,8 @@ namespace Configs {
                 stmt.bind(idx++, r.test_country);
                 stmt.bind(idx++, r.ip_out);
                 stmt.bind(idx++, r.outbound_json);
-                stmt.bind(idx++, r.traffic_dl);
-                stmt.bind(idx++, r.traffic_up);
+                stmt.bind(idx++, static_cast<int64_t>(r.traffic_dl));
+                stmt.bind(idx++, static_cast<int64_t>(r.traffic_up));
             }
             stmt.exec();
             maybeCheckpoint(static_cast<int>(rows.size()));
