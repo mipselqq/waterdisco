@@ -153,7 +153,7 @@ func (s *server) Stop(ctx context.Context, in *gen.EmptyReq) (out *gen.ErrorResp
 			log.Println("Failed to unset system DNS:", err)
 		}
 	}
-	boxInstance.CloseWithTimeout(instanceCancel, time.Second*2, log.Println)
+	boxInstance.CloseWithTimeout(instanceCancel, time.Second*2, log.Println, true)
 
 	boxInstance = nil
 
@@ -213,7 +213,7 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 		if err != nil {
 			return nil, err
 		}
-		defer testInstance.CloseWithTimeout(cancel, 2*time.Second, log.Println)
+		defer testInstance.CloseWithTimeout(cancel, 2*time.Second, log.Println, false)
 	}
 
 	outboundTags := in.OutboundTags
@@ -290,7 +290,7 @@ func (s *server) IPTest(ctx context.Context, in *gen.IPTestRequest) (*gen.IPTest
 	if err != nil {
 		return nil, err
 	}
-	defer testInstance.CloseWithTimeout(cancel, 2*time.Second, log.Println)
+	defer testInstance.CloseWithTimeout(cancel, 2*time.Second, log.Println, false)
 
 	outboundTags := in.OutboundTags
 	if *in.UseDefaultOutbound {
