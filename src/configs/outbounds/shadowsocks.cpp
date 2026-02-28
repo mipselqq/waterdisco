@@ -84,8 +84,8 @@ namespace Configs {
                 plugin = "obfs-local";
                 QStringList ssPlugin;
                 clash::obfs plugin_config = object.plugin_opts.get_value<clash::obfs>();
-                if (!plugin_config.host.empty()) ssPlugin << "host=" + QString::fromStdString(plugin_config.host);
-                if (!plugin_config.mode.empty()) ssPlugin << "mode=" + QString::fromStdString(plugin_config.mode);
+                if (!plugin_config.mode.empty()) ssPlugin << "obfs=" + QString::fromStdString(plugin_config.mode);
+                if (!plugin_config.host.empty()) ssPlugin << "obfs-host=" + QString::fromStdString(plugin_config.host);
                 plugin_opts = ssPlugin.join(";");
             }
         }
