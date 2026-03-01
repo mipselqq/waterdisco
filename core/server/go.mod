@@ -8,7 +8,7 @@ require (
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/sagernet/sing v0.8.0-beta.16.0.20260227013657-e419e9875a07
-	github.com/sagernet/sing-box v1.13.0-rc.4
+	github.com/sagernet/sing-box v1.13.0
 	github.com/sagernet/sing-tun v0.8.0-beta.18
 	github.com/spf13/cobra v1.10.2
 	github.com/xtls/xray-core v1.251208.0
