@@ -2428,7 +2428,9 @@ void MainWindow::on_tabWidget_customContextMenuRequested(const QPoint &p) {
         auto id = Configs::dataManager->groupsRepo->GetGroupsTabOrder()[clickedIndex];
         if (QMessageBox::question(this, tr("Confirmation"), tr("Remove %1?").arg(Configs::dataManager->groupsRepo->GetGroup(id)->name)) ==
             QMessageBox::StandardButton::Yes) {
-            profile_stop(false, true, false);
+            if (running != nullptr) {
+                if (running->gid == id) profile_stop(false, true, false);
+            }
             Configs::dataManager->groupsRepo->DeleteGroup(id);
             MW_dialog_message(Dialog_DialogManageGroups, "refresh-1");
         }
