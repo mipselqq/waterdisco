@@ -2,7 +2,7 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ru_RU">
 <context>
-    <name></name>
+    <name>QObject</name>
     <message>
         <source>Request with proxy but no profile started.</source>
         <translation>Запрос через прокси, но профиль не запущен.</translation>
