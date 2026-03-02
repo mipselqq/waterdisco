@@ -2,7 +2,7 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN">
 <context>
-    <name></name>
+    <name>QObject</name>
     <message>
         <source>Request with proxy but no profile started.</source>
         <translation type="unfinished">使用代理请求，但未启动代理配置档。</translation>

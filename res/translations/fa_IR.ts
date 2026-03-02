@@ -2,7 +2,7 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="fa_IR" sourcelanguage="en">
 <context>
-    <name></name>
+    <name>QObject</name>
     <message>
         <source>Request with proxy but no profile started.</source>
         <translation type="unfinished">درخواست با پروکسی اما هیچ نمایه‌ای شروع نشده است.</translation>
