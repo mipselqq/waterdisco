@@ -71,7 +71,6 @@ set(PROJECT_SOURCES
         src/global/DeviceDetailsHelper.cpp
         src/global/CountryHelper.cpp
 
-        3rdparty/base64.cpp
         3rdparty/qrcodegen.cpp
         3rdparty/QtExtKeySequenceEdit.cpp
         3rdparty/QrDecoder.cpp
