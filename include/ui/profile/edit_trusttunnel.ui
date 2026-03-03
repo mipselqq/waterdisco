@@ -58,19 +58,16 @@
        <string>reno</string>
       </property>
      </item>
-    </widget>
      <item>
       <property name="text">
        <string>bbr_standard</string>
       </property>
      </item>
-    </widget>
      <item>
       <property name="text">
        <string>bbr2</string>
       </property>
      </item>
-    </widget>
      <item>
       <property name="text">
        <string>bbr_variant</string>
