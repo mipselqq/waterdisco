@@ -36,6 +36,7 @@ require (
 	github.com/database64128/tfo-go/v2 v2.3.2 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
 	github.com/dgryski/go-metro v0.0.0-20200812162917-85c65e2d0165 // indirect
+	github.com/dyhkwong/sing-juicity v0.1.0-beta.6 // indirect
 	github.com/ebitengine/purego v0.9.1 // indirect
 	github.com/florianl/go-nfqueue/v2 v2.0.2 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -151,6 +152,7 @@ require (
 	github.com/vishvananda/netlink v1.3.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/xchacha20-poly1305/sing-trusttunnel v0.2.0 // indirect
 	github.com/xtls/reality v0.0.0-20251014195629-e4eec4520535 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -176,4 +178,4 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260301182945-aef88ff6918e
+replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260302211354-6ff5bb6b50b4
