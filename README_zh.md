@@ -27,6 +27,10 @@
 - TUIC
 - Hysteria
 - Hysteria2
+- AnyTLS
+- Juicity
+- TrustTunnel
+- ShadowTLS
 - Wireguard
 - SSH
 - Custom Outbound
