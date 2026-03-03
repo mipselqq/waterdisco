@@ -243,6 +243,13 @@ namespace Subscription {
             if (!ok) return;
         }
 
+        // Juicity
+        if (str.startsWith("juicity://")) {
+            ent = Configs::ProfilesRepo::NewProfile("juicity");
+            auto ok = ent->Juicity()->ParseFromLink(str);
+            if (!ok) return;
+        }
+
         // Wireguard
         if (str.startsWith("wg://")) {
             ent = Configs::ProfilesRepo::NewProfile("wireguard");
@@ -358,6 +365,13 @@ namespace Subscription {
             if (out["type"] == "tuic") {
                 ent = Configs::ProfilesRepo::NewProfile("tuic");
                 auto ok = ent->TUIC()->ParseFromJson(out);
+                if (!ok) continue;
+            }
+
+            // Juicity
+            if (out["type"] == "juicity") {
+                ent = Configs::ProfilesRepo::NewProfile("juicity");
+                auto ok = ent->Juicity()->ParseFromJson(out);
                 if (!ok) continue;
             }
 

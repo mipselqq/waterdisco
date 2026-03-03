@@ -108,6 +108,8 @@ namespace Configs {
             outbound = new Configs::hysteria();
         } else if (type == "tuic") {
             outbound = new Configs::tuic();
+        } else if (type == "juicity") {
+            outbound = new Configs::juicity();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
         } else if (type == "wireguard") {
@@ -283,6 +285,8 @@ namespace Configs {
             outbound = new Configs::hysteria();
         } else if (type == "tuic") {
             outbound = new Configs::tuic();
+        } else if (type == "juicity") {
+            outbound = new Configs::juicity();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
         } else if (type == "wireguard") {
