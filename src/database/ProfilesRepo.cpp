@@ -110,6 +110,8 @@ namespace Configs {
             outbound = new Configs::tuic();
         } else if (type == "juicity") {
             outbound = new Configs::juicity();
+        } else if (type == "trusttunnel") {
+            outbound = new Configs::trusttunnel();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
         } else if (type == "shadowtls") {
@@ -289,6 +291,8 @@ namespace Configs {
             outbound = new Configs::tuic();
         } else if (type == "juicity") {
             outbound = new Configs::juicity();
+        } else if (type == "trusttunnel") {
+            outbound = new Configs::trusttunnel();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
         } else if (type == "shadowtls") {

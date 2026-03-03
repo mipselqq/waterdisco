@@ -250,6 +250,13 @@ namespace Subscription {
             if (!ok) return;
         }
 
+        // TrustTunnel
+        if (str.startsWith("tt://")) {
+            ent = Configs::ProfilesRepo::NewProfile("trusttunnel");
+            auto ok = ent->TrustTunnel()->ParseFromLink(str);
+            if (!ok) return;
+        }
+
         // ShadowTLS
         if (str.startsWith("shadowtls://")) {
             ent = Configs::ProfilesRepo::NewProfile("shadowtls");
@@ -379,6 +386,13 @@ namespace Subscription {
             if (out["type"] == "juicity") {
                 ent = Configs::ProfilesRepo::NewProfile("juicity");
                 auto ok = ent->Juicity()->ParseFromJson(out);
+                if (!ok) continue;
+            }
+
+            // TrustTunnel
+            if (out["type"] == "trusttunnel") {
+                ent = Configs::ProfilesRepo::NewProfile("trusttunnel");
+                auto ok = ent->TrustTunnel()->ParseFromJson(out);
                 if (!ok) continue;
             }
 
