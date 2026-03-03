@@ -31,6 +31,7 @@
 #include "include/ui/profile/edit_trojan.h"
 #include "include/ui/profile/edit_tuic.h"
 #include "include/ui/profile/edit_juicity.h"
+#include "include/ui/profile/edit_trusttunnel.h"
 #include "include/ui/profile/edit_shadowtls.h"
 #include "include/ui/profile/edit_xrayvless.h"
 
@@ -225,6 +226,7 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
         LOAD_TYPE("hysteria")
         LOAD_TYPE("tuic")
         LOAD_TYPE("juicity")
+        LOAD_TYPE("trusttunnel")
         LOAD_TYPE("anytls")
         LOAD_TYPE("shadowtls")
         LOAD_TYPE("wireguard")
@@ -316,6 +318,10 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         innerEditor = _innerWidget;
     } else if (type == "juicity") {
         auto _innerWidget = new EditJuicity(this);
+        innerWidget = _innerWidget;
+        innerEditor = _innerWidget;
+    } else if (type == "trusttunnel") {
+        auto _innerWidget = new EditTrustTunnel(this);
         innerWidget = _innerWidget;
         innerEditor = _innerWidget;
     } else if (type == "anytls") {
