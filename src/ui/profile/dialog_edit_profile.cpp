@@ -31,6 +31,7 @@
 #include "include/ui/profile/edit_trojan.h"
 #include "include/ui/profile/edit_tuic.h"
 #include "include/ui/profile/edit_juicity.h"
+#include "include/ui/profile/edit_shadowtls.h"
 #include "include/ui/profile/edit_xrayvless.h"
 
 #define ADJUST_SIZE runOnThread([=,this] { adjustSize(); adjustPosition(mainwindow); }, this);
@@ -225,6 +226,7 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
         LOAD_TYPE("tuic")
         LOAD_TYPE("juicity")
         LOAD_TYPE("anytls")
+        LOAD_TYPE("shadowtls")
         LOAD_TYPE("wireguard")
         LOAD_TYPE("tailscale")
         LOAD_TYPE("ssh")
@@ -318,6 +320,10 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         innerEditor = _innerWidget;
     } else if (type == "anytls") {
         auto _innerWidget = new EditAnyTLS(this);
+        innerWidget = _innerWidget;
+        innerEditor = _innerWidget;
+    } else if (type == "shadowtls") {
+        auto _innerWidget = new EditShadowTLS(this);
         innerWidget = _innerWidget;
         innerEditor = _innerWidget;
     } else if (type == "wireguard") {

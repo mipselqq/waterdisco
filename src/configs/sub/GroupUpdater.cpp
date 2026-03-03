@@ -250,6 +250,13 @@ namespace Subscription {
             if (!ok) return;
         }
 
+        // ShadowTLS
+        if (str.startsWith("shadowtls://")) {
+            ent = Configs::ProfilesRepo::NewProfile("shadowtls");
+            auto ok = ent->ShadowTLS()->ParseFromLink(str);
+            if (!ok) return;
+        }
+
         // Wireguard
         if (str.startsWith("wg://")) {
             ent = Configs::ProfilesRepo::NewProfile("wireguard");
@@ -372,6 +379,13 @@ namespace Subscription {
             if (out["type"] == "juicity") {
                 ent = Configs::ProfilesRepo::NewProfile("juicity");
                 auto ok = ent->Juicity()->ParseFromJson(out);
+                if (!ok) continue;
+            }
+
+            // ShadowTLS
+            if (out["type"] == "shadowtls") {
+                ent = Configs::ProfilesRepo::NewProfile("shadowtls");
+                auto ok = ent->ShadowTLS()->ParseFromJson(out);
                 if (!ok) continue;
             }
 

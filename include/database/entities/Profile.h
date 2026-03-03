@@ -16,6 +16,7 @@
 #include "include/configs/outbounds/trojan.h"
 #include "include/configs/outbounds/tuic.h"
 #include "include/configs/outbounds/juicity.h"
+#include "include/configs/outbounds/shadowtls.h"
 #include "include/configs/outbounds/vless.h"
 #include "include/configs/outbounds/vmess.h"
 #include "include/configs/outbounds/xrayVless.h"
@@ -103,6 +104,10 @@ namespace Configs {
 
         [[nodiscard]] Configs::juicity *Juicity() const {
             return dynamic_cast<Configs::juicity *>(outbound.get());
+        };
+
+        [[nodiscard]] Configs::shadowtls *ShadowTLS() const {
+            return dynamic_cast<Configs::shadowtls *>(outbound.get());
         };
 
         [[nodiscard]] Configs::wireguard *Wireguard() const {

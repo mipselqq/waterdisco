@@ -112,6 +112,8 @@ namespace Configs {
             outbound = new Configs::juicity();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
+        } else if (type == "shadowtls") {
+            outbound = new Configs::shadowtls();
         } else if (type == "wireguard") {
             outbound = new Configs::wireguard();
         } else if (type == "tailscale") {
@@ -289,6 +291,8 @@ namespace Configs {
             outbound = new Configs::juicity();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
+        } else if (type == "shadowtls") {
+            outbound = new Configs::shadowtls();
         } else if (type == "wireguard") {
             outbound = new Configs::wireguard();
         } else if (type == "tailscale") {
