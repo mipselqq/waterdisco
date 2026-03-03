@@ -183,7 +183,7 @@ namespace Configs {
         if (query.hasQueryItem("allowInsecure")) insecure = query.queryItemValue("allowInsecure").replace("1", "true") == "true";
         if (query.hasQueryItem("allow_insecure")) insecure = query.queryItemValue("allow_insecure").replace("1", "true") == "true";
         if (query.hasQueryItem("insecure")) insecure = query.queryItemValue("insecure").replace("1", "true") == "true";
-        if (query.hasQueryItem("alpn")) alpn = query.queryItemValue("alpn").split(",");
+        if (query.hasQueryItem("alpn")) alpn = query.queryItemValue("alpn", QUrl::FullyDecoded).split(",");
         if (query.hasQueryItem("tls_min_version")) min_version = query.queryItemValue("tls_min_version");
         if (query.hasQueryItem("tls_max_version")) max_version = query.queryItemValue("tls_max_version");
         if (query.hasQueryItem("tls_cipher_suites")) cipher_suites = query.queryItemValue("tls_cipher_suites").split(",");
