@@ -13,7 +13,7 @@ EditTrustTunnel::~EditTrustTunnel() {
 
 void EditTrustTunnel::onStart(std::shared_ptr<Configs::Profile> _ent) {
     this->ent = _ent;
-    auto outbound = ent->EditTrustTunnel();
+    auto outbound = ent->TrustTunnel();
 
     ui->username->setText(outbound->username);
     ui->password->setText(outbound->password);
@@ -23,7 +23,7 @@ void EditTrustTunnel::onStart(std::shared_ptr<Configs::Profile> _ent) {
 }
 
 bool EditTrustTunnel::onEnd() {
-    auto outbound = ent->EditTrustTunnel();
+    auto outbound = ent->TrustTunnel();
 
     outbound->username = ui->username->text();
     outbound->password = ui->password->text();
