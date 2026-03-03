@@ -30,6 +30,7 @@
 #include "include/ui/profile/edit_socks.h"
 #include "include/ui/profile/edit_trojan.h"
 #include "include/ui/profile/edit_tuic.h"
+#include "include/ui/profile/edit_juicity.h"
 #include "include/ui/profile/edit_xrayvless.h"
 
 #define ADJUST_SIZE runOnThread([=,this] { adjustSize(); adjustPosition(mainwindow); }, this);
@@ -222,6 +223,7 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
         ui->type->addItem("VLESS (Xray)", "xrayvless");
         LOAD_TYPE("hysteria")
         LOAD_TYPE("tuic")
+        LOAD_TYPE("juicity")
         LOAD_TYPE("anytls")
         LOAD_TYPE("wireguard")
         LOAD_TYPE("tailscale")
@@ -308,6 +310,10 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         });
     } else if (type == "tuic") {
         auto _innerWidget = new EditTuic(this);
+        innerWidget = _innerWidget;
+        innerEditor = _innerWidget;
+    } else if (type == "juicity") {
+        auto _innerWidget = new EditJuicity(this);
         innerWidget = _innerWidget;
         innerEditor = _innerWidget;
     } else if (type == "anytls") {
