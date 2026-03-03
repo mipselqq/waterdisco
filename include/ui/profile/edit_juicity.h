@@ -1,5 +1,5 @@
-#ifndef EDIT_TUIC_H
-#define EDIT_TUIC_H
+#ifndef EDIT_JUICITY_H
+#define EDIT_JUICITY_H
 
 #include <QWidget>
 #include "profile_editor.h"
@@ -26,4 +26,4 @@ private:
     std::shared_ptr<Configs::Profile> ent;
 };
 
-#endif // EDIT_TUIC_H
+#endif // EDIT_JUICITY_H
