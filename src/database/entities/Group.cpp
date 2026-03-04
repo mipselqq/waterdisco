@@ -76,7 +76,6 @@ namespace Configs
         {
             return false;
         }
-        column_width.clear();
         profiles.append(ID);
         return true;
     }
@@ -92,7 +91,6 @@ namespace Configs
                 profiles.append(profileID);
             }
         }
-        column_width.clear();
         return true;
     }
 

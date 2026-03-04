@@ -348,14 +348,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             });
         });
     });
-    connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionResized, this, [=, this](int logicalIndex, int oldSize, int newSize) {
+    connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionResized, this, [=, this](int, int, int) {
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         if (Configs::dataManager->settingsRepo->refreshing_group || group == nullptr) return;
         group->column_width.clear();
         for (int i = 0; i < ui->profilesTableView->horizontalHeader()->count(); i++) {
             group->column_width.push_back(ui->profilesTableView->horizontalHeader()->sectionSize(i));
         }
-        group->column_width[logicalIndex] = newSize;
         Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
     });
     ui->profilesTableView->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -922,30 +921,8 @@ void MainWindow::show_group(int gid) {
 
     ui->tabWidget->widget(groupId2TabIndex(gid))->layout()->addWidget(ui->profilesTableView);
 
-    auto *hHeader = ui->profilesTableView->horizontalHeader();
-    if (group->column_width.isEmpty() || group->column_width[0] <= 0) {
-        group->column_width.clear();
-        for (int i=0;i<=4;i++) group->column_width.push_back(0);
-        hHeader->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-        hHeader->setSectionResizeMode(1, QHeaderView::Stretch);
-        hHeader->setSectionResizeMode(2, QHeaderView::Stretch);
-        hHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-        hHeader->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    }
-
     // show proxies
     refresh_proxy_list({}, true);
-
-    for (int i = 0; i <= 4; i++) {
-        hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-        auto size = group->column_width.value(i);
-        if (size <= 0) {
-            size = hHeader->sectionSize(i);
-        }
-        group->column_width[i] = size;
-        hHeader->resizeSection(i, size);
-    }
-    Configs::dataManager->groupsRepo->Save(group);
 
     if (group->scroll_last_profile >= 0) {
         int rowCount = profilesTableModel->rowCount();
@@ -958,6 +935,28 @@ void MainWindow::show_group(int gid) {
                 if (idx.isValid()) {
                     ui->profilesTableView->scrollTo(idx, QAbstractItemView::PositionAtTop);
                 }
+                auto *hHeader = ui->profilesTableView->horizontalHeader();
+                hHeader->blockSignals(true);
+                if (group->column_width.isEmpty()) {
+                    hHeader->setResizeContentsPrecision(40);
+                    hHeader->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+                    hHeader->setSectionResizeMode(1, QHeaderView::Stretch);
+                    hHeader->setSectionResizeMode(2, QHeaderView::Stretch);
+                    hHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+                    hHeader->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+                    ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+                } else {
+                    for (int i=0;i<group->column_width.size();i++) {
+                        hHeader->resizeSection(i, group->column_width.at(i));
+                    }
+                    ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+                }
+                for (int i=0;i<=4;i++) {
+                    auto size = hHeader->sectionSize(i);
+                    hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
+                    hHeader->resizeSection(i, size);
+                }
+                hHeader->blockSignals(false);
             });
         }
     }
