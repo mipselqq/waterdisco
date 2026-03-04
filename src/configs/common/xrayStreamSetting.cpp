@@ -15,7 +15,7 @@ namespace Configs {
         if (query.hasQueryItem("allowInsecure")) allowInsecure = query.queryItemValue("allowInsecure").replace("1", "true") == "true";
         if (query.hasQueryItem("allow_insecure")) allowInsecure = query.queryItemValue("allow_insecure").replace("1", "true") == "true";
         if (query.hasQueryItem("insecure")) allowInsecure = query.queryItemValue("insecure").replace("1", "true") == "true";
-        if (query.hasQueryItem("alpn")) alpn = query.queryItemValue("alpn").split(",");
+        if (query.hasQueryItem("alpn")) alpn = query.queryItemValue("alpn", QUrl::FullyDecoded).split(",");
         if (query.hasQueryItem("fp")) fingerprint = query.queryItemValue("fp");
         return true;
     }
