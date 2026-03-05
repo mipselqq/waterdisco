@@ -22,10 +22,6 @@ EditAdvanced::EditAdvanced(QWidget *parent, const std::shared_ptr<Configs::Profi
         ui->max_version->setText(tlsObj->max_version);
         ui->enable_ech->setChecked(tlsObj->ech->enabled);
 
-        // TODO enable when sing-box version is >= 1.13
-        ui->cert_sha256->setEnabled(false);
-        ui->client_cert->setEnabled(false);
-        ui->client_key->setEnabled(false);
         if (!tlsObj->ech->config.isEmpty()) {
             ui->ech_config->setText("Already set");
             CACHE.echConfig = tlsObj->ech->config;
