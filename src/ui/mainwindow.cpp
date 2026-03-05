@@ -935,7 +935,7 @@ void MainWindow::show_group(int gid) {
                 if (idx.isValid()) {
                     ui->profilesTableView->scrollTo(idx, QAbstractItemView::PositionAtTop);
                 }
-                auto *hHeader = ui->profilesTableView->horizontalHeader();
+                ProfilesTableFilterHeader *hHeader = static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
                 hHeader->blockSignals(true);
                 if (group->column_width.isEmpty()) {
                     hHeader->setResizeContentsPrecision(40);
@@ -956,6 +956,7 @@ void MainWindow::show_group(int gid) {
                     hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
                     hHeader->resizeSection(i, size);
                 }
+                hHeader->adjustPositions();
                 hHeader->blockSignals(false);
             });
         }
