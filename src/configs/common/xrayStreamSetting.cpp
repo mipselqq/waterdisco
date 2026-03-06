@@ -477,7 +477,7 @@ namespace Configs {
         QJsonObject obj;
         if (!authority.isEmpty()) obj["authority"] = authority;
         if (!serviceName.isEmpty()) obj["serviceName"] = serviceName;
-        if (multiMode) object["multiMode"] = multiMode;
+        if (multiMode) obj["multiMode"] = multiMode;
         return obj;
     }
 
