@@ -1045,6 +1045,7 @@ namespace Configs {
                 };
         }
         bool ok;
+        conf.insert("log", QJsonObject{{"level", dataManager->settingsRepo->log_level}});
         auto resp = API::defaultClient->CheckConfig(&ok, QJsonObject2QString(conf, true));
         if (!ok)
         {
