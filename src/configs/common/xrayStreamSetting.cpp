@@ -442,6 +442,49 @@ namespace Configs {
         return {ExportToJson(), ""};
     }
 
+    bool xrayGRPC::ParseFromLink(const QString &link) {
+        auto url = QUrl(link);
+        if (!url.isValid()) return false;
+        auto query = QUrlQuery(url.query());
+        if (query.hasQueryItem("authority")) authority = query.queryItemValue("authority", QUrl::FullyDecoded);
+        if (query.hasQueryItem("serviceName")) serviceName = query.queryItemValue("serviceName", QUrl::FullyDecoded);
+        if (query.hasQueryItem("mode") && query.queryItemValue("mode") == "multi") multiMode = true;
+        return true;
+    }
+
+    bool xrayGRPC::ParseFromJson(const QJsonObject &object) {
+        if (object.isEmpty()) return false;
+        if (object.contains("authority")) authority = object["authority"].toString();
+        if (object.contains("serviceName")) serviceName = object["serviceName"].toString();
+        if (object.contains("multiMode")) multiMode = object["multiMode"].toBool();
+        return true;
+    }
+
+    bool xrayGRPC::ParseFromClash(const clash::Proxies& object) {
+        if (!object.grpc_opts.grpc_service_name.empty()) serviceName = QString::fromStdString(object.grpc_opts.grpc_service_name);
+        return true;
+    }
+
+    QString xrayGRPC::ExportToLink() {
+        QUrlQuery query;
+        if (!authority.isEmpty()) query.addQueryItem("authority", authority);
+        if (!serviceName.isEmpty()) query.addQueryItem("serviceName", serviceName);
+        if (multiMode) query.addQueryItem("mode", "multi");
+        return query.toString(QUrl::FullyEncoded);
+    }
+
+    QJsonObject xrayGRPC::ExportToJson() {
+        QJsonObject obj;
+        if (!authority.isEmpty()) obj["authority"] = authority;
+        if (!serviceName.isEmpty()) obj["serviceName"] = serviceName;
+        if (multiMode) object["multiMode"] = multiMode;
+        return obj;
+    }
+
+    BuildResult xrayGRPC::Build() {
+        return {ExportToJson(), ""};
+    }
+
     bool xrayStreamSetting::ParseFromLink(const QString &link) {
         auto url = QUrl(link);
         if (!url.isValid()) return false;
@@ -455,6 +498,7 @@ namespace Configs {
         if (network == "xhttp") xhttp->ParseFromLink(link);
         else if (network == "ws") ws->ParseFromLink(link);
         else if (network == "httpupgrade") httpupgrade->ParseFromLink(link);
+        else if (network == "grpc") grpc->ParseFromLink(link);
 
         return true;
     }
@@ -470,6 +514,7 @@ namespace Configs {
         if (network == "xhttp" && object["xhttpSettings"].isObject()) xhttp->ParseFromJson(object["xhttpSettings"].toObject());
         if (network == "ws" && object["wsSettings"].isObject()) ws->ParseFromJson(object["wsSettings"].toObject());
         if (network == "httpupgrade" && object["httpupgradeSettings"].isObject()) httpupgrade->ParseFromJson(object["httpupgradeSettings"].toObject());
+        if (network == "grpc" && object["grpcSettings"].isObject()) grpc->ParseFromJson(object["grpcSettings"].toObject());
         return true;
     }
 
@@ -493,6 +538,7 @@ namespace Configs {
                 ws->ParseFromClash(object);
             }
         }
+        if (network == "grpc") grpc->ParseFromClash(object);
         return true;
     }
 
@@ -505,6 +551,7 @@ namespace Configs {
         if (network == "xhttp") mergeUrlQuery(query, xhttp->ExportToLink());
         if (network == "ws") mergeUrlQuery(query, ws->ExportToLink());
         if (network == "httpupgrade") mergeUrlQuery(query, httpupgrade->ExportToLink());
+        if (network == "grpc") mergeUrlQuery(query, grpc->ExportToLink());
         return query.toString(QUrl::FullyEncoded);
     }
 
@@ -517,6 +564,7 @@ namespace Configs {
         if (network == "xhttp") object["xhttpSettings"] = xhttp->ExportToJson();
         if (network == "ws") object["wsSettings"] = ws->ExportToJson();
         if (network == "httpupgrade") object["httpupgradeSettings"] = httpupgrade->ExportToJson();
+        if (network == "grpc") object["grpcSettings"] = grpc->ExportToJson();
         return object;
     }
 
