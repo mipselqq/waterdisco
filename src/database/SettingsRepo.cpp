@@ -105,6 +105,8 @@ namespace Configs {
             "active_routing",
             "mw_size",
             "vpn_impl",
+            "vpn_tun_ipv4_cidr",
+            "vpn_tun_ipv6_cidr",
             "sub_custom_hwid_params",
             "splitter_state",
             "utlsFingerprint",
@@ -311,6 +313,8 @@ namespace Configs {
                 else if (key == "vpn_mtu") vpn_mtu = varValue.toInt();
                 else if (key == "vpn_ipv6") vpn_ipv6 = varValue.toBool();
                 else if (key == "vpn_strict_route") vpn_strict_route = varValue.toBool();
+                else if (key == "vpn_tun_ipv4_cidr") vpn_tun_ipv4_cidr = varValue.toString();
+                else if (key == "vpn_tun_ipv6_cidr") vpn_tun_ipv6_cidr = varValue.toString();
                 else if (key == "disable_privilege_req") disable_privilege_req = varValue.toBool();
                 else if (key == "enable_ntp") enable_ntp = varValue.toBool();
                 else if (key == "ntp_server_address") ntp_server_address = varValue.toString();
@@ -435,6 +439,8 @@ namespace Configs {
             {"vpn_mtu", vpn_mtu},
             {"vpn_ipv6", vpn_ipv6},
             {"vpn_strict_route", vpn_strict_route},
+            {"vpn_tun_ipv4_cidr", vpn_tun_ipv4_cidr},
+            {"vpn_tun_ipv6_cidr", vpn_tun_ipv6_cidr},
             {"disable_privilege_req", disable_privilege_req},
             {"enable_ntp", enable_ntp},
             {"ntp_server_address", ntp_server_address},
