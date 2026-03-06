@@ -945,14 +945,14 @@
           <widget class="QWidget" name="xray_common_box" native="true">
            <layout class="QGridLayout" name="gridLayout_11">
             <item row="0" column="0">
-             <widget class="QLabel" name="label_18">
+             <widget class="QLabel" name="xray_host_l">
               <property name="text">
                <string>Host</string>
               </property>
              </widget>
             </item>
             <item row="3" column="0">
-             <widget class="QLabel" name="label_34">
+             <widget class="QLabel" name="xray_headers_l">
               <property name="text">
                <string>Headers</string>
               </property>
@@ -968,7 +968,7 @@
              <widget class="QLineEdit" name="xray_headers"/>
             </item>
             <item row="0" column="2">
-             <widget class="QLabel" name="label_33">
+             <widget class="QLabel" name="xray_path_l">
               <property name="text">
                <string>Path</string>
               </property>
@@ -983,6 +983,13 @@
             </item>
             <item row="1" column="1">
              <widget class="QLineEdit" name="xray_ed_length"/>
+            </item>
+            <item row="2" column="0">
+             <widget class="QCheckBox" name="xray_multi_mode">
+              <property name="text">
+               <string>Multi Mode</string>
+              </property>
+             </widget>
             </item>
            </layout>
           </widget>
