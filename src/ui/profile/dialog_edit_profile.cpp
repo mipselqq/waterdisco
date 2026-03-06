@@ -182,7 +182,7 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
                 ui->xray_multi_mode->setVisible(false);
             } else {
                 ui->xray_xhttp_box->setVisible(false);
-                if (txt == "xhttp") {
+                if (txt == "grpc") {
                     ui->xray_ed_label->setVisible(false);
                     ui->xray_ed_length->setVisible(false);
                     ui->xray_headers_l->setVisible(false);
