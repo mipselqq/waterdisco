@@ -491,7 +491,7 @@ namespace Configs {
         auto query = QUrlQuery(url.query());
 
         if (query.hasQueryItem("type")) network = query.queryItemValue("type").replace("tcp", "raw");
-        if (network != "raw" && network != "xhttp" && network != "ws" && network != "httpupgrade") return false;
+        if (!Configs::XrayNetworks.contains(network)) return false;
         if (query.hasQueryItem("security")) security = query.queryItemValue("security");
         if (security == "tls") TLS->ParseFromLink(link);
         else if (security == "reality") reality->ParseFromLink(link);
@@ -507,7 +507,7 @@ namespace Configs {
         if (object.isEmpty()) return false;
 
         if (object.contains("network")) network = object.value("network").toString();
-        if (network != "raw" && network != "xhttp" && network != "ws" && network != "httpupgrade") return false;
+        if (!Configs::XrayNetworks.contains(network)) return false;
         if (object.contains("security")) security = object.value("security").toString();
         if (security == "tls" && object["tlsSettings"].isObject()) TLS->ParseFromJson(object["tlsSettings"].toObject());
         else if (security == "reality" && object["realitySettings"].isObject()) reality->ParseFromJson(object["realitySettings"].toObject());
@@ -520,7 +520,7 @@ namespace Configs {
 
     bool xrayStreamSetting::ParseFromClash(const clash::Proxies& object) {
         if (!object.network.empty()) network = QString::fromStdString(object.network);
-        if (network != "raw" && network != "ws") return false;
+        if (network != "raw" && network != "ws" && network != "grpc") return false;
         if (object.tls) {
             if (object.reality_opts.public_key.empty()) {
                 security = "tls";
