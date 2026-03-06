@@ -850,16 +850,26 @@ namespace Configs {
         QJsonArray inbounds;
         QJsonArray outbounds;
         QJsonArray routeRules;
+        int dnsPort = dataManager->settingsRepo->core_dns_in_port;
 
-        dnsObj = {
-            {"servers", QJsonArray{
-                QJsonObject{
-                    {"address", "127.0.0.1"},
-                    {"port", dataManager->settingsRepo->core_dns_in_port},
-                    {"skipFallBack", true}
-                }
-            }}
-        };
+        if (!ctx->forTest) {
+            dnsObj = {
+                {"servers", QJsonArray{
+                    QJsonObject{
+                        {"address", "127.0.0.1"},
+                        {"port", dnsPort},
+                        {"queryStrategy", "UseIPv4"},
+                        {"skipFallBack", true}
+                    },
+                    QJsonObject{
+                            {"address", "127.0.0.1"},
+                            {"port", dnsPort},
+                            {"queryStrategy", "UseIPv6"},
+                            {"skipFallBack", true}
+                    }
+                }}
+            };
+        }
 
         for (auto [port, outboundObj] : ctx->xrayOutbounds) {
             auto inboundTag = outboundObj["tag"].toString() + "-inbound";
@@ -879,16 +889,18 @@ namespace Configs {
         }
 
         // dnsRouting
-        outbounds << QJsonObject{
-            {"tag", "direct"},
-            {"protocol", "freedom"},
-        };
-        routeRules << QJsonObject{
-            {"type", "field"},
-            {"ip", QJsonArray{"127.0.0.1"}},
-            {"port", dataManager->settingsRepo->core_dns_in_port},
-            {"outboundTag", "direct"},
-        };
+        if (!ctx->forTest) {
+            outbounds << QJsonObject{
+                {"tag", "direct"},
+                {"protocol", "freedom"},
+            };
+            routeRules << QJsonObject{
+                {"type", "field"},
+                {"ip", QJsonArray{"127.0.0.1"}},
+                {"port", dnsPort},
+                {"outboundTag", "direct"},
+            };
+        }
 
         ctx->buildConfigResult->xrayConfig["log"] = QJsonObject{
         {"loglevel", Configs::dataManager->settingsRepo->xray_log_level},
