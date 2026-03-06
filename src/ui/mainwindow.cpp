@@ -973,43 +973,40 @@ void MainWindow::show_group(int gid) {
     // show proxies
     refresh_proxy_list({}, true);
 
-    if (group->scroll_last_profile >= 0) {
-        int rowCount = profilesTableModel->rowCount();
-        int targetRow = group->scroll_last_profile;
-        if (targetRow >= rowCount && rowCount > 0) targetRow = rowCount - 1;
+    int rowCount = profilesTableModel->rowCount();
+    int targetRow = group->scroll_last_profile;
+    if (targetRow >= rowCount && rowCount > 0) targetRow = rowCount - 1;
+    // TODO try to find a more stable way
+    QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
         if (targetRow >= 0) {
-            // TODO try to find a more stable way
-            QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
-                QModelIndex idx = profilesTableModel->index(targetRow, 0);
-                if (idx.isValid()) {
-                    ui->profilesTableView->scrollTo(idx, QAbstractItemView::PositionAtTop);
-                }
-                ProfilesTableFilterHeader *hHeader = static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
-                hHeader->blockSignals(true);
-                if (group->column_width.isEmpty()) {
-                    hHeader->setResizeContentsPrecision(40);
-                    hHeader->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-                    hHeader->setSectionResizeMode(1, QHeaderView::Stretch);
-                    hHeader->setSectionResizeMode(2, QHeaderView::Stretch);
-                    hHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-                    hHeader->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-                    ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-                } else {
-                    for (int i=0;i<group->column_width.size();i++) {
-                        hHeader->resizeSection(i, group->column_width.at(i));
-                    }
-                    ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-                }
-                for (int i=0;i<=4;i++) {
-                    auto size = hHeader->sectionSize(i);
-                    hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-                    hHeader->resizeSection(i, size);
-                }
-                hHeader->adjustPositions();
-                hHeader->blockSignals(false);
-            });
+            if (QModelIndex idx = profilesTableModel->index(targetRow, 0); idx.isValid()) {
+                ui->profilesTableView->scrollTo(idx, QAbstractItemView::PositionAtTop);
+            }
         }
-    }
+        auto *hHeader = dynamic_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
+        hHeader->blockSignals(true);
+        if (group->column_width.isEmpty()) {
+            hHeader->setResizeContentsPrecision(40);
+            hHeader->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(1, QHeaderView::Stretch);
+            hHeader->setSectionResizeMode(2, QHeaderView::Stretch);
+            hHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+            ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        } else {
+            for (int i=0;i<group->column_width.size();i++) {
+                hHeader->resizeSection(i, group->column_width.at(i));
+            }
+            ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        }
+        for (int i=0;i<=4;i++) {
+            auto size = hHeader->sectionSize(i);
+            hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
+            hHeader->resizeSection(i, size);
+        }
+        hHeader->adjustPositions();
+        hHeader->blockSignals(false);
+    });
 
     Configs::dataManager->settingsRepo->refreshing_group = false;
 }
