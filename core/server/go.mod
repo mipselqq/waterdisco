@@ -7,8 +7,8 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/sagernet/sing v0.8.1
-	github.com/sagernet/sing-box v1.13.1
+	github.com/sagernet/sing v0.8.2
+	github.com/sagernet/sing-box v1.13.2
 	github.com/sagernet/sing-tun v0.8.2
 	github.com/spf13/cobra v1.10.2
 	github.com/xtls/xray-core v1.251208.0
@@ -176,4 +176,4 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260305165719-d5577a0bd149
+replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260307143105-3a0ae00616cd
