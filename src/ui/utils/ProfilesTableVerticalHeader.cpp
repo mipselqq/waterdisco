@@ -5,7 +5,9 @@
 #include <QFontMetrics>
 
 ProfilesTableVerticalHeader::ProfilesTableVerticalHeader(QWidget *parent)
-    : QHeaderView(Qt::Vertical, parent) {}
+    : QHeaderView(Qt::Vertical, parent) {
+    setSectionsClickable(true);
+}
 
 void ProfilesTableVerticalHeader::setProfilesModel(ProfilesTableModel *model) {
     if (m_model == model) return;
