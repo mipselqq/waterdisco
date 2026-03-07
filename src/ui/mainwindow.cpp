@@ -485,8 +485,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->profilesTableView->verticalHeader()->setStretchLastSection(false);
     ui->profilesTableView->verticalHeader()->setDefaultSectionSize(24);
     ui->profilesTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    ui->profilesTableView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    ui->profilesTableView->verticalScrollBar()->setSingleStep(6);
     ui->profilesTableView->setTabKeyNavigation(false);
 
     // search box
