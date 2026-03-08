@@ -69,18 +69,18 @@ namespace Configs
         traffic_uplink = 0;
     }
 
-        QString ProfileFilter_ent_key(const std::shared_ptr<Configs::Profile> &ent) {
-        auto key = ent->outbound->ExportJsonLink(true);
+        QString ProfileFilter_ent_key(const std::shared_ptr<Configs::Profile> &ent, bool ignoreMetadata) {
+        auto key = ent->outbound->ExportJsonLink(ignoreMetadata);
         return key;
     }
 
     void ProfileFilter::Uniq(const QList<std::shared_ptr<Profile>> &in,
                              QList<std::shared_ptr<Profile>> &out,
-                             bool keep_last) {
+                             bool keep_last, bool ignoreMetadata) {
         QMap<QString, std::shared_ptr<Profile>> hashMap;
 
         for (const auto &ent: in) {
-            QString key = ProfileFilter_ent_key(ent);
+            QString key = ProfileFilter_ent_key(ent, ignoreMetadata);
             if (hashMap.contains(key)) {
                 if (keep_last) {
                     out.removeAll(hashMap[key]);
@@ -97,15 +97,16 @@ namespace Configs
     void ProfileFilter::Common(const QList<std::shared_ptr<Profile>> &src,
                                const QList<std::shared_ptr<Profile>> &dst,
                                QList<std::shared_ptr<Profile>> &outSrc,
-                               QList<std::shared_ptr<Profile>> &outDst) {
+                               QList<std::shared_ptr<Profile>> &outDst,
+                               bool ignoreMetadata) {
         QMap<QString, std::shared_ptr<Profile>> hashMap;
 
         for (const auto &ent: src) {
-            QString key = ProfileFilter_ent_key(ent);
+            QString key = ProfileFilter_ent_key(ent, ignoreMetadata);
             hashMap[key] = ent;
         }
         for (const auto &ent: dst) {
-            QString key = ProfileFilter_ent_key(ent);
+            QString key = ProfileFilter_ent_key(ent, ignoreMetadata);
             if (hashMap.contains(key)) {
                 outDst += ent;
                 outSrc += hashMap[key];
@@ -115,15 +116,16 @@ namespace Configs
 
     void ProfileFilter::OnlyInSrc(const QList<std::shared_ptr<Profile>> &src,
                                   const QList<std::shared_ptr<Profile>> &dst,
-                                  QList<std::shared_ptr<Profile>> &out) {
+                                  QList<std::shared_ptr<Profile>> &out,
+                                  bool ignoreMetadata) {
         QMap<QString, bool> hashMap;
 
         for (const auto &ent: dst) {
-            QString key = ProfileFilter_ent_key(ent);
+            QString key = ProfileFilter_ent_key(ent, ignoreMetadata);
             hashMap[key] = true;
         }
         for (const auto &ent: src) {
-            QString key = ProfileFilter_ent_key(ent);
+            QString key = ProfileFilter_ent_key(ent, ignoreMetadata);
             if (!hashMap.contains(key)) out += ent;
         }
     }

@@ -121,20 +121,23 @@ namespace Configs {
         static void Uniq(
             const QList<std::shared_ptr<Profile>> &in,
             QList<std::shared_ptr<Profile>> &out,
-            bool keep_last = false   // def keep first
+            bool keep_last = false, // def keep first
+            bool ignoreMetadata = true
         );
 
         static void Common(
             const QList<std::shared_ptr<Profile>> &src,
             const QList<std::shared_ptr<Profile>> &dst,
             QList<std::shared_ptr<Profile>> &outSrc,
-            QList<std::shared_ptr<Profile>> &outDst
+            QList<std::shared_ptr<Profile>> &outDst,
+            bool ignoreMetadata = true
         );
 
         static void OnlyInSrc(
             const QList<std::shared_ptr<Profile>> &src,
             const QList<std::shared_ptr<Profile>> &dst,
-            QList<std::shared_ptr<Profile>> &out
+            QList<std::shared_ptr<Profile>> &out,
+            bool ignoreMetadata = true
         );
 
         static void OnlyInSrc_ByPointer(
