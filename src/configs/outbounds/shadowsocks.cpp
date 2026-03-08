@@ -35,10 +35,10 @@ namespace Configs {
             password = url.password();
         }
 
-        plugin = query.queryItemValue("plugin").replace("simple-obfs;", "obfs-local;");
+        plugin = query.queryItemValue("plugin", QUrl::FullyDecoded).replace("simple-obfs;", "obfs-local;");
         plugin_opts = SubStrAfter(plugin, ";");
         plugin = SubStrBefore(plugin, ";");
-        if (query.hasQueryItem("plugin-opts")) plugin_opts = query.queryItemValue("plugin-opts");
+        if (query.hasQueryItem("plugin-opts")) plugin_opts = query.queryItemValue("plugin-opts", QUrl::FullyDecoded);
         if (query.hasQueryItem("uot")) uot = query.queryItemValue("uot") == "true" || query.queryItemValue("uot").toInt() > 0;
         multiplex->ParseFromLink(link);
 
