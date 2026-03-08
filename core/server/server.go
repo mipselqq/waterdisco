@@ -125,7 +125,7 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 		return
 	}
 
-	if runtime.GOOS == "darwin" && strings.Contains(*in.CoreConfig, "tun-in") {
+	if runtime.GOOS == "darwin" && in.GetTunIpv4Cidr() != "" {
 		stopAllCores := func() {
 			boxInstance.CloseWithTimeout(instanceCancel, time.Second*2, log.Println, true)
 			boxInstance = nil
@@ -140,12 +140,6 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 		}
 
 		tunCIDR := in.GetTunIpv4Cidr()
-		if tunCIDR == "" {
-			err = errors.New("tun_ipv4_cidr is required for tun-in on macOS")
-			stopAllCores()
-			return
-		}
-
 		tunPrefix, parseErr := netip.ParsePrefix(tunCIDR)
 		if parseErr != nil || !tunPrefix.Addr().Is4() {
 			err = fmt.Errorf("invalid tun_ipv4_cidr %q", tunCIDR)
