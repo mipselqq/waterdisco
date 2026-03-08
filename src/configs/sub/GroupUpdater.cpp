@@ -510,6 +510,7 @@ namespace Subscription {
             auto items = QStringList{
                 QObject::tr("Add profiles to this group"),
                 QObject::tr("Create new subscription group"),
+                QObject::tr("Import HTTP proxy profile"),
             };
             bool ok;
             auto a = QInputDialog::getItem(nullptr,
@@ -517,8 +518,10 @@ namespace Subscription {
                                            QObject::tr("%1\nHow to update?").arg(content),
                                            items, 0, false, &ok);
             if (!ok) return;
-            asURL = true;
-            if (items.indexOf(a) == 1) createNewGroup = true;
+            switch (items.indexOf(a)) {
+                case 1: createNewGroup = true;
+                case 0: asURL = true; break;
+            }
         }
 
         runOnNewThread([=,this] {
