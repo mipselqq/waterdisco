@@ -619,9 +619,9 @@ namespace Subscription {
                 QList<std::shared_ptr<Configs::Profile>> out;
                 // find and delete not updated profile by ProfileFilter
                 Configs::ProfileFilter::OnlyInSrc_ByPointer(out_all, in, out);
-                Configs::ProfileFilter::OnlyInSrc(in, out, only_in);
-                Configs::ProfileFilter::OnlyInSrc(out, in, only_out);
-                Configs::ProfileFilter::Common(in, out, update_keep, update_del);
+                Configs::ProfileFilter::OnlyInSrc(in, out, only_in, false);
+                Configs::ProfileFilter::OnlyInSrc(out, in, only_out, false);
+                Configs::ProfileFilter::Common(in, out, update_keep, update_del, false);
                 QString notice_added;
                 QString notice_deleted;
                 if (only_out.size() < 1000)
