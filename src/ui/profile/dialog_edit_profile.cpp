@@ -500,6 +500,8 @@ void DialogEditProfile::typeSelected(const QString &newType) {
     } else {
         ui->security->setVisible(false);
         ui->security_l->setVisible(false);
+        ui->security_box->setVisible(false);
+        ui->tls_camouflage_box->setVisible(false);
     }
     if (ent->outbound->HasMux()) {
         ui->multiplex->setVisible(true);
