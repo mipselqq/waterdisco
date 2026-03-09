@@ -546,6 +546,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->menu_add_from_clipboard2, &QAction::triggered, ui->menu_add_from_clipboard, &QAction::trigger);
     connect(ui->actionRestart_Proxy, &QAction::triggered, this, [=,this] {
         runOnThread([=, this] {
+            profile_stop(true, true, true);
             core_process->Kill();
         }, DS_cores);
     });
