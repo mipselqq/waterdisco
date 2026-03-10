@@ -1760,13 +1760,16 @@ void MainWindow::refresh_proxy_list(const QList<int>& ids, bool mayNeedReset) {
 }
 
 void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedReset) {
-    if (auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup(); currentGroup == nullptr)
+    auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+    if (currentGroup == nullptr)
     {
         MW_show_log("Could not find current group!");
         return;
     }
     // refresh data
     refresh_proxy_list_impl_refresh_data(ids, mayNeedReset);
+    // now refresh to resize columns
+    show_group(currentGroup->id);
 }
 
 void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
