@@ -176,7 +176,7 @@ namespace Configs {
         bool enable_warp = false;
         QString warp_private_key = "";
         QString warp_public_key = "";
-        QStringList warp_ifc_addrs = {"172.27.1.0/28", "2606:4700:110:8604:e69c:1aea:bd1e:5daf/120"};
+        QStringList warp_ifc_addrs = {};
         QString warp_ep = "";
 
         // Hijack

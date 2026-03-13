@@ -8,6 +8,8 @@
 #include <utility>
 #include <type_traits>
 
+#include "include/global/Utils.hpp"
+
 namespace Configs {
     struct ProfileInsertRow {
         int id;
@@ -29,7 +31,7 @@ namespace Configs {
     // Run WAL checkpoint after this many write operations (exec or batch chunk).
     constexpr int WAL_CHECKPOINT_AFTER_WRITES = 10000;
 
-    void NotifyError(const std::string& query, std::exception& e) {
+    inline void NotifyError(const std::string& query, std::exception& e) {
         runOnUiThread([=] {
             std::string shortQ;
             if (query.length() > 200) shortQ = query.substr(0, 200);
