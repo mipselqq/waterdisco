@@ -65,6 +65,8 @@ namespace Configs {
 
         std::shared_ptr<Profile> GetProfileByName(const QString &name);
 
+        QList<std::pair<int, QString> > GetAllProfileIDNameMapped();
+
         QStringList GetAllProfileNames();
         
         // Delete multiple profiles

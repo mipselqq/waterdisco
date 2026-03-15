@@ -79,6 +79,14 @@ namespace Configs_network {
             config->endpoint = "engage.cloudflareclient.com:2408";
         }
 
+        auto ifcAddrObj = jsonResp["interface"].toObject()["addresses"].toObject();
+        if (ifcAddrObj.isEmpty()) {
+            *error = "Received invalid response: " + rawResponse;
+            return config;
+        }
+        config->ipv4Address = ifcAddrObj["v4"].toString();
+        config->ipv6Address = ifcAddrObj["v6"].toString();
+
         return config;
     }
 }

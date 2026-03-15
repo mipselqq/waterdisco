@@ -162,6 +162,8 @@ namespace Configs {
 #endif
         int vpn_mtu = 1500;
         bool vpn_ipv6 = false;
+        QString vpn_tun_ipv4_cidr = "172.19.0.1/24";
+        QString vpn_tun_ipv6_cidr = "fdfe:dcba:9876::1/96";
         bool disable_privilege_req = false;
 
         // NTP
@@ -174,7 +176,7 @@ namespace Configs {
         bool enable_warp = false;
         QString warp_private_key = "";
         QString warp_public_key = "";
-        QStringList warp_ifc_addrs = {"172.27.1.0/28", "2606:4700:110:8604:e69c:1aea:bd1e:5daf/120"};
+        QStringList warp_ifc_addrs = {};
         QString warp_ep = "";
 
         // Hijack

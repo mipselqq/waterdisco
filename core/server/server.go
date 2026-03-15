@@ -12,6 +12,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net/netip"
+	"os"
+	"runtime"
+	"strings"
+	"time"
+
 	"github.com/google/shlex"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/experimental/clashapi"
@@ -19,11 +26,6 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
 	"github.com/xtls/xray-core/core"
-	"log"
-	"os"
-	"runtime"
-	"strings"
-	"time"
 )
 
 var boxInstance *boxbox.Box
@@ -122,11 +124,40 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 		}
 		return
 	}
-	if runtime.GOOS == "darwin" && strings.Contains(*in.CoreConfig, "tun-in") && strings.Contains(*in.CoreConfig, "172.19.0.1/24") {
-		err := sys.SetSystemDNS("172.19.0.2", boxInstance.Network().InterfaceMonitor())
-		if err != nil {
+
+	if runtime.GOOS == "darwin" && in.GetTunIpv4Cidr() != "" {
+		stopAllCores := func() {
+			boxInstance.CloseWithTimeout(instanceCancel, time.Second*2, log.Println, true)
+			boxInstance = nil
+			if extraProcess != nil {
+				extraProcess.Stop()
+				extraProcess = nil
+			}
+			if xrayInstance != nil {
+				xrayInstance.Close()
+				xrayInstance = nil
+			}
+		}
+
+		tunCIDR := in.GetTunIpv4Cidr()
+		tunPrefix, parseErr := netip.ParsePrefix(tunCIDR)
+		if parseErr != nil || !tunPrefix.Addr().Is4() {
+			err = fmt.Errorf("invalid tun_ipv4_cidr %q", tunCIDR)
+			stopAllCores()
+			return
+		}
+
+		tunDNS := tunPrefix.Addr().Next()
+		if !tunDNS.IsValid() || !tunDNS.Is4() {
+			err = fmt.Errorf("got invalid DNS IP from tun_ipv4_cidr: %s", tunDNS)
+			stopAllCores()
+			return
+		}
+
+		if err := sys.SetSystemDNS(tunDNS.String(), boxInstance.Network().InterfaceMonitor()); err != nil {
 			log.Println("Failed to set system DNS:", err)
 		}
+
 		needUnsetDNS = true
 	}
 

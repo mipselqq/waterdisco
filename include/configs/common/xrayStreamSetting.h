@@ -2,7 +2,7 @@
 #include "include/configs/baseConfig.h"
 
 namespace Configs {
-    inline QStringList XrayNetworks = {"raw", "xhttp", "ws", "httpupgrade"};
+    inline QStringList XrayNetworks = {"raw", "xhttp", "ws", "httpupgrade", "grpc"};
     inline QStringList XrayXHTTPModes = {"auto", "packet-up", "stream-up", "stream-one"};
 
     class xrayTLS : public baseConfig {
@@ -96,6 +96,20 @@ namespace Configs {
         BuildResult Build() override;
     };
 
+    class xrayGRPC : public baseConfig {
+    public:
+        QString authority;
+        QString serviceName;
+        bool multiMode = false;
+
+        bool ParseFromLink(const QString& link) override;
+        bool ParseFromJson(const QJsonObject& object) override;
+        bool ParseFromClash(const clash::Proxies& object) override;
+        QString ExportToLink() override;
+        QJsonObject ExportToJson() override;
+        BuildResult Build() override;
+    };
+
     class xrayStreamSetting : public baseConfig {
         public:
         QString network = "raw";
@@ -105,6 +119,7 @@ namespace Configs {
         std::shared_ptr<xrayXHTTP> xhttp = std::make_shared<xrayXHTTP>();
         std::shared_ptr<xrayWS> ws = std::make_shared<xrayWS>();
         std::shared_ptr<xrayHttpUpgrade> httpupgrade = std::make_shared<xrayHttpUpgrade>();
+        std::shared_ptr<xrayGRPC> grpc = std::make_shared<xrayGRPC>();
 
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
