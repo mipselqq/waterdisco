@@ -27,7 +27,7 @@ namespace Configs {
         
         if (server_port == 0) server_port = 443;
 
-        return !(uuid.isEmpty() || password.isEmpty() || server.isEmpty());
+        return !(uuid.isEmpty() || server.isEmpty());
     }
 
     bool tuic::ParseFromJson(const QJsonObject& object)
