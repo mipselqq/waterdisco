@@ -181,4 +181,4 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260309060351-6abdf01d569e
+replace github.com/sagernet/sing-box => github.com/Throneproj/sing-box v1.11.16-0.20260302211354-6ff5bb6b50b4

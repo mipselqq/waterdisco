@@ -108,8 +108,14 @@ namespace Configs {
             outbound = new Configs::hysteria();
         } else if (type == "tuic") {
             outbound = new Configs::tuic();
+        } else if (type == "juicity") {
+            outbound = new Configs::juicity();
+        } else if (type == "trusttunnel") {
+            outbound = new Configs::trusttunnel();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
+        } else if (type == "shadowtls") {
+            outbound = new Configs::shadowtls();
         } else if (type == "wireguard") {
             outbound = new Configs::wireguard();
         } else if (type == "tailscale") {
@@ -283,8 +289,14 @@ namespace Configs {
             outbound = new Configs::hysteria();
         } else if (type == "tuic") {
             outbound = new Configs::tuic();
+        } else if (type == "juicity") {
+            outbound = new Configs::juicity();
+        } else if (type == "trusttunnel") {
+            outbound = new Configs::trusttunnel();
         } else if (type == "anytls") {
             outbound = new Configs::anyTLS();
+        } else if (type == "shadowtls") {
+            outbound = new Configs::shadowtls();
         } else if (type == "wireguard") {
             outbound = new Configs::wireguard();
         } else if (type == "tailscale") {
