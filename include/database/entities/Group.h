@@ -21,6 +21,12 @@ namespace Configs
         speedOnly
     };
 
+    enum class trafficBy : int {
+        total = 0,
+        dl,
+        ul
+    };
+
     class Group {
     public:
         QMutex mutex;
@@ -37,12 +43,16 @@ namespace Configs
 
         // list ui
         QList<int> column_width;
+        QList<int> calculated_column_width; // memory only, no need to save to db
         QList<int> profiles;
         int scroll_last_profile = -1;
         testBy test_sort_by = testBy::latency;
+        trafficBy traffic_sort_by = trafficBy::total;
         testShowItems test_items_to_show = testShowItems::all;
 
         Group() = default;
+
+        void clearCalculatedColumnWidth();
 
         [[nodiscard]] QList<int> Profiles() const;
 

@@ -132,25 +132,58 @@ namespace Configs {
             if (item < 0) continue;
             auto neededEnt = Configs::dataManager->profilesRepo->GetProfile(item);
             if (neededEnt == nullptr) {
-                ctx->error = "The routing profile is referencing outbounds that no longer exists, consider revising your settings";
+                ctx->error = "The routing profile is referencing outbounds that no longer exist, consider revising your settings";
                 return;
             }
-            if (neededEnt->type == "extracore" || neededEnt->type == "custom" || neededEnt->type == "chain")
-            {
-                ctx->error = "Outbounds used in routing profile cannot be of types extracore, custom or chain";
+            if (neededEnt->type == "extracore" || neededEnt->type == "custom") {
+                ctx->error = "Outbounds used in routing profile cannot be of types extracore or custom";
                 return;
             }
-            if (auto entAddrs = getEntDomains({neededEnt->id}, ctx->error); !entAddrs.empty())
-            {
-                if (!ctx->error.isEmpty()) return;
-                for (const auto &addr: entAddrs)
-                {
-                    preReqs->dnsDeps->directDomains << addr;
+            if (neededEnt->type == "chain") {
+                auto chain = neededEnt->Chain();
+                if (chain == nullptr || chain->list.isEmpty()) {
+                    ctx->error = "Chain outbound in routing profile is empty or corrupted";
+                    return;
                 }
-                preReqs->dnsDeps->needDirectDnsRules = true;
+                // Validate each hop
+                for (int hopID : chain->list) {
+                    auto hopEnt = Configs::dataManager->profilesRepo->GetProfile(hopID);
+                    if (hopEnt == nullptr) {
+                        ctx->error = "Chain outbound in routing profile contains a missing profile";
+                        return;
+                    }
+                    if (hopEnt->type == "extracore" || hopEnt->type == "custom" || hopEnt->type == "chain") {
+                        ctx->error = "Chain hops in routing profile cannot be of types extracore, custom or chain";
+                        return;
+                    }
+                    // Collect domains for DNS direct rules
+                    if (auto addrs = getEntDomains({hopID}, ctx->error); !addrs.empty()) {
+                        if (!ctx->error.isEmpty()) return;
+                        for (const auto &addr : addrs) preReqs->dnsDeps->directDomains << addr;
+                        preReqs->dnsDeps->needDirectDnsRules = true;
+                    }
+                }
+                // Map chain ID -> tag of the outermost (first-built) hop
+                preReqs->routingDeps->outboundMap[item] = "route-" + Int2String(suffix);
+                // Build reversed hop list (matching main-chain build order: outer first)
+                QList<int> reversedHops;
+                for (int idx = chain->list.size() - 1; idx >= 0; idx--) reversedHops << chain->list[idx];
+                preReqs->routingDeps->routeOutboundGroups << reversedHops;
+                suffix += chain->list.size();
+            } else {
+                // Single-hop outbound (existing logic)
+                if (auto entAddrs = getEntDomains({neededEnt->id}, ctx->error); !entAddrs.empty())
+                {
+                    if (!ctx->error.isEmpty()) return;
+                    for (const auto &addr: entAddrs)
+                    {
+                        preReqs->dnsDeps->directDomains << addr;
+                    }
+                    preReqs->dnsDeps->needDirectDnsRules = true;
+                }
+                preReqs->routingDeps->outboundMap[item] = "route-" + Int2String(suffix++);
+                preReqs->routingDeps->routeOutboundGroups << QList<int>{item};
             }
-            preReqs->routingDeps->outboundMap[item] = "route-" + Int2String(suffix++);
-            preReqs->routingDeps->neededOutbounds << item;
         }
 
         for (const auto &item: *neededRuleSets) {
@@ -512,8 +545,11 @@ namespace Configs {
             inboundObj["stack"] = Configs::dataManager->settingsRepo->vpn_implementation;
             inboundObj["strict_route"] = Configs::dataManager->settingsRepo->vpn_strict_route;
             if (ctx->os == Linux) inboundObj["auto_redirect"] = true;
-            auto tunAddress = QJsonArray{"172.19.0.1/24"};
-            if (Configs::dataManager->settingsRepo->vpn_ipv6) tunAddress += "fdfe:dcba:9876::1/96";
+            const auto tunIPv4CIDR = Configs::dataManager->settingsRepo->vpn_tun_ipv4_cidr;
+            const auto tunIPv6CIDR = Configs::dataManager->settingsRepo->vpn_tun_ipv6_cidr;
+            ctx->buildConfigResult->tunIPv4CIDR = tunIPv4CIDR;
+            auto tunAddress = QJsonArray{tunIPv4CIDR};
+            if (Configs::dataManager->settingsRepo->vpn_ipv6) tunAddress += tunIPv6CIDR;
             inboundObj["address"] = tunAddress;
 
             if (Configs::dataManager->settingsRepo->enable_tun_routing)
@@ -606,15 +642,15 @@ namespace Configs {
         return {entID};
     }
 
-    void buildOutboundChain(std::shared_ptr<BuildSingBoxConfigContext> &ctx, const QList<int>& entIDs, const QString& prefix, bool includeProxy, bool link, int xrayPort = -1)
+    void buildOutboundChain(std::shared_ptr<BuildSingBoxConfigContext> &ctx, const QList<int>& entIDs, const QString& prefix, bool includeProxy, bool link, int xrayPort = -1, int startSuffix = 0)
     {
         QList<std::shared_ptr<Profile>> ents;
         entIDListtoEntList(entIDs, ents, ctx->error);
         for (int idx = 0; idx < ents.size(); idx++)
         {
-            auto tag = prefix + "-" + Int2String(idx);
+            auto tag = prefix + "-" + Int2String(startSuffix + idx);
             QString nextTag;
-            if (idx < ents.size() - 1) nextTag = prefix + "-" + Int2String(idx+1);
+            if (idx < ents.size() - 1) nextTag = prefix + "-" + Int2String(startSuffix + idx + 1);
             if (includeProxy && idx == 0) tag = "proxy";
             const auto& ent = ents[idx];
             auto [object, error] = ent->outbound->Build();
@@ -678,7 +714,12 @@ namespace Configs {
         buildOutboundChain(ctx, entIDs, "config", true, true);
 
         // Now, build the outbounds needed by the route profile
-        buildOutboundChain(ctx, ctx->buildPrerequisities->routingDeps->neededOutbounds, "route", false, false);
+        int routeSuffix = 0;
+        for (const auto& group : ctx->buildPrerequisities->routingDeps->routeOutboundGroups) {
+            bool linked = group.size() > 1;
+            buildOutboundChain(ctx, group, "route", false, linked, -1, routeSuffix);
+            routeSuffix += group.size();
+        }
 
         // Add the direct outbound
         ctx->outbounds.append(QJsonObject{
@@ -847,16 +888,26 @@ namespace Configs {
         QJsonArray inbounds;
         QJsonArray outbounds;
         QJsonArray routeRules;
+        int dnsPort = dataManager->settingsRepo->core_dns_in_port;
 
-        dnsObj = {
-            {"servers", QJsonArray{
-                QJsonObject{
-                    {"address", "127.0.0.1"},
-                    {"port", dataManager->settingsRepo->core_dns_in_port},
-                    {"skipFallBack", true}
-                }
-            }}
-        };
+        if (!ctx->forTest) {
+            dnsObj = {
+                {"servers", QJsonArray{
+                    QJsonObject{
+                        {"address", "127.0.0.1"},
+                        {"port", dnsPort},
+                        {"queryStrategy", "UseIPv4"},
+                        {"skipFallBack", true}
+                    },
+                    QJsonObject{
+                            {"address", "127.0.0.1"},
+                            {"port", dnsPort},
+                            {"queryStrategy", "UseIPv6"},
+                            {"skipFallBack", true}
+                    }
+                }}
+            };
+        }
 
         for (auto [port, outboundObj] : ctx->xrayOutbounds) {
             auto inboundTag = outboundObj["tag"].toString() + "-inbound";
@@ -876,16 +927,18 @@ namespace Configs {
         }
 
         // dnsRouting
-        outbounds << QJsonObject{
-            {"tag", "direct"},
-            {"protocol", "freedom"},
-        };
-        routeRules << QJsonObject{
-            {"type", "field"},
-            {"ip", QJsonArray{"127.0.0.1"}},
-            {"port", dataManager->settingsRepo->core_dns_in_port},
-            {"outboundTag", "direct"},
-        };
+        if (!ctx->forTest) {
+            outbounds << QJsonObject{
+                {"tag", "direct"},
+                {"protocol", "freedom"},
+            };
+            routeRules << QJsonObject{
+                {"type", "field"},
+                {"ip", QJsonArray{"127.0.0.1"}},
+                {"port", dnsPort},
+                {"outboundTag", "direct"},
+            };
+        }
 
         ctx->buildConfigResult->xrayConfig["log"] = QJsonObject{
         {"loglevel", Configs::dataManager->settingsRepo->xray_log_level},
@@ -1030,6 +1083,7 @@ namespace Configs {
                 };
         }
         bool ok;
+        conf.insert("log", QJsonObject{{"level", dataManager->settingsRepo->log_level}});
         auto resp = API::defaultClient->CheckConfig(&ok, QJsonObject2QString(conf, true));
         if (!ok)
         {
@@ -1143,4 +1197,3 @@ namespace Configs {
         return res;
     }
 }
-

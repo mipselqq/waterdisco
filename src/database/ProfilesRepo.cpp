@@ -457,8 +457,18 @@ namespace Configs {
         return GetProfile(id);
     }
 
+    QList<std::pair<int, QString> > ProfilesRepo::GetAllProfileIDNameMapped() {
+        auto query = db.query("SELECT id, name FROM profiles ORDER BY id");
+        if (!query) return {};
+        QList<std::pair<int, QString> > res;
+        while (query->executeStep()) {
+            res.append({query->getColumn(0).getInt(), QString(query->getColumn(1).getString().c_str())});
+        }
+        return res;
+    }
+
     QStringList ProfilesRepo::GetAllProfileNames() {
-        auto query = db.query("SELECT name FROM profiles");
+        auto query = db.query("SELECT name FROM profiles ORDER BY id");
         if (!query) return {};
         QStringList names;
         while (query->executeStep()) {

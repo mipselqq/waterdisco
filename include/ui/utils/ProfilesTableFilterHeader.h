@@ -85,7 +85,6 @@ public slots:
         emit geometriesChanged(); 
     }
 
-private slots:
     void adjustPositions() {
         if (!m_filtersVisible || !address_filter || !name_filter || !type_filter || !test_filter || count() < 4) {
 	        return;

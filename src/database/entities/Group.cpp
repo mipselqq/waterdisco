@@ -5,6 +5,10 @@
 
 namespace Configs
 {
+    void Group::clearCalculatedColumnWidth() {
+        calculated_column_width.clear();
+    }
+
     QList<int> Group::Profiles() const {
         return profiles;
     }
@@ -24,6 +28,7 @@ namespace Configs
             case GroupSortMethod::ByAddress:
             case GroupSortMethod::ByName:
             case GroupSortMethod::ByTestResult:
+            case GroupSortMethod::ByTraffic:
             case GroupSortMethod::ByType: {
                 auto get_latency_for_sort = [](const std::shared_ptr<Profile>& prof) {
                     auto i = prof->latency;
@@ -59,6 +64,18 @@ namespace Configs
                                           if (test_sort_by == testBy::ipOut) {
                                               return sortAction.descending ? profA->ip_out > profB->ip_out : profA->ip_out < profB->ip_out;
                                           }
+                                      } else if (sortAction.method == GroupSortMethod::ByTraffic) {
+                                          if (traffic_sort_by == trafficBy::total) {
+                                              auto totalA = profA->traffic_downlink + profA->traffic_uplink;
+                                              auto totalB = profB->traffic_downlink + profB->traffic_uplink;
+                                              return sortAction.descending ? totalA > totalB  : totalA < totalB;
+                                          }
+                                          if (traffic_sort_by == trafficBy::dl) {
+                                              return sortAction.descending ? profA->traffic_downlink > profB->traffic_downlink : profA->traffic_downlink < profB->traffic_downlink;
+                                          }
+                                          if (traffic_sort_by == trafficBy::ul) {
+                                              return sortAction.descending ? profA->traffic_uplink > profB->traffic_uplink : profA->traffic_uplink < profB->traffic_uplink;
+                                          }
                                       }
                                       return sortAction.descending ? ms_a > ms_b : ms_a < ms_b;
                                   });
@@ -76,7 +93,6 @@ namespace Configs
         {
             return false;
         }
-        column_width.clear();
         profiles.append(ID);
         return true;
     }
@@ -92,7 +108,6 @@ namespace Configs
                 profiles.append(profileID);
             }
         }
-        column_width.clear();
         return true;
     }
 

@@ -98,12 +98,13 @@ RouteItem::RouteItem(QWidget *parent, const std::shared_ptr<Configs::RouteProfil
     }
 
     outbounds = {"proxy", "direct"};
-    outbounds << get_all_outbounds();
+    auto outboundIdNamePairs = Configs::dataManager->profilesRepo->GetAllProfileIDNameMapped();
     // init outbound map
     outboundMap[0] = -1;
     outboundMap[1] = -2;
-    for (const auto& item: Configs::dataManager->profilesRepo->GetAllProfileIds()) {
-        outboundMap[outboundMap.size()] = item;
+    for (const auto& item: outboundIdNamePairs) {
+        outboundMap[outboundMap.size()] = item.first;
+        outbounds << item.second;
     }
 
     // limit
@@ -212,6 +213,7 @@ RouteItem::RouteItem(QWidget *parent, const std::shared_ptr<Configs::RouteProfil
            }
            chain->ResetRules();
            chain->Rules << parsed;
+           currentIndex = -1;
            updateRouteItemsView();
            updateRuleSection();
 

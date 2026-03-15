@@ -200,6 +200,7 @@ DialogManageRoutes::DialogManageRoutes(QWidget *parent) : QDialog(parent), ui(ne
         ui->warp_private_key->setText(conf->privateKey);
         ui->warp_public_key->setText(conf->publicKey);
         ui->warp_ep->setText(conf->endpoint);
+        ui->warp_ifc_addrs->setText(conf->ipv4Address + "/32," + conf->ipv6Address + "/128");
         ui->warp_autogen->setText("Success!");
         setTimeout([=,this] { ui->warp_autogen->setText(originalText); }, this, 2000);
     });

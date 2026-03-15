@@ -47,9 +47,12 @@ namespace Configs
     {
         public:
         int defaultOutboundID;
-        QList<int> neededOutbounds;
+        QList<int> neededOutbounds;       // kept for compatibility but no longer consumed
         QStringList neededRuleSets;
         std::map<int, QString> outboundMap;
+        // Each entry is one routing outbound group.
+        // Single profile -> [[id]]. Chain -> [[outerHop, ..., innerHop]] (reversed, matching existing chain build order).
+        QList<QList<int>> routeOutboundGroups;
     };
 
     class BuildPrerequisities
@@ -66,6 +69,7 @@ namespace Configs
         QString error;
         bool isChained = false;
         QJsonObject coreConfig;
+        QString tunIPv4CIDR;
         bool isXrayNeeded = false;
         QJsonObject xrayConfig;
         std::shared_ptr<ExtraCoreData> extraCoreData = std::make_shared<ExtraCoreData>();
