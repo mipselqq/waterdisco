@@ -21,7 +21,7 @@ namespace Configs {
         
         if (server_port == 0) server_port = 443;
 
-        return !(uuid.isEmpty() || password.isEmpty() || server.isEmpty());
+        return !(uuid.isEmpty() || server.isEmpty());
     }
 
     bool juicity::ParseFromJson(const QJsonObject& object)
@@ -40,7 +40,7 @@ namespace Configs {
         QUrlQuery query;
         url.setScheme("juicity");
         url.setUserName(uuid);
-        url.setPassword(password);
+        if (!password.isEmpty()) url.setPassword(password);
         url.setHost(server);
         url.setPort(server_port);
         if (!name.isEmpty()) url.setFragment(name);

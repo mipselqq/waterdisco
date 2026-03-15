@@ -68,7 +68,7 @@ namespace Configs {
         QUrlQuery query;
         url.setScheme("tuic");
         url.setUserName(uuid);
-        url.setPassword(password);
+        if (!password.isEmpty()) url.setPassword(password);
         url.setHost(server);
         url.setPort(server_port);
         if (!name.isEmpty()) url.setFragment(name);

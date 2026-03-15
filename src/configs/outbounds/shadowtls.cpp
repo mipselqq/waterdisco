@@ -42,7 +42,7 @@ namespace Configs {
         QUrl url;
         QUrlQuery query;
         url.setScheme("shadowtls");
-        if (version > 1) url.setPassword(password);
+        if (version > 1 && !password.isEmpty()) url.setPassword(password);
         url.setHost(server);
         url.setPort(server_port);
         if (!name.isEmpty()) url.setFragment(name);
