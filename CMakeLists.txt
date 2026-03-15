@@ -167,6 +167,15 @@ set(PROJECT_SOURCES
         include/ui/profile/edit_tuic.h
         src/ui/profile/edit_tuic.cpp
         include/ui/profile/edit_tuic.ui
+        include/ui/profile/edit_juicity.h
+        src/ui/profile/edit_juicity.cpp
+        include/ui/profile/edit_juicity.ui
+        include/ui/profile/edit_trusttunnel.h
+        src/ui/profile/edit_trusttunnel.cpp
+        include/ui/profile/edit_trusttunnel.ui
+        include/ui/profile/edit_shadowtls.h
+        src/ui/profile/edit_shadowtls.cpp
+        include/ui/profile/edit_shadowtls.ui
 
         include/ui/profile/edit_custom.h
         src/ui/profile/edit_custom.cpp
@@ -249,6 +258,9 @@ set(PROJECT_SOURCES
         include/configs/outbounds/hysteria.h
         include/configs/outbounds/vless.h
         include/configs/outbounds/tuic.h
+        include/configs/outbounds/juicity.h
+        include/configs/outbounds/trusttunnel.h
+        include/configs/outbounds/shadowtls.h
         include/configs/outbounds/anyTLS.h
         include/configs/outbounds/ssh.h
         
@@ -262,6 +274,9 @@ set(PROJECT_SOURCES
         src/configs/outbounds/tailscale.cpp
         src/configs/outbounds/trojan.cpp
         src/configs/outbounds/tuic.cpp
+        src/configs/outbounds/juicity.cpp
+        src/configs/outbounds/trusttunnel.cpp
+        src/configs/outbounds/shadowtls.cpp
         src/configs/outbounds/vless.cpp
         src/configs/outbounds/vmess.cpp
         src/configs/outbounds/wireguard.cpp

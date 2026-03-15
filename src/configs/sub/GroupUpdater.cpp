@@ -243,6 +243,27 @@ namespace Subscription {
             if (!ok) return;
         }
 
+        // Juicity
+        if (str.startsWith("juicity://")) {
+            ent = Configs::ProfilesRepo::NewProfile("juicity");
+            auto ok = ent->Juicity()->ParseFromLink(str);
+            if (!ok) return;
+        }
+
+        // TrustTunnel
+        if (str.startsWith("tt://")) {
+            ent = Configs::ProfilesRepo::NewProfile("trusttunnel");
+            auto ok = ent->TrustTunnel()->ParseFromLink(str);
+            if (!ok) return;
+        }
+
+        // ShadowTLS
+        if (str.startsWith("shadowtls://")) {
+            ent = Configs::ProfilesRepo::NewProfile("shadowtls");
+            auto ok = ent->ShadowTLS()->ParseFromLink(str);
+            if (!ok) return;
+        }
+
         // Wireguard
         if (str.startsWith("wg://")) {
             ent = Configs::ProfilesRepo::NewProfile("wireguard");
@@ -358,6 +379,27 @@ namespace Subscription {
             if (out["type"] == "tuic") {
                 ent = Configs::ProfilesRepo::NewProfile("tuic");
                 auto ok = ent->TUIC()->ParseFromJson(out);
+                if (!ok) continue;
+            }
+
+            // Juicity
+            if (out["type"] == "juicity") {
+                ent = Configs::ProfilesRepo::NewProfile("juicity");
+                auto ok = ent->Juicity()->ParseFromJson(out);
+                if (!ok) continue;
+            }
+
+            // TrustTunnel
+            if (out["type"] == "trusttunnel") {
+                ent = Configs::ProfilesRepo::NewProfile("trusttunnel");
+                auto ok = ent->TrustTunnel()->ParseFromJson(out);
+                if (!ok) continue;
+            }
+
+            // ShadowTLS
+            if (out["type"] == "shadowtls") {
+                ent = Configs::ProfilesRepo::NewProfile("shadowtls");
+                auto ok = ent->ShadowTLS()->ParseFromJson(out);
                 if (!ok) continue;
             }
 
