@@ -28,10 +28,8 @@
 #endif
 
 void signal_handler(int signum) {
-    if (GetMainWindow()) {
-        GetMainWindow()->prepare_exit();
-        qApp->quit();
-    }
+    GetMainWindow()->prepare_exit();
+    qApp->quit();
 }
 
 QTranslator* trans = nullptr;

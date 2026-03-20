@@ -1206,13 +1206,12 @@ void MainWindow::prepare_exit()
         mu_exit.unlock();
         return;
     }
-    HideWindow(this);
     Configs::dataManager->settingsRepo->prepare_exit = true;
     //
+    set_spmode_system_proxy(false, false);
+    if (Configs::dataManager->settingsRepo->system_dns_set) set_system_dns(false, false);
     RegisterHiddenMenuShortcuts(true);
     RegisterHotkey(true);
-    if (Configs::dataManager->settingsRepo->system_dns_set) set_system_dns(false, false);
-    set_spmode_system_proxy(false, false);
     //
     on_commitDataRequest();
     //
@@ -1223,6 +1222,7 @@ void MainWindow::prepare_exit()
     {
         core_process->Kill();
     }, DS_cores, true);
+    HideWindow(this);
 
     mu_exit.unlock();
     qDebug() << "prepare exit done!";
