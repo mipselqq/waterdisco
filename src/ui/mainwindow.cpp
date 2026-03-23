@@ -2444,9 +2444,9 @@ bool MainWindow::should_print_log(const QString &log) {
                 result = false;
                 break;
             }
-            if (!excludeCombined.pattern().isEmpty() && excludeCombined.match(log).hasMatch()) {
-                result = false;
-            }
+        }
+        if (!excludeCombined.pattern().isEmpty() && excludeCombined.match(log).hasMatch()) {
+            result = false;
         }
     }
     return result;
