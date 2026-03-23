@@ -583,7 +583,7 @@ namespace Configs {
         }
         if (Configs::dataManager->settingsRepo->enable_dns_server) {
             inbounds.prepend(QJsonObject{
-                {"tag", "dns-in"},
+                {"tag", "hijack-dns"},
                 {"type", "direct"},
                 {"listen", Configs::dataManager->settingsRepo->dns_server_listen_lan ? "0.0.0.0" : "127.1.1.1"},
                 {"listen_port", Configs::dataManager->settingsRepo->dns_server_listen_port},
@@ -746,11 +746,11 @@ namespace Configs {
         {
             auto sniffRule = std::make_shared<RouteRule>();
             sniffRule->action = "sniff";
-            sniffRule->inbound = {"dns-in"};
+            sniffRule->inbound = {"hijack-dns"};
 
             auto redirRule = std::make_shared<RouteRule>();
             redirRule->action = "hijack-dns";
-            redirRule->inbound = {"dns-in"};
+            redirRule->inbound = {"hijack-dns"};
 
             routeChain->Rules.prepend(redirRule);
             routeChain->Rules.prepend(sniffRule);
