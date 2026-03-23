@@ -56,7 +56,7 @@ namespace Subscription {
             auto obj = doc.object();
             bool hasInbound = obj.contains("inbounds");
             bool hasOutbound = obj.contains("outbounds") || obj.contains("endpoints");
-            if (hasInbound && hasOutbound) return SingBoxSubType::fullConfig;
+            // if (hasInbound && hasOutbound) return SingBoxSubType::fullConfig;
             if (hasOutbound) return SingBoxSubType::outboundInJson;
             if (obj.contains("type")) return SingBoxSubType::outboundObject;
             return SingBoxSubType::invalid;
