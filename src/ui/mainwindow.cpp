@@ -84,10 +84,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     };
 
     // handle AutoRun migration and privilege matching
-#ifdef Q_OS_WIN
     AutoRun_FixPrivilegeIfNeeded();
     AutoRun_MigrateIfNeeded();
-#endif
 
     // Setup misc UI
     // migrate old themes
@@ -1030,6 +1028,9 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
                 set_spmode_system_proxy(false);
                 set_spmode_system_proxy(true);
             }
+        }
+        if (info.contains("UpdateDisableAdmin")) {
+            AutoRun_FixPrivilegeIfNeeded();
         }
         auto suggestRestartProxy = Configs::dataManager->settingsRepo->Save();
         if (info.contains("RouteChanged")) {

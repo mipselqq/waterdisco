@@ -82,3 +82,7 @@ bool AutoRun_IsEnabled() {
     QString desktopFileLocation = getUserAutostartDir_private() + appName + QLatin1String(".desktop");
     return QFile::exists(desktopFileLocation);
 }
+
+void AutoRun_FixPrivilegeIfNeeded() {}
+
+void AutoRun_MigrateIfNeeded() {}

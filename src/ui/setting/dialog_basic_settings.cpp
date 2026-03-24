@@ -356,6 +356,7 @@ void DialogBasicSettings::accept() {
     D_SAVE_BOOL(skip_cert)
     Configs::dataManager->settingsRepo->utlsFingerprint = ui->utlsFingerprint->currentText();
     Configs::dataManager->settingsRepo->disable_privilege_req = ui->disable_priv_req->isChecked();
+    if (Configs::dataManager->settingsRepo->disable_run_admin != ui->windows_no_admin->isChecked()) CACHE.updateDisableAdmin = true;
     Configs::dataManager->settingsRepo->disable_run_admin = ui->windows_no_admin->isChecked();
     Configs::dataManager->settingsRepo->use_mozilla_certs = ui->mozilla_cert->isChecked();
 
@@ -365,6 +366,7 @@ void DialogBasicSettings::accept() {
     if (CACHE.updateSystemDns) str << "UpdateSystemDns";
     if (CACHE.updateTrayIcon) str << "UpdateTrayIcon";
     if (CACHE.updateMaxLogLines) str << "UpdateMaxLogLines";
+    if (CACHE.updateDisableAdmin) str << "UpdateDisableAdmin";
     if (needChoosePort) str << "NeedChoosePort";
     MW_dialog_message(Dialog_DialogBasicSettings, str.join(","));
     QDialog::accept();

@@ -33,6 +33,7 @@ private:
         bool updateTrayIcon = false;
         bool updateSystemDns = false;
         bool updateMaxLogLines = false;
+        bool updateDisableAdmin = false;
     } CACHE;
 
 private slots:
