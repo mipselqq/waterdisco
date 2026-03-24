@@ -1,5 +1,4 @@
-#ifndef DIALOG_BASIC_SETTINGS_H
-#define DIALOG_BASIC_SETTINGS_H
+#pragma once
 
 #include <QDialog>
 #include <QJsonObject>
@@ -39,5 +38,3 @@ private:
 private slots:
     void on_core_settings_clicked();
 };
-
-#endif // DIALOG_BASIC_SETTINGS_H

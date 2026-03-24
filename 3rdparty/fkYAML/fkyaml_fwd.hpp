@@ -6,8 +6,7 @@
 // SPDX-FileCopyrightText: 2023-2025 Kensuke Fukutani <fktn.dev@gmail.com>
 // SPDX-License-Identifier: MIT
 
-#ifndef FK_YAML_FKYAML_FWD_HPP
-#define FK_YAML_FKYAML_FWD_HPP
+#pragma once
 
 #include <cstdint>
 #include <map>
@@ -96,5 +95,3 @@ template <typename Key, typename Value, typename IgnoredCompare, typename Alloca
 class ordered_map;
 
 FK_YAML_NAMESPACE_END
-
-#endif /* FK_YAML_FKYAML_FWD_HPP */

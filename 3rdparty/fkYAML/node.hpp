@@ -6,8 +6,7 @@
 // SPDX-FileCopyrightText: 2023-2025 Kensuke Fukutani <fktn.dev@gmail.com>
 // SPDX-License-Identifier: MIT
 
-#ifndef FK_YAML_NODE_HPP
-#define FK_YAML_NODE_HPP
+#pragma once
 
 #include <algorithm>
 #include <cstdint>
@@ -14722,5 +14721,3 @@ private:
 };
 
 } // namespace std
-
-#endif /* FK_YAML_NODE_HPP */

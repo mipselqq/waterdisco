@@ -1,6 +1,4 @@
-#ifndef EDIT_TRUSTTUNNEL_H
-#define EDIT_TRUSTTUNNEL_H
-
+#pragma once
 #include <QWidget>
 #include "profile_editor.h"
 #include "ui_edit_trusttunnel.h"
@@ -25,5 +23,3 @@ private:
     Ui::EditTrustTunnel *ui;
     std::shared_ptr<Configs::Profile> ent;
 };
-
-#endif // EDIT_TRUSTTUNNEL_H

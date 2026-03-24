@@ -1,6 +1,4 @@
-#ifndef EDIT_SHADOWTLS_H
-#define EDIT_SHADOWTLS_H
-
+#pragma once
 #include <QWidget>
 #include "profile_editor.h"
 #include "ui_edit_shadowtls.h"
@@ -25,5 +23,3 @@ private:
     Ui::EditShadowTLS *ui;
     std::shared_ptr<Configs::Profile> ent;
 };
-
-#endif // EDIT_SHADOWTLS_H
