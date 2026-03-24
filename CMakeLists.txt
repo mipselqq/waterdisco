@@ -109,7 +109,6 @@ set(PROJECT_SOURCES
 
         include/sys/Process.hpp
         src/sys/Process.cpp
-        src/sys/AutoRun.cpp
 
         include/ui/setting/ThemeManager.hpp
         src/ui/setting/ThemeManager.cpp
@@ -231,7 +230,6 @@ set(PROJECT_SOURCES
 
         src/sys/macos/MacOS.cpp
 
-        src/sys/AutoRun.cpp
         src/sys/Process.cpp
         include/ui/mainwindow_interface.h
         include/stats/connections/connectionLister.hpp
