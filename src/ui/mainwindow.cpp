@@ -987,13 +987,13 @@ void MainWindow::show_group(int gid) {
     int rowCount = profilesTableModel->rowCount();
     int targetRow = group->scroll_last_profile;
     if (targetRow >= rowCount && rowCount > 0) targetRow = rowCount - 1;
-    // TODO try to find a more stable way
     QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
         if (targetRow >= 0) {
             if (QModelIndex idx = profilesTableModel->index(targetRow, 0); idx.isValid()) {
                 ui->profilesTableView->scrollTo(idx, QAbstractItemView::PositionAtTop);
             }
         }
+        refresh_proxy_list_column_size();
     });
 
     Configs::dataManager->settingsRepo->refreshing_group = false;
@@ -1760,7 +1760,7 @@ void MainWindow::refresh_proxy_list_column_size() {
             hHeader->setSectionResizeMode(2, QHeaderView::Stretch);
             hHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);
             hHeader->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-            if (group->calculated_column_width.size() > 0 && group->calculated_column_width[0] > hHeader->sectionSize(0)) {
+            if (!group->calculated_column_width.empty() && group->calculated_column_width[0] > hHeader->sectionSize(0)) {
                 hHeader->setSectionResizeMode(0, QHeaderView::Fixed);
                 hHeader->resizeSection(0, group->calculated_column_width[0]);
             }
