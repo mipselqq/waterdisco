@@ -92,7 +92,7 @@ void enable_autorun() {
     process.waitForFinished();
 
     if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        WinCommander::runProcessElevated("schtasks.exe", args, "", WinCommander::SW_HIDE, true);
+        WinCommander::runProcessElevated("schtasks.exe", args, "", 0, true);
     }
 }
 
@@ -107,7 +107,7 @@ void disable_autorun() {
     process.waitForFinished();
 
     if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        WinCommander::runProcessElevated("schtasks.exe", args, "", WinCommander::SW_HIDE, true);
+        WinCommander::runProcessElevated("schtasks.exe", args, "", 0, true);
     }
 }
 

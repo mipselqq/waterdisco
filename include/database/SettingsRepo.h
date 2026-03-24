@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Database.h"
 #include "include/global/Const.hpp"
 #include <QMutexLocker>
