@@ -1788,6 +1788,7 @@ void MainWindow::refresh_proxy_list_column_size() {
             }
             ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         }
+        for (int i=0;i<=4;i++) ui->profilesTableView->setColumnWidth(i, hHeader->sectionSize(i));
         hHeader->adjustPositions();
         hHeader->blockSignals(false);
     });
