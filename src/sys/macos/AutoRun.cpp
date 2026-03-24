@@ -90,3 +90,7 @@ bool AutoRun_IsEnabled() {
     CFRelease(urlRef);
     return returnValue;
 }
+
+void AutoRun_FixPrivilegeIfNeeded() {}
+
+void AutoRun_MigrateIfNeeded() {}
