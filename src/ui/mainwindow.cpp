@@ -83,6 +83,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         });
     };
 
+    // handle AutoRun migration and privilege matching
+    AutoRun_FixPrivilegeIfNeeded();
+    AutoRun_MigrateIfNeeded();
+
     // Setup misc UI
     // migrate old themes
     bool isNum;
