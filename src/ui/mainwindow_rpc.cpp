@@ -9,6 +9,7 @@
 #include <QPushButton>
 #include <QDesktopServices>
 #include <QMessageBox>
+#include <QJsonDocument>
 
 #include "include/configs/generate.h"
 #include "include/database/GroupsRepo.h"
@@ -739,6 +740,19 @@ void MainWindow::profile_start(int _id) {
         runOnUiThread([=, this] {
             refresh_status();
             refresh_proxy_list({ent->id});
+
+            auto resp = NetworkRequestHelper::HttpGet("http://ip-api.com/json/", false, true);
+            if (resp.error.isEmpty()) {
+                QJsonDocument doc = QJsonDocument::fromJson(resp.data);
+                if (doc.isObject()) {
+                    QJsonObject obj = doc.object();
+                    QString ip = obj["query"].toString();
+                    QString city = obj["city"].toString();
+                    QString countryName = obj["country"].toString();
+                    QString countryCode = obj["countryCode"].toString();
+                    ui->label_outbound->setText(QString("🌐 %1\n%2 %3, %4").arg(ip, CountryCodeToFlag(countryCode), countryName, city));
+                }
+            }
         });
 
         return true;
@@ -877,6 +891,7 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
 
             refresh_status();
             refresh_proxy_list({id});
+            ui->label_outbound->setText("");
 
             mu_stopping.unlock();
         }, true);

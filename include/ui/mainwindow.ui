@@ -475,31 +475,15 @@
      </widget>
     </item>
     <item>
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
+     <layout class="QGridLayout" name="horizontalLayout">
+      <item row="0" column="0" colspan="2">
        <widget class="QLabel" name="label_running">
         <property name="text">
          <string/>
         </property>
        </widget>
       </item>
-      <item>
-       <spacer name="horizontalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-        <property name="sizeType">
-         <enum>QSizePolicy::Policy::Maximum</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>0</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
+      <item row="0" column="2">
        <widget class="QLabel" name="label_inbound">
         <property name="text">
          <string/>
@@ -509,7 +493,17 @@
         </property>
        </widget>
       </item>
-      <item>
+      <item row="0" column="3">
+       <widget class="QLabel" name="label_outbound">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="4">
        <widget class="QLabel" name="label_speed">
         <property name="text">
          <string/>
