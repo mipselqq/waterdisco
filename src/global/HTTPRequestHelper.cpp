@@ -18,12 +18,12 @@
 
 namespace Configs_network {
 
-    HTTPResponse NetworkRequestHelper::HttpGet(const QString &url, bool sendHwid) {
+    HTTPResponse NetworkRequestHelper::HttpGet(const QString &url, bool sendHwid, bool useProxy) {
         QNetworkRequest request;
         QNetworkAccessManager accessManager;
         accessManager.setTransferTimeout(10000);
         request.setUrl(url);
-        if (Configs::dataManager->settingsRepo->net_use_proxy || Configs::dataManager->settingsRepo->spmode_system_proxy) {
+        if (Configs::dataManager->settingsRepo->net_use_proxy || Configs::dataManager->settingsRepo->spmode_system_proxy || useProxy) {
             if (Configs::dataManager->settingsRepo->started_id < 0) {
                 return HTTPResponse{QObject::tr("Request with proxy but no profile started.")};
             }

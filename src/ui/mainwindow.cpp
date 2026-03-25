@@ -1632,7 +1632,7 @@ void MainWindow::refresh_status(const QString &traffic_update) {
     }
 
     if (QDateTime::currentSecsSinceEpoch() - last_test_time > 2) {
-        ui->label_running->setText(running ? QString("[%1] %2").arg(group_name, running->outbound->DisplayName()).left(30) : tr("Not Running"));
+        ui->label_running->setText(running ? QString("[%1]\n%2").arg(group_name, running->outbound->DisplayName()) : tr("Not Running"));
     }
     //
     auto display_socks = DisplayAddress(Configs::dataManager->settingsRepo->inbound_address, Configs::dataManager->settingsRepo->inbound_socks_port);
