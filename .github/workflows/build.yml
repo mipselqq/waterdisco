@@ -164,37 +164,6 @@ jobs:
         with:
           path: download-artifact
       # ========================================================================================================= Qt Install
-      - name: Install OpenSSL (Windows Legacy)
-        if: matrix.platform == 'windows-latest' && matrix.qt_version == '6.2.12'
-        shell: bash
-        run: |
-          curl -L -o openssl.7z https://github.com/throneproj/env_windows_legacy/releases/download/latest/openssl-${{ matrix.target }}.7z
-          7z x openssl.7z
-      - name: OpenSSL Cache
-        id: cache-openssl
-        if: matrix.platform == 'windows-latest' && matrix.qt_version != '6.2.12'
-        uses: actions/cache@v4.2.3
-        with:
-          path: C:/vcpkg/installed/x64-windows-static
-          key: OpenSSLCache-${{ matrix.platform }}-${{ matrix.target }}
-      - name: Install OpenSSL (Windows)
-        if: matrix.platform == 'windows-latest' && steps.cache-openssl.outputs.cache-hit != 'true' && matrix.qt_version != '6.2.12'
-        shell: powershell
-        run: |
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-          vcpkg install openssl:x64-windows-static
-      - name: Qt static Cache
-        id: cache-static-Qt
-        if: matrix.platform == 'windows-latest' && matrix.qt_version != '6.2.12'
-        uses: actions/cache@v4.2.3
-        with:
-          path: qt6/build
-          key: QtStaticCache-${{ matrix.platform }}-${{ matrix.target }}-Qt${{ matrix.qt_version }}-${{ hashFiles('script/build_qt_static_windows.bat') }}
-      - name: Install Qt Windows
-        shell: cmd
-        if: matrix.platform == 'windows-latest' && steps.cache-static-Qt.outputs.cache-hit != 'true' && matrix.qt_version != '6.2.12'
-        run: |
-          ./script/build_qt_static_windows.bat ${{ matrix.qt_version }}
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.0
         if: matrix.platform != 'windows-latest'
@@ -208,8 +177,12 @@ jobs:
         shell: bash
         if: matrix.platform == 'windows-latest' && matrix.qt_version != '6.2.12'
         run: |
-          export CMAKE_PREFIX_PATH=$PWD/qt6/build/lib/cmake
-          export OPENSSL_ROOT_DIR="C:/vcpkg/installed/x64-windows-static"
+          curl -L -o qt.7z https://github.com/throneproj/buildqt/releases/download/Qt_${{ matrix.qt_version }}/Qt_${{ matrix.qt_version }}.7z
+          7z x qt.7z
+          curl -L -o openssl.7z https://github.com/throneproj/env_windows_legacy/releases/download/latest/openssl-msvc.7z
+          7z x openssl.7z
+          export CMAKE_PREFIX_PATH=$PWD/Qt/lib/cmake
+          export OPENSSL_ROOT_DIR=$PWD/openssl
           mkdir build
           cd build
           curl -fLso srslist.h "https://raw.githubusercontent.com/throneproj/routeprofiles/rule-set/srslist.h"
@@ -223,6 +196,8 @@ jobs:
         run: |
           curl -L -o qt.7z https://github.com/throneproj/env_windows_legacy/releases/download/latest/qt-${{ matrix.target }}.7z
           7z x qt.7z
+          curl -L -o openssl.7z https://github.com/throneproj/env_windows_legacy/releases/download/latest/openssl-${{ matrix.target }}.7z
+          7z x openssl.7z
           export CMAKE_PREFIX_PATH=$PWD/Qt/lib/cmake
           export OPENSSL_ROOT_DIR=$PWD/openssl
           mkdir build
