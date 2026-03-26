@@ -13,10 +13,28 @@ source script/env_deploy.sh
 TAGS="with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,badlinkname,tfogo_checklinkname0"
 
 if [[ "$GOOS" == "windows" || "$GOOS" == "linux" ]]; then
+  rm -rf $DEST
+  mkdir -p $DEST
   TAGS="$TAGS,with_purego"
+  if [[ "$GOOS" == "windows" ]]; then
+    if [[ "$GOARCH" == "arm64" ]]; then
+      curl -fLso $DEST/libcronet.dll "https://github.com/SagerNet/cronet-go/releases/latest/download/libcronet-windows-arm64.dll"
+    else
+      curl -fLso $DEST/libcronet.dll "https://github.com/SagerNet/cronet-go/releases/latest/download/libcronet-windows-amd64.dll"
+    fi
+  fi
+  if [[ "$GOOS" == "linux" ]]; then
+    if [[ "$GOARCH" == "arm64" ]]; then
+      curl -fLso $DEST/libcronet.so "https://github.com/SagerNet/cronet-go/releases/latest/download/libcronet-linux-arm64.so"
+    else
+      curl -fLso $DEST/libcronet.so "https://github.com/SagerNet/cronet-go/releases/latest/download/libcronet-linux-amd64.so"
+    fi
+  fi
 fi
 
 if [[ "$GOOS" == "darwin" ]]; then
+  rm -rf $DEST
+  mkdir -p $DEST
   export CGO_ENABLED=1
 else
   export CGO_ENABLED=0
@@ -35,6 +53,8 @@ if [[ "$GOOS" =~ legacy$ ]]; then
     GOOS="darwin"
     DEST=$DEPLOYMENT/macos-legacy-amd64
   fi
+  rm -rf $DEST
+  mkdir -p $DEST
 else
   GOCMD="go"
   TAGS="$TAGS,with_naive_outbound"
@@ -44,8 +64,6 @@ if [ -z $DEST ]; then
   echo "Please set GOOS GOARCH"
   exit 1
 fi
-rm -rf $DEST
-mkdir -p $DEST
 
 if [[ "$GOOS" == "windows" ]]; then
   if [[ "$GOARCH" == "386" ]]; then
