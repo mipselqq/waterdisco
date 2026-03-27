@@ -70,16 +70,18 @@ jobs:
           cache-dependency-path: |
             core/server/go.sum
       - name: Install Golang For Legacy OS
-        if: matrix.cross_os == 'windowslegacy' || matrix.cross_os == 'darwin-legacy'
+        if: steps.cache-common.outputs.cache-hit != 'true' && contains( matrix.cross_os, 'legacy' )
         run: |
           curl -L -o go.7z https://github.com/throneproj/env_windows_legacy/releases/download/latest/go.7z
           7z x go.7z
       - name: Install Protoc
+        if: steps.cache-common.outputs.cache-hit != 'true'
         uses: arduino/setup-protoc@v3
         with:
           version: "31.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Installing protoc-gen-go
+        if: steps.cache-common.outputs.cache-hit != 'true'
         run: |
           go install github.com/golang/protobuf/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
@@ -150,15 +152,10 @@ jobs:
         with:
           architecture: ${{ matrix.target }}
       - name: Install MSVC compiler
-        if: matrix.platform == 'windows-latest' && matrix.qt_version != '6.2.12'
-        uses: ilammy/msvc-dev-cmd@v1.13.0
-        with:
-          arch: ${{ matrix.target }}
-      - name: Install MSVC compiler (WoA)
-        if: matrix.platform == 'windows-11-arm'
+        if: contains( matrix.platform, 'windows' ) && matrix.qt_version != '6.2.12'
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: arm64
+          arch: ${{ matrix.target }}
       - name: Download Artifacts
         uses: actions/download-artifact@v4.3.0
         with:
