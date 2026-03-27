@@ -17,42 +17,33 @@ jobs:
         include:
           - cross_os: windows
             cross_arch: amd64
-            platform: ubuntu-latest
             go_version: "1.25.8"
           - cross_os: windows
             cross_arch: arm64
-            platform: ubuntu-latest
             go_version: "1.25.8"
           - cross_os: linux
             cross_arch: amd64
-            platform: ubuntu-latest
             go_version: "1.25.8"
           - cross_os: linux
             cross_arch: arm64
-            platform: ubuntu-latest
             go_version: "1.25.8"
           - cross_os: darwin
             cross_arch: amd64
-            platform: macos-latest
             go_version: "1.25.8"
           - cross_os: darwin
             cross_arch: arm64
-            platform: macos-latest
             go_version: "1.25.8"
           - cross_os: darwin-legacy
             cross_arch: amd64
-            platform: ubuntu-latest
             go_version: "1.25.8"
           - cross_os: windowslegacy
             cross_arch: amd64
-            platform: ubuntu-latest
             go_version: "1.25.8"
           - cross_os: windowslegacy
             cross_arch: 386
-            platform: ubuntu-latest
             go_version: "1.25.8"
       fail-fast: false
-    runs-on: ${{ matrix.platform }}
+    runs-on: macos-latest
     steps:
       - name: Checking out sources
         uses: actions/checkout@v4.2.2
@@ -72,8 +63,8 @@ jobs:
       - name: Install Golang For Legacy OS
         if: steps.cache-common.outputs.cache-hit != 'true' && contains( matrix.cross_os, 'legacy' )
         run: |
-          curl -L -o go.7z https://github.com/throneproj/env_windows_legacy/releases/download/latest/go.7z
-          7z x go.7z
+          curl -L -o go.zip https://github.com/throneproj/env_windows_legacy/releases/download/latest/go.zip
+          7z x go.zip
       - name: Install Protoc
         if: steps.cache-common.outputs.cache-hit != 'true'
         uses: arduino/setup-protoc@v3
