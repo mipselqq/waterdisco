@@ -101,4 +101,10 @@ namespace Configs {
               QStandardPaths::AppConfigLocation);
         return qApp->applicationDirPath();
     }
+
+    bool HasNaive() {
+        bool ok;
+        auto hasNaive = API::defaultClient->CheckNaive(&ok);
+        return ok && hasNaive;
+    };
 } // namespace Configs
