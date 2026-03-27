@@ -41,7 +41,7 @@ else
 fi
 
 if [[ "$GOOS" =~ legacy$ ]]; then
-  GOCMD="$PWD/go/bin/go"
+  GOCMD="$PWD/golang.org/go/bin/go"
   if [[ "$GOOS" == "windowslegacy" ]]; then
     GOOS="windows"
     if [[ $GOARCH == 'amd64' ]]; then
