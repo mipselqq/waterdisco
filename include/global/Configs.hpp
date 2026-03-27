@@ -3,7 +3,19 @@
 #include "Const.hpp"
 #include "Utils.hpp"
 #include "include/database/DatabaseManager.h"
-#include <srslist.h>
+#include <map>
+#include <string>
+
+// Built-in routing rule-set URL mapping.
+// Keep this in a header as an inline object, since several UI/config units use it.
+inline const std::map<std::string, std::string> ruleSetMap = {
+    {"geoip-cn", "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"},
+    {"geoip-private", "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-private.srs"},
+    {"geoip-ir", "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ir.srs"},
+    {"geosite-cn", "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"},
+    {"geosite-geolocation-!cn", "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs"},
+    {"geosite-category-ads-all", "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"},
+};
 
 // Switch core support
 

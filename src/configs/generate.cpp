@@ -372,6 +372,19 @@ namespace Configs {
             return;
         }
 
+        // On Linux with systemd-resolved + Tun, "local" DNS is converted to
+        // sing-box "underlying". If no default interface is available,
+        // sing-box exits with: dns/underlying: No default interface.
+        if (ctx->os == Linux
+            && Configs::dataManager->settingsRepo->spmode_vpn
+            && ctx->isResolvedUsed
+            && Configs::dataManager->settingsRepo->core_box_underlying_dns.isEmpty()
+            && Configs::dataManager->settingsRepo->direct_dns.startsWith("local"))
+        {
+            ctx->error = QObject::tr("Linux detected with systemd-resolved and Tun mode enabled. Direct DNS is set to local, which requires a default interface for underlying DNS. Please set Routing Settings -> Local override to a real DNS server IP (for example 1.1.1.1 or your router DNS) or disable Tun mode.");
+            return;
+        }
+
         if (Configs::dataManager->settingsRepo->use_dns_object && useDnsObj) {
             ctx->buildConfigResult->coreConfig["dns"] = QString2QJsonObject(Configs::dataManager->settingsRepo->dns_object);
             return;

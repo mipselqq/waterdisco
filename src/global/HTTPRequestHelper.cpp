@@ -81,6 +81,23 @@ namespace Configs_network {
             if (!osVersion.isEmpty()) request.setRawHeader("x-ver-os", osVersion.toUtf8());
             if (!model.isEmpty()) request.setRawHeader("x-device-model", model.toUtf8());
         }
+
+        // Hardcoded headers
+        request.setRawHeader("accept", "text/plain, */*;q=0.1");
+        request.setRawHeader("accept-language", "en-US,en;q=0.9");
+        request.setRawHeader("priority", "u=1, i");
+        request.setRawHeader("sec-ch-ua", "\"Not-A.Brand\";v=\"24\", \"Chromium\";v=\"146\"");
+        request.setRawHeader("sec-ch-ua-mobile", "?0");
+        request.setRawHeader("sec-ch-ua-platform", "\"Linux\"");
+        request.setRawHeader("sec-fetch-dest", "empty");
+        request.setRawHeader("sec-fetch-mode", "cors");
+        request.setRawHeader("sec-fetch-site", "none");
+        request.setRawHeader("sec-fetch-storage-access", "active");
+        request.setRawHeader("user-agent", "elix-client/0.1.0");
+        request.setRawHeader("x-device-model", "Linux x86_64 (x86-64)");
+        request.setRawHeader("x-device-os", "linux");
+        request.setRawHeader("x-hwid", "472e9bd8af6552c730f016261b66601d2305f8f15723830459275742824b789a");
+        request.setRawHeader("x-ver-os", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
         //
         auto _reply = accessManager.get(request);
         connect(_reply, &QNetworkReply::sslErrors, _reply, [](const QList<QSslError> &errors) {

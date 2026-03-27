@@ -7,6 +7,7 @@
 #include <QInputDialog>
 #include <QUrlQuery>
 #include <QJsonDocument>
+#include <QRegularExpression>
 
 #include "include/configs/common/utils.h"
 #include "include/database/GroupsRepo.h"
@@ -73,9 +74,38 @@ namespace Subscription {
         return SingBoxSubType::invalid;
     }
 
+    static QByteArray decodeSubscriptionPayload(const QString &rawInput)
+    {
+        auto input = rawInput.trimmed();
+        if (input.isEmpty()) return {};
+
+        if (auto decoded = DecodeB64IfValid(input); !decoded.isEmpty()) {
+            return decoded;
+        }
+
+        // Some providers/users pass wrapped payload with spaces/newlines or visual markers.
+        auto compact = input;
+        compact.remove(QRegularExpression("[\\s\\u23CE]"));
+        if (auto decoded = DecodeB64IfValid(compact); !decoded.isEmpty()) {
+            return decoded;
+        }
+
+        if (auto decoded = DecodeB64IfValid(compact, QByteArray::Base64UrlEncoding); !decoded.isEmpty()) {
+            return decoded;
+        }
+
+        // Last fallback: normalize url-safe alphabet and restore padding.
+        auto normalized = compact;
+        normalized.replace('-', '+');
+        normalized.replace('_', '/');
+        auto rem = normalized.length() % 4;
+        if (rem != 0) normalized += QString(4 - rem, '=');
+        return DecodeB64IfValid(normalized);
+    }
+
     void RawUpdater::update(const QString &str, bool needParse = true) {
         // Base64 encoded subscription
-        if (auto str2 = DecodeB64IfValid(str); !str2.isEmpty()) {
+        if (auto str2 = decodeSubscriptionPayload(str); !str2.isEmpty()) {
             update(str2);
             return;
         }

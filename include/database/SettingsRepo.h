@@ -127,7 +127,7 @@ namespace Configs {
         int current_route_id = 1;
         QString remote_dns = "tls://8.8.8.8";
         QString remote_dns_strategy = "";
-        QString direct_dns = "localhost";
+        QString direct_dns = "8.8.8.8";
         QString direct_dns_strategy = "";
         bool use_dns_object = false;
         QString dns_object = "";
@@ -206,7 +206,7 @@ namespace Configs {
         int core_box_clash_api = -9090;
         QString core_box_clash_listen_addr = "127.0.0.1";
         QString core_box_clash_api_secret = "";
-        QString core_box_underlying_dns = "";
+        QString core_box_underlying_dns = "8.8.8.8";
         int core_dns_in_port = 5533;
 
         // Xray
