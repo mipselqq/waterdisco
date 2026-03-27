@@ -54,6 +54,7 @@
 #include <QTimer>
 #include <QMessageBox>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
 #include <QStyleHints>
@@ -167,8 +168,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     Configs::dataManager->settingsRepo->core_port = MkPort();
     if (Configs::dataManager->settingsRepo->core_port <= 0) Configs::dataManager->settingsRepo->core_port = 19810;
 
-    auto core_path = QApplication::applicationDirPath() + "/";
-    core_path += "ThroneCore";
+    auto core_path = Configs::FindCoreRealPath();
+    if (!QFile::exists(core_path)) {
+        MW_show_log("[ERROR] ThroneCore not found near Throne executable: " + core_path);
+    }
 
     QStringList args;
     args.push_back("-port");
