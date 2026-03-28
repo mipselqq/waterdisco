@@ -11,6 +11,7 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/Throne}"
 CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 CORE_PATH="${CORE_PATH:-}"
+CORE_GO_TAGS="${CORE_GO_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_purego,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
 
 log() {
   printf '[install] %s\n' "$*"
@@ -43,7 +44,7 @@ Options:
   -h, --help           Show this help
 
 Environment overrides:
-  BUILD_DIR, INSTALL_DIR, CMAKE_BUILD_TYPE, SKIP_BUILD, CORE_PATH
+  BUILD_DIR, INSTALL_DIR, CMAKE_BUILD_TYPE, SKIP_BUILD, CORE_PATH, CORE_GO_TAGS
 EOF
 }
 
@@ -121,7 +122,8 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
       fi
 
       # Force module mode so local imports like ThroneCore/gen resolve even if user env disables modules.
-      GOWORK=off GO111MODULE=on go build -trimpath -ldflags "-s -w" -o "$BUILD_DIR/ThroneCore" .
+      # Keep parity with script/build_go.sh tags so Clash API and related features are available.
+      GOWORK=off GO111MODULE=on go build -trimpath -ldflags "-w -s -X 'internal/godebug.defaultGODEBUG=multipathtcp=0' -checklinkname=0" -tags "$CORE_GO_TAGS" -o "$BUILD_DIR/ThroneCore" .
     )
     CORE_PATH="$BUILD_DIR/ThroneCore"
   fi

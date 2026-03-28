@@ -521,7 +521,10 @@ namespace Configs {
         };
 
         // Local
-        auto dnsLocalAddress = Configs::dataManager->settingsRepo->core_box_underlying_dns.isEmpty() ? "local" : Configs::dataManager->settingsRepo->core_box_underlying_dns;
+        auto dnsLocalAddress = Configs::dataManager->settingsRepo->core_box_underlying_dns.trimmed();
+        if (dnsLocalAddress.isEmpty() || dnsLocalAddress.compare("local", Qt::CaseInsensitive) == 0) {
+            dnsLocalAddress = "8.8.8.8";
+        }
         auto dnsLocalObj = buildDnsObj(dnsLocalAddress, ctx);
         dnsLocalObj["tag"] = "dns-local";
         servers += dnsLocalObj;
