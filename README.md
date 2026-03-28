@@ -25,7 +25,7 @@ Qt based Desktop cross-platform GUI proxy utility, empowered by [Sing-box](https
 
 Supports Windows 11/10/8/7 / Linux / MacOS out of the box.
 
-<img width="1002" height="789" alt="image" src="https://github.com/user-attachments/assets/45a23c6c-b716-4acf-8281-63d35cac8457" />
+<img width="2076" height="1201" alt="image" src="https://github.com/user-attachments/assets/c03cf971-8bad-46a5-9278-050359f520a5" />
 
 ### Note on MacOS releases
 Apple platforms have a very strict security policy and since Throne does not have a signed certificate, you will have to remove the quarantine using `xattr -d com.apple.quarantine /path/to/throne.app`. Also to get the built-in privilege escalation to work, `Terminal` should have the `Full Disk` access.
