@@ -1,3 +1,24 @@
+# What's new in this fork
+
+This fork adds several quality-of-life features and improvements to the original Throne app:
+
+### 🚀 Smarter Speed Tests
+* **New Metrics:** See more valuable details for each server, including **Connection Time**, **Rx Speed**, and overall **Site Score**.
+* **Ping removal**: Ping is just a bad metric for measuring server quality. Removed in favour of connection time, which basically shows HTTP connection establishment time via a tunnel.
+* **Save Time:** The new **"Speed test fall short"** option stops testing slow servers early, prioritizing your fast servers first. If one server's download test time is more than 2x of fastest discovered time, skip.
+* **Stop Anytime:** Added a button to easily cancel a speed test while it's running.
+
+### ⚡ Auto-Connect & Startup
+* **Connect to Best:** Added a **"Connect with best site score"** action to instantly pick the fastest server.
+* **Startup Automation:** The app can now automatically test your servers and connect to the best one every time you open it.
+* **Startup Selection:** Choose exactly which servers you want the app to test on startup.
+
+### 🛠️ Profile Management
+* **Disable Profiles:** You can now disable specific profiles so they are ignored during tests and auto-connects.
+* **Saved Settings:** The app now correctly remembers your selected toggles, test results, and disabled profiles even after a restart.
+
+Btw, the codebase is such a spaghetti that I don't even care about the quality lol.
+
 # Throne (Formerly Nekoray)
 
 Qt based Desktop cross-platform GUI proxy utility, empowered by [Sing-box](https://github.com/SagerNet/sing-box)
