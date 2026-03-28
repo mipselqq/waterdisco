@@ -42,13 +42,12 @@ double ParseSpeedToMbps(QString speed) {
     return v / 1000000.0;
 }
 
-int CalcSiteScore(int latencyMs, int connectMs, double rxMbps) {
-    if (latencyMs <= 0 || connectMs <= 0 || rxMbps <= 0.0) return 0;
+int CalcSiteScore(int connectMs, double rxMbps) {
+    if (connectMs <= 0 || rxMbps <= 0.0) return 0;
     auto clamp01 = [](double v) { return std::max(0.0, std::min(100.0, v)); };
-    const double latencyScore = clamp01(100.0 - (static_cast<double>(latencyMs) / 6.0));
     const double connectScore = clamp01(100.0 - (static_cast<double>(connectMs) / 8.0));
     const double rxScore = clamp01(rxMbps * 2.5);
-    return static_cast<int>(std::round(latencyScore * 0.45 + connectScore * 0.25 + rxScore * 0.30));
+    return static_cast<int>(std::round(connectScore * 0.45 + rxScore * 0.55));
 }
 }
 
@@ -613,7 +612,7 @@ void MainWindow::querySpeedtest(QDateTime lastProxyListUpdate, const QMap<QStrin
             profile->dl_speed_mbps = ParseSpeedToMbps(profile->dl_speed);
             profile->ul_speed_mbps = ParseSpeedToMbps(profile->ul_speed);
             if (profile->latency <= 0 && res.result.value().latency.value() > 0) profile->latency = res.result.value().latency.value();
-            profile->site_score = CalcSiteScore(profile->latency, profile->connect_time_ms, profile->dl_speed_mbps);
+            profile->site_score = CalcSiteScore(profile->connect_time_ms, profile->dl_speed_mbps);
             refresh_proxy_list({profile->id});
             lastProxyListUpdate = QDateTime::currentDateTime();
         }
@@ -698,7 +697,7 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
             ent->dl_speed_mbps = ParseSpeedToMbps(ent->dl_speed);
             ent->ul_speed_mbps = ParseSpeedToMbps(ent->ul_speed);
             if (ent->latency <= 0 && res.latency.value() > 0) ent->latency = res.latency.value();
-            ent->site_score = CalcSiteScore(ent->latency, ent->connect_time_ms, ent->dl_speed_mbps);
+            ent->site_score = CalcSiteScore(ent->connect_time_ms, ent->dl_speed_mbps);
         } else {
             ent->dl_speed = "N/A";
             ent->ul_speed = "N/A";
