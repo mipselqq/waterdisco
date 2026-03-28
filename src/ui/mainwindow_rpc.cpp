@@ -432,6 +432,8 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool test
         return;
     }
 
+    currentUnderTest.store(true);
+
     runOnNewThread([this, profileIDs, testCurrent]() {
         stopSpeedtest.store(false);
         if (!testCurrent)
@@ -462,6 +464,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool test
         } else
         {
             runSpeedTest("", "", true, true, {}, {});
+            currentUnderTest.store(false);
         }
 
         speedtestRunning.unlock();
@@ -561,7 +564,6 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
     doneMu->lock();
     runOnNewThread([=,this]
     {
-        QDateTime lastProxyListUpdate = QDateTime::currentDateTime();
         while (true) {
             QThread::msleep(100);
             if (doneMu->tryLock())
@@ -838,6 +840,11 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
     auto id = running->id;
 
     auto profile_stop_stage2 = [=,this] {
+        if (currentUnderTest.load()) {
+            bool ok;
+            defaultClient->StopTests(&ok);
+            if (!ok) MW_show_log("Failed to stop profile tests!");
+        }
         if (!crash) {
             bool rpcOK;
             QString error = defaultClient->Stop(&rpcOK);
