@@ -23,6 +23,7 @@
         <file alias="Proxy.png">public/Proxy.png</file>
         <file alias="Proxy-Dns.png">public/Proxy-Dns.png</file>
         <file alias="Tun.png">public/Tun.png</file>
+        <file alias="easter.mp4">public/easter.mp4</file>
         <file>dashboard-notice.html</file>
     </qresource>
 </RCC>

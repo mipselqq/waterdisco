@@ -15,7 +15,7 @@ if(MSVC)
     string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network LinguistTools DBus)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network LinguistTools DBus Multimedia MultimediaWidgets)
 
 #### Platform Variables ####
 if (APPLE)
@@ -401,7 +401,7 @@ target_sources(Throne PRIVATE ${CMAKE_BINARY_DIR}/translations.qrc)
 # Target Link
 
 target_link_libraries(Throne PRIVATE
-        Qt6::Widgets Qt6::Network Qt6::DBus
+    Qt6::Widgets Qt6::Network Qt6::DBus Qt6::Multimedia Qt6::MultimediaWidgets
         Threads::Threads
         ${NKR_EXTERNAL_TARGETS}
         ${PLATFORM_LIBRARIES}

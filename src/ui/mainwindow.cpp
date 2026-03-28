@@ -67,6 +67,11 @@
 #include <QToolTip>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QHBoxLayout>
+#include <QUrl>
+#include <QAudioOutput>
+#include <QMediaPlayer>
+#include <QVideoWidget>
 #include <random>
 #include <3rdparty/QHotkey/qhotkey.h>
 #include <3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.hpp>
@@ -304,6 +309,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->label_inbound->installEventFilter(this);
     ui->splitter->installEventFilter(this);
     ui->tabWidget->installEventFilter(this);
+    ui->profilesTableView->viewport()->installEventFilter(this);
     //
     auto btnFilter = new QToolButton(this);
     btnFilter->setIcon(QIcon(":/icon/filter.png"));
@@ -489,6 +495,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             group->column_width.push_back(ui->profilesTableView->horizontalHeader()->sectionSize(i));
         }
         Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
+        updateEasterVideoGeometry();
+    });
+    connect(ui->profilesTableView->horizontalScrollBar(), &QScrollBar::valueChanged, this, [=, this](int) {
+        updateEasterVideoGeometry();
     });
     ui->profilesTableView->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->profilesTableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
@@ -736,6 +746,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         Configs::dataManager->settingsRepo->inbound_address = checked ? "::" : "127.0.0.1";
         ui->actionAllow_LAN->setChecked(checked);
         MW_dialog_message("", "UpdateConfigs::dataManager->settingsRepo");
+    });
+    connect(ui->actionRun_easter, &QAction::triggered, this, [=, this]() {
+        runEasterVideo();
     });
     //
     connect(ui->checkBox_VPN, &QCheckBox::clicked, this, [=,this](bool checked) { set_spmode_vpn(checked); });
@@ -2028,6 +2041,7 @@ void MainWindow::refresh_proxy_list_column_size() {
             }
             hHeader->adjustPositions();
             hHeader->blockSignals(false);
+            updateEasterVideoGeometry();
             return;
         }
 
@@ -2053,7 +2067,106 @@ void MainWindow::refresh_proxy_list_column_size() {
         ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         hHeader->adjustPositions();
         hHeader->blockSignals(false);
+        updateEasterVideoGeometry();
     });
+}
+
+void MainWindow::runEasterVideo() {
+    stopEasterVideo();
+
+    auto *viewport = ui->profilesTableView->viewport();
+    auto *header = ui->profilesTableView->horizontalHeader();
+    if (!viewport || !header) return;
+
+    int usedWidth = 0;
+    for (int i = 0; i < header->count(); ++i) {
+        if (ui->profilesTableView->isColumnHidden(i)) continue;
+        usedWidth += header->sectionSize(i);
+    }
+    const int freeWidth = std::max(0, viewport->width() - usedWidth);
+    if (freeWidth < 120) {
+        MW_show_log(tr("No free right-side table space for easter video."));
+        return;
+    }
+
+    easterOverlay = new QWidget(viewport);
+    easterOverlay->setObjectName("easterOverlay");
+    easterOverlay->setAttribute(Qt::WA_DeleteOnClose, true);
+    easterOverlay->setStyleSheet("QWidget#easterOverlay { background-color: rgba(0, 0, 0, 200); }");
+
+    auto *layout = new QHBoxLayout(easterOverlay);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    easterVideoWidget = new QVideoWidget(easterOverlay);
+    easterVideoWidget->setAspectRatioMode(Qt::KeepAspectRatio);
+    layout->addWidget(easterVideoWidget);
+
+    easterAudioOutput = new QAudioOutput(this);
+    easterAudioOutput->setMuted(false);
+    easterAudioOutput->setVolume(1.0);
+
+    easterPlayer = new QMediaPlayer(this);
+    easterPlayer->setAudioOutput(easterAudioOutput);
+    easterPlayer->setVideoOutput(easterVideoWidget);
+    easterPlayer->setSource(QUrl("qrc:/Throne/easter.mp4"));
+
+    connect(easterPlayer, &QMediaPlayer::mediaStatusChanged, this, [=, this](QMediaPlayer::MediaStatus status) {
+        if (status == QMediaPlayer::EndOfMedia || status == QMediaPlayer::InvalidMedia) {
+            stopEasterVideo();
+        }
+    });
+
+    updateEasterVideoGeometry();
+    easterOverlay->show();
+    easterOverlay->raise();
+    easterPlayer->play();
+}
+
+void MainWindow::stopEasterVideo() {
+    if (easterPlayer != nullptr) {
+        easterPlayer->stop();
+        easterPlayer->deleteLater();
+        easterPlayer = nullptr;
+    }
+    if (easterAudioOutput != nullptr) {
+        easterAudioOutput->deleteLater();
+        easterAudioOutput = nullptr;
+    }
+    if (easterVideoWidget != nullptr) {
+        easterVideoWidget->deleteLater();
+        easterVideoWidget = nullptr;
+    }
+    if (easterOverlay != nullptr) {
+        easterOverlay->deleteLater();
+        easterOverlay = nullptr;
+    }
+}
+
+void MainWindow::updateEasterVideoGeometry() {
+    if (easterOverlay == nullptr) return;
+
+    auto *viewport = ui->profilesTableView->viewport();
+    auto *header = ui->profilesTableView->horizontalHeader();
+    if (!viewport || !header) return;
+
+    int usedWidth = 0;
+    for (int i = 0; i < header->count(); ++i) {
+        if (ui->profilesTableView->isColumnHidden(i)) continue;
+        usedWidth += header->sectionSize(i);
+    }
+
+    const int viewportWidth = viewport->width();
+    const int viewportHeight = viewport->height();
+    const int x = std::min(std::max(0, usedWidth), viewportWidth);
+    const int width = std::max(0, viewportWidth - x);
+
+    if (width <= 0 || viewportHeight <= 0) {
+        stopEasterVideo();
+        return;
+    }
+
+    easterOverlay->setGeometry(x, 0, width, viewportHeight);
 }
 
 void MainWindow::refresh_proxy_list(const QList<int>& ids, bool mayNeedReset) {
@@ -3017,6 +3130,10 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             auto size = ui->splitter->size();
             ui->splitter->setSizes({size.height() / 2, size.height() / 2});
         }
+    } else if (event->type() == QEvent::Resize) {
+        if (obj == ui->profilesTableView->viewport()) {
+            updateEasterVideoGeometry();
+        }
     }
     return QMainWindow::eventFilter(obj, event);
 }
@@ -3114,6 +3231,7 @@ void MainWindow::setActionsData()
     ui->actionResolve_Selected_Out_IP->setData(QString("m27"));
     ui->actionAuto_connect_with_best_site_score->setData(QString("m28"));
     ui->actionConnect_with_best_site_score->setData(QString("m29"));
+    ui->actionRun_easter->setData(QString("m30"));
 }
 
 QList<QAction*> MainWindow::getActionsForShortcut()

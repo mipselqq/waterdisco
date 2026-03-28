@@ -26,6 +26,7 @@
 #include <QSemaphore>
 #include <QMutex>
 #include <QThreadPool>
+#include <QPointer>
 
 #include "group/GroupSort.hpp"
 #include "include/global/GuiUtils.hpp"
@@ -167,6 +168,11 @@ private slots:
     void on_tabWidget_customContextMenuRequested(const QPoint& p);
 
 private:
+    class QMediaPlayer *easterPlayer = nullptr;
+    class QAudioOutput *easterAudioOutput = nullptr;
+    class QVideoWidget *easterVideoWidget = nullptr;
+    class QWidget *easterOverlay = nullptr;
+
     Ui::MainWindow *ui;
     ProfilesTableModel *profilesTableModel = nullptr;
     QSystemTrayIcon *tray;
@@ -243,6 +249,10 @@ private:
     bool should_print_log(const QString &log);
 
     void updateLogFilterFields();
+
+    void runEasterVideo();
+    void stopEasterVideo();
+    void updateEasterVideoGeometry();
 
     QList<int> filterProfilesList(const QList<int>& profileIDs);
 

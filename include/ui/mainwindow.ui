@@ -561,6 +561,7 @@
     <addaction name="actionRemember_last_proxy"/>
    <addaction name="actionAuto_connect_with_best_site_score"/>
     <addaction name="actionAllow_LAN"/>
+    <addaction name="actionRun_easter"/>
     <addaction name="menu_spmode"/>
     <addaction name="separator"/>
     <addaction name="actionRestart_Proxy"/>
@@ -1088,6 +1089,11 @@
       <string>Connect with best site score</string>
     </property>
    </action>
+  <action name="actionRun_easter">
+   <property name="text">
+    <string>Improve mood</string>
+   </property>
+  </action>
   <action name="actionRefresh_Column_Widths">
    <property name="text">
     <string>Refresh Column Widths</string>
