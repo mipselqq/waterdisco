@@ -76,7 +76,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
         req.outbound_tags.push_back(item.toStdString());
     }
     req.config = config.toStdString();
-    req.url = (testUrl.isEmpty() ? Configs::dataManager->settingsRepo->test_latency_url : testUrl).toStdString();
+    req.url = (testUrl.isEmpty() ? Configs::dataManager->settingsRepo->simple_dl_url : testUrl).toStdString();
     req.use_default_outbound = useDefault;
     req.max_concurrency = Configs::dataManager->settingsRepo->test_concurrent;
     req.test_timeout_ms = Configs::dataManager->settingsRepo->url_test_timeout_ms;
@@ -296,6 +296,7 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
     }
 
     runOnNewThread([this, profileIDs, connectionTimeTest]() {
+        Q_UNUSED(connectionTimeTest);
         stopSpeedtest.store(false);
         auto speedTestFunc = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice, const QList<int>& ids) {
             auto buildObject = Configs::BuildTestConfig(profileSlice);
@@ -308,10 +309,10 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
             auto testCount = buildObject->fullConfigs.size() + (!buildObject->outboundTags.empty());
             for (const auto &entID: buildObject->fullConfigs.keys()) {
                 auto configStr = buildObject->fullConfigs[entID];
-                auto func = [this, &counter, testCount, configStr, entID, connectionTimeTest]() {
+                auto func = [this, &counter, testCount, configStr, entID]() {
                     runURLTest(configStr, "", true, {}, {}, entID,
-                               connectionTimeTest ? Configs::dataManager->settingsRepo->simple_dl_url : Configs::dataManager->settingsRepo->test_latency_url,
-                               connectionTimeTest);
+                               Configs::dataManager->settingsRepo->simple_dl_url,
+                               true);
                     ++counter;
                     if (counter.load() == testCount) {
                         speedtestRunning.unlock();
@@ -321,12 +322,12 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
             }
 
             if (!buildObject->outboundTags.empty()) {
-                auto func = [this, &buildObject, &counter, testCount, connectionTimeTest]() {
+                auto func = [this, &buildObject, &counter, testCount]() {
                     auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
                     runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID,
                                -1,
-                               connectionTimeTest ? Configs::dataManager->settingsRepo->simple_dl_url : Configs::dataManager->settingsRepo->test_latency_url,
-                               connectionTimeTest);
+                               Configs::dataManager->settingsRepo->simple_dl_url,
+                               true);
                     ++counter;
                     if (counter.load() == testCount) {
                         speedtestRunning.unlock();
@@ -337,7 +338,7 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
             if (testCount == 0) speedtestRunning.unlock();
 
             speedtestRunning.lock();
-            MW_show_log(connectionTimeTest ? "Connection-time test for batch done." : "URL test for batch done.");
+            MW_show_log("Connection-time test for batch done.");
             runOnUiThread([=,this]{
                 refresh_proxy_list(ids);
             });
@@ -354,12 +355,12 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
         }
         speedtestRunning.unlock();
         if (currentGroup->auto_clear_unavailable) {
-            MW_show_log(connectionTimeTest ? "Connection-time test finished, clearing unavailable profiles..." : "URL test finished, clearing unavailable profiles...");
+            MW_show_log("Connection-time test finished, clearing unavailable profiles...");
             runOnUiThread([=, this] {
                clearUnavailableProfiles(false, profileIDs);
             });
         }
-        MW_show_log(connectionTimeTest ? tr("Connection-time test finished!") : tr("URL test finished!"));
+        MW_show_log(tr("Connection-time test finished!"));
     });
 }
 
@@ -386,23 +387,23 @@ void MainWindow::url_test_current() {
     runOnNewThread([=,this] {
         libcore::TestReq req;
         req.test_current = true;
-        req.url = Configs::dataManager->settingsRepo->test_latency_url.toStdString();
+        req.url = Configs::dataManager->settingsRepo->simple_dl_url.toStdString();
 
         bool rpcOK;
         auto result = defaultClient->Test(&rpcOK, req);
         if (!rpcOK || result.results.empty()) return;
 
-        auto latency = result.results[0].latency_ms.value();
+        auto connectTime = result.results[0].latency_ms.value();
         last_test_time = QDateTime::currentSecsSinceEpoch();
 
         runOnUiThread([=,this] {
             if (!result.results[0].error.value().empty()) {
-                MW_show_log(QString("UrlTest error: %1").arg(QString::fromStdString(result.results[0].error.value())));
+                MW_show_log(QString("Connection-time test error: %1").arg(QString::fromStdString(result.results[0].error.value())));
             }
-            if (latency <= 0) {
-                ui->label_running->setText(tr("Test Result") + ": " + tr("Unavailable"));
-            } else if (latency > 0) {
-                ui->label_running->setText(tr("Test Result") + ": " + QString("%1 ms").arg(latency));
+            if (connectTime <= 0) {
+                ui->label_running->setText(tr("Connection Time") + ": " + tr("Unavailable"));
+            } else if (connectTime > 0) {
+                ui->label_running->setText(tr("Connection Time") + ": " + QString("%1 ms").arg(connectTime));
             }
         });
     });
@@ -532,26 +533,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
                 return;
             }
 
-            // 1) Fast parallel ping probe.
-            for (const auto &entID: buildObject->fullConfigs.keys()) {
-                if (stopSpeedtest.load()) {
-                    completedFully = false;
-                    return;
-                }
-                auto configStr = buildObject->fullConfigs[entID];
-                runURLTest(configStr, "", true, {}, {}, entID, Configs::dataManager->settingsRepo->test_latency_url, false);
-            }
-            if (stopSpeedtest.load()) {
-                completedFully = false;
-                return;
-            }
-            if (!buildObject->outboundTags.empty()) {
-                auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
-                runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID,
-                           -1, Configs::dataManager->settingsRepo->test_latency_url, false);
-            }
-
-            // 2) 2MB simple download throughput probe.
+            // 1) 2MB simple download throughput probe.
             for (const auto &entID: buildObject->fullConfigs.keys()) {
                 if (stopSpeedtest.load()) {
                     completedFully = false;

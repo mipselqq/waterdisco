@@ -947,7 +947,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         urltest_current_group(get_now_selected_list(), true);
     });
     connect(ui->actionUrl_Test_Group, &QAction::triggered, this, [=,this]() {
-        urltest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles(), false);
+        urltest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles(), true);
     });
     connect(ui->actionSpeedtest_Selected, &QAction::triggered, this, [=,this]()
     {
