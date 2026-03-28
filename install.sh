@@ -95,8 +95,10 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
   log "[1/2] Configuring CMake (${CMAKE_BUILD_TYPE}, generator: ${CMAKE_GENERATOR})"
   cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -G "$CMAKE_GENERATOR" -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE"
 
-  log "[2/2] Building Throne (progress below)"
-  cmake --build "$BUILD_DIR" --target Throne --parallel "$(nproc)" --verbose
+  BUILD_JOBS="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+  export CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS"
+  log "[2/2] Building Throne with nproc=${BUILD_JOBS} jobs (progress below)"
+  cmake --build "$BUILD_DIR" --target Throne --parallel "$BUILD_JOBS" --verbose
 
   if [[ -z "$CORE_PATH" ]]; then
     log "Building ThroneCore from core/server"
