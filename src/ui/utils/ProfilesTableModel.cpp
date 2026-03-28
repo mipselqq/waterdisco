@@ -275,6 +275,29 @@ int ProfilesTableModel::profileIdAt(int row) const {
     return m_profileIds[row];
 }
 
+int ProfilesTableModel::rowOfProfileId(int profileId) const {
+    return id2row.value(profileId, -1);
+}
+
+bool ProfilesTableModel::moveProfileRow(int fromRow, int toRow) {
+    if (fromRow < 0 || toRow < 0 || fromRow >= m_profileIds.size() || toRow >= m_profileIds.size()) return false;
+    if (fromRow == toRow) return true;
+
+    const int destinationChild = (fromRow < toRow) ? (toRow + 1) : toRow;
+    if (!beginMoveRows(QModelIndex(), fromRow, fromRow, QModelIndex(), destinationChild)) return false;
+
+    const int movedId = m_profileIds.takeAt(fromRow);
+    m_profileIds.insert(toRow, movedId);
+
+    id2row.clear();
+    for (int i = 0; i < m_profileIds.size(); ++i) {
+        id2row.insert(m_profileIds[i], i);
+    }
+
+    endMoveRows();
+    return true;
+}
+
 void ProfilesTableModel::refreshProfileId(int profileId) {
     if (!id2row.contains(profileId)) return;
     auto r = id2row.value(profileId);
@@ -288,6 +311,10 @@ void ProfilesTableModel::emplaceProfiles(int row1, int row2) {
     m_profileIds.insert(row2+1, m_profileIds[row1]);
     if (row1 < row2) m_profileIds.remove(row1);
     else m_profileIds.remove(row1+1);
+    id2row.clear();
+    for (int i = 0; i < m_profileIds.size(); ++i) {
+        id2row.insert(m_profileIds[i], i);
+    }
     for (int i = std::max(std::min(row1, row2), 0); i <= std::max(row1, row2); ++i) {
         refreshProfileId(m_profileIds[i]);
     }

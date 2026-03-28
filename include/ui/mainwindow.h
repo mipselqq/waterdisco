@@ -183,6 +183,8 @@ private:
     qint64 last_test_time = 0;
     //
     int proxy_last_order = -1;
+    int live_sort_column = -1;
+    bool live_sort_descending = false;
     bool select_mode = false;
     QMutex mu_starting;
     QMutex mu_stopping;

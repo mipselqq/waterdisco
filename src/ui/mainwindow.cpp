@@ -459,6 +459,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         } else {
             return;
         }
+        live_sort_column = logicalIndex;
+        live_sort_descending = action.descending;
         runOnNewThread([=, this] {
             auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
             if (currGroup == nullptr) return;
@@ -514,6 +516,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             int testSortBy = chosen->data().toInt();
             group->test_sort_by = static_cast<Configs::testBy>(testSortBy);
             Configs::dataManager->groupsRepo->Save(group);
+            if (testSortBy == static_cast<int>(Configs::testBy::latency)) live_sort_column = 5;
+            if (testSortBy == static_cast<int>(Configs::testBy::rxSpeed)) live_sort_column = 6;
+            if (testSortBy == static_cast<int>(Configs::testBy::connectTime)) live_sort_column = 7;
+            if (testSortBy == static_cast<int>(Configs::testBy::siteScore)) live_sort_column = 8;
+            live_sort_descending = false;
             GroupSortAction action;
             action.method = GroupSortMethod::ByTestResult;
             action.descending = false;
@@ -557,6 +564,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             int trafficSortBy = chosen->data().toInt();
             group->traffic_sort_by = static_cast<Configs::trafficBy>(trafficSortBy);
             Configs::dataManager->groupsRepo->Save(group);
+            live_sort_column = (trafficSortBy == static_cast<int>(Configs::trafficBy::rx)) ? 9 : 10;
+            live_sort_descending = false;
             GroupSortAction action;
             action.method = GroupSortMethod::ByTraffic;
             action.descending = false;
@@ -2006,9 +2015,132 @@ void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, boo
     auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
     if (currentGroup == nullptr) return;
     if (!ids.isEmpty()) {
-        if (filterProfilesList(ids).isEmpty())
+        const auto changedVisibleIds = filterProfilesList(ids);
+        if (changedVisibleIds.isEmpty())
             return;
-        for (auto id:ids) profilesTableModel->refreshProfileId(id);
+
+        for (auto id: changedVisibleIds) profilesTableModel->refreshProfileId(id);
+
+        const bool isDynamicSortColumn = (live_sort_column >= 5 && live_sort_column <= 10);
+        bool sortColumnMatchesGroupMode = false;
+        if (live_sort_column == 5) sortColumnMatchesGroupMode = (currentGroup->test_sort_by == Configs::testBy::latency);
+        if (live_sort_column == 6) sortColumnMatchesGroupMode = (currentGroup->test_sort_by == Configs::testBy::rxSpeed);
+        if (live_sort_column == 7) sortColumnMatchesGroupMode = (currentGroup->test_sort_by == Configs::testBy::connectTime);
+        if (live_sort_column == 8) sortColumnMatchesGroupMode = (currentGroup->test_sort_by == Configs::testBy::siteScore);
+        if (live_sort_column == 9) sortColumnMatchesGroupMode = (currentGroup->traffic_sort_by == Configs::trafficBy::rx);
+        if (live_sort_column == 10) sortColumnMatchesGroupMode = (currentGroup->traffic_sort_by == Configs::trafficBy::tx);
+
+        if (isDynamicSortColumn && sortColumnMatchesGroupMode) {
+            const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+            auto isDisabled = [&](int profileId) {
+                return disabledIds.contains(QString::number(profileId));
+            };
+
+            QHash<int, double> metricCache;
+            auto metricOf = [&](int profileId) {
+                if (metricCache.contains(profileId)) return metricCache.value(profileId);
+                auto profile = Configs::dataManager->profilesRepo->GetProfile(profileId);
+                if (!profile) {
+                    metricCache.insert(profileId, 0.0);
+                    return 0.0;
+                }
+                double value = 0.0;
+                if (live_sort_column == 5) {
+                    int latency = profile->latency;
+                    if (latency == 0) latency = 100000;
+                    if (latency < 0) latency = 99999;
+                    value = static_cast<double>(latency);
+                } else if (live_sort_column == 6) {
+                    value = profile->dl_speed_mbps;
+                } else if (live_sort_column == 7) {
+                    int connect = profile->connect_time_ms;
+                    if (connect == 0) connect = 100000;
+                    if (connect < 0) connect = 99999;
+                    value = static_cast<double>(connect);
+                } else if (live_sort_column == 8) {
+                    value = static_cast<double>(profile->site_score);
+                } else if (live_sort_column == 9) {
+                    value = static_cast<double>(profile->traffic_downlink);
+                } else if (live_sort_column == 10) {
+                    value = static_cast<double>(profile->traffic_uplink);
+                }
+                metricCache.insert(profileId, value);
+                return value;
+            };
+
+            auto shouldComeBefore = [&](int lhsId, int rhsId) {
+                const double lhs = metricOf(lhsId);
+                const double rhs = metricOf(rhsId);
+                if (lhs == rhs) return false;
+                return live_sort_descending ? (lhs > rhs) : (lhs < rhs);
+            };
+
+            auto moveInGroupByMetric = [&](int profileId) {
+                if (isDisabled(profileId)) return;
+
+                auto &profiles = currentGroup->profiles;
+                int from = profiles.indexOf(profileId);
+                if (from < 0) return;
+
+                int firstDisabled = profiles.size();
+                for (int i = 0; i < profiles.size(); ++i) {
+                    if (isDisabled(profiles[i])) {
+                        firstDisabled = i;
+                        break;
+                    }
+                }
+                if (from >= firstDisabled) return;
+
+                int to = from;
+
+                while (to > 0) {
+                    const int prevId = profiles[to - 1];
+                    if (isDisabled(prevId)) break;
+                    if (shouldComeBefore(profileId, prevId)) --to;
+                    else break;
+                }
+                while (to + 1 < firstDisabled) {
+                    const int nextId = profiles[to + 1];
+                    if (shouldComeBefore(nextId, profileId)) ++to;
+                    else break;
+                }
+
+                if (to != from) profiles.move(from, to);
+            };
+
+            auto moveInViewByMetric = [&](int profileId) {
+                if (isDisabled(profileId)) return;
+
+                int from = profilesTableModel->rowOfProfileId(profileId);
+                if (from < 0) return;
+
+                const int rowCount = profilesTableModel->rowCount();
+                int to = from;
+
+                while (to > 0) {
+                    const int prevId = profilesTableModel->profileIdAt(to - 1);
+                    if (isDisabled(prevId)) break;
+                    if (shouldComeBefore(profileId, prevId)) --to;
+                    else break;
+                }
+                while (to + 1 < rowCount) {
+                    const int nextId = profilesTableModel->profileIdAt(to + 1);
+                    if (isDisabled(nextId)) break;
+                    if (shouldComeBefore(nextId, profileId)) ++to;
+                    else break;
+                }
+
+                if (to != from) {
+                    profilesTableModel->moveProfileRow(from, to);
+                }
+            };
+
+            for (int id : changedVisibleIds) {
+                metricCache.remove(id);
+                moveInGroupByMetric(id);
+                moveInViewByMetric(id);
+            }
+        }
     } else {
         auto profileIDs = filterProfilesList(currentGroup->profiles);
         profilesTableModel->refreshTable(profileIDs, mayNeedReset);

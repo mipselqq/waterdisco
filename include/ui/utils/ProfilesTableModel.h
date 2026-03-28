@@ -36,6 +36,12 @@ public:
     // Profile ID for a given row (for selection / double-click).
     int profileIdAt(int row) const;
 
+    // Current row for a profile ID, or -1 if not in the current filtered model.
+    int rowOfProfileId(int profileId) const;
+
+    // Move one row to a new position using model move semantics.
+    bool moveProfileRow(int fromRow, int toRow);
+
     // Invalidate one row so the view repaints (e.g. after latency/traffic update).
     void refreshProfileId(int profileId);
 
