@@ -2,6 +2,8 @@
 
 #include <QAbstractItemView>
 #include <QMenu>
+#include <QProxyStyle>
+#include <QStyleOptionMenuItem>
 #include "include/configs/sub/GroupUpdater.hpp"
 #include "include/sys/Process.hpp"
 #include "include/sys/AutoRun.hpp"
@@ -532,17 +534,59 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     tray->setIcon(GetTrayIcon(Icon::NONE));
     QApplication::setWindowIcon(Icon::GetTrayIcon(Icon::NONE));
     auto *trayMenu = new QMenu();
-    trayMenu->addAction(ui->actionShow_window);
-    trayMenu->addSeparator();
-    trayMenu->addAction(ui->actionStart_with_system);
-    trayMenu->addAction(ui->actionRemember_last_proxy);
-    trayMenu->addAction(ui->actionAllow_LAN);
-    trayMenu->addSeparator();
-    trayMenu->addMenu(ui->menu_spmode);
-    trayMenu->addSeparator();
-    trayMenu->addAction(ui->actionRestart_Proxy);
+
+    auto *separator = trayMenu->addSeparator();
     trayMenu->addAction(ui->actionRestart_Program);
     trayMenu->addAction(ui->menu_exit);
+
+    auto trayRouteIDs = std::make_shared<QList<int>>();
+    auto trayRouteActions = std::make_shared<QList<QAction*>>();
+
+    auto rebuildTrayRouteActions = [=, this]() {
+        for (auto *oldAction : *trayRouteActions) {
+            trayMenu->removeAction(oldAction);
+            oldAction->deleteLater();
+        }
+        trayRouteActions->clear();
+        trayRouteIDs->clear();
+
+        for (const auto &route : Configs::dataManager->routesRepo->GetAllRouteProfiles()) {
+            trayRouteIDs->append(route->id);
+
+            auto *action = new QAction(trayMenu);
+            action->setText(route->name);
+            action->setData(route->id);
+            action->setCheckable(true);
+            connect(action, &QAction::triggered, this, [=, this]() {
+                const auto routeID = action->data().toInt();
+                if (Configs::dataManager->settingsRepo->current_route_id == routeID) return;
+                Configs::dataManager->settingsRepo->current_route_id = routeID;
+                Configs::dataManager->settingsRepo->Save();
+                if (Configs::dataManager->settingsRepo->started_id >= 0) profile_start(Configs::dataManager->settingsRepo->started_id);
+            });
+            trayMenu->insertAction(separator, action);
+            trayRouteActions->append(action);
+        }
+    };
+
+    rebuildTrayRouteActions();
+
+    connect(trayMenu, &QMenu::aboutToShow, this, [=, this]() {
+        QList<int> currentRouteIDs;
+        for (const auto &route : Configs::dataManager->routesRepo->GetAllRouteProfiles()) {
+            currentRouteIDs.append(route->id);
+        }
+
+        // Rebuild only when route list changed, otherwise only update checked state.
+        if (currentRouteIDs != *trayRouteIDs) {
+            rebuildTrayRouteActions();
+        }
+
+        for (auto *action : *trayRouteActions) {
+            action->setChecked(Configs::dataManager->settingsRepo->current_route_id == action->data().toInt());
+        }
+    });
+
     tray->setVisible(!Configs::dataManager->settingsRepo->disable_tray);
     tray->setContextMenu(trayMenu);
     connect(tray, &QSystemTrayIcon::activated, qApp, [=, this](QSystemTrayIcon::ActivationReason reason) {
