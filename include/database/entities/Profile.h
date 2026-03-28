@@ -44,6 +44,8 @@ namespace Configs {
 
         QString ip_out;
 
+        QString runningCountryInfo; // volatile, not saved to db
+
         Profile() = default;
         Profile(Configs::outbound *outbound, const QString &type_);
 

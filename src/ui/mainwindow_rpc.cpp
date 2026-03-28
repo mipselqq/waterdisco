@@ -747,11 +747,11 @@ void MainWindow::profile_start(int _id) {
                 QJsonDocument doc = QJsonDocument::fromJson(resp.data);
                 if (doc.isObject()) {
                     QJsonObject obj = doc.object();
-                    QString ip = obj["query"].toString();
                     QString city = obj["city"].toString();
                     QString countryName = obj["country"].toString();
                     QString countryCode = obj["countryCode"].toString();
-                    ui->label_outbound->setText(QString("🌐 %1\n%2 %3, %4").arg(ip, CountryCodeToFlag(countryCode), countryName, city));
+                    if (running) running->runningCountryInfo = QString("%1 %2, %3").arg(CountryCodeToFlag(countryCode), countryName, city);
+                    refresh_status();
                 }
             }
         });
@@ -897,7 +897,6 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
 
             refresh_status();
             refresh_proxy_list({id});
-            ui->label_outbound->setText("");
 
             mu_stopping.unlock();
         }, true);
