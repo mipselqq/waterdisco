@@ -2092,6 +2092,7 @@ void MainWindow::runEasterVideo() {
     easterOverlay = new QWidget(viewport);
     easterOverlay->setObjectName("easterOverlay");
     easterOverlay->setAttribute(Qt::WA_DeleteOnClose, true);
+    easterOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     easterOverlay->setStyleSheet("QWidget#easterOverlay { background-color: rgba(0, 0, 0, 200); }");
 
     auto *layout = new QHBoxLayout(easterOverlay);
@@ -2099,6 +2100,7 @@ void MainWindow::runEasterVideo() {
     layout->setSpacing(0);
 
     easterVideoWidget = new QVideoWidget(easterOverlay);
+    easterVideoWidget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     easterVideoWidget->setAspectRatioMode(Qt::KeepAspectRatio);
     layout->addWidget(easterVideoWidget);
 
@@ -2124,27 +2126,39 @@ void MainWindow::runEasterVideo() {
 }
 
 void MainWindow::stopEasterVideo() {
-    if (easterPlayer != nullptr) {
-        easterPlayer->stop();
-        easterPlayer->deleteLater();
-        easterPlayer = nullptr;
+    if (easterStopping) return;
+    easterStopping = true;
+
+    auto *player = easterPlayer;
+    auto *audio = easterAudioOutput;
+    auto *overlay = easterOverlay;
+
+    easterPlayer = nullptr;
+    easterAudioOutput = nullptr;
+    easterVideoWidget = nullptr;
+    easterOverlay = nullptr;
+
+    if (player != nullptr) {
+        player->disconnect(this);
+        player->setVideoOutput(nullptr);
+        player->setAudioOutput(nullptr);
+        player->stop();
+        player->deleteLater();
     }
-    if (easterAudioOutput != nullptr) {
-        easterAudioOutput->deleteLater();
-        easterAudioOutput = nullptr;
+    if (audio != nullptr) {
+        audio->deleteLater();
     }
-    if (easterVideoWidget != nullptr) {
-        easterVideoWidget->deleteLater();
-        easterVideoWidget = nullptr;
+    if (overlay != nullptr) {
+        overlay->hide();
+        overlay->setParent(nullptr);
+        delete overlay;
     }
-    if (easterOverlay != nullptr) {
-        easterOverlay->deleteLater();
-        easterOverlay = nullptr;
-    }
+
+    easterStopping = false;
 }
 
 void MainWindow::updateEasterVideoGeometry() {
-    if (easterOverlay == nullptr) return;
+    if (easterOverlay == nullptr || easterStopping) return;
 
     auto *viewport = ui->profilesTableView->viewport();
     auto *header = ui->profilesTableView->horizontalHeader();

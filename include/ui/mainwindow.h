@@ -172,6 +172,7 @@ private:
     class QAudioOutput *easterAudioOutput = nullptr;
     class QVideoWidget *easterVideoWidget = nullptr;
     class QWidget *easterOverlay = nullptr;
+    bool easterStopping = false;
 
     Ui::MainWindow *ui;
     ProfilesTableModel *profilesTableModel = nullptr;
