@@ -263,6 +263,9 @@ void ProfilesTableModel::refreshTable(const QList<int> &ids, bool mayNeedReset) 
     if (needFullReset) {
         setProfileIds(ids);
     } else {
+        // Soft refresh path: clear cache to avoid showing stale profile snapshots.
+        m_cache.clear();
+        m_lruOrder.clear();
         QModelIndex topLeft = index(0, 0);
         QModelIndex bottomRight = index(m_profileIds.count() - 1, columnCount() - 1);
 
@@ -300,6 +303,13 @@ bool ProfilesTableModel::moveProfileRow(int fromRow, int toRow) {
 
 void ProfilesTableModel::refreshProfileId(int profileId) {
     if (!id2row.contains(profileId)) return;
+    m_cache.remove(profileId);
+    for (int i = 0; i < m_lruOrder.size(); ++i) {
+        if (m_lruOrder[i] == profileId) {
+            m_lruOrder.removeAt(i);
+            break;
+        }
+    }
     auto r = id2row.value(profileId);
     QModelIndex top = index(r, 0);
     QModelIndex bottom = index(r, columnCount() - 1);

@@ -2140,18 +2140,24 @@ void MainWindow::stopEasterVideo() {
 
     if (player != nullptr) {
         player->disconnect(this);
+        player->stop();
+        player->setSource(QUrl());
         player->setVideoOutput(nullptr);
         player->setAudioOutput(nullptr);
-        player->stop();
-        player->deleteLater();
+        delete player;
     }
     if (audio != nullptr) {
-        audio->deleteLater();
+        delete audio;
     }
     if (overlay != nullptr) {
         overlay->hide();
         overlay->setParent(nullptr);
         delete overlay;
+    }
+
+    // Force a repaint pass so table rendering fully returns to pre-video state.
+    if (ui->profilesTableView != nullptr && ui->profilesTableView->viewport() != nullptr) {
+        ui->profilesTableView->viewport()->update();
     }
 
     easterStopping = false;

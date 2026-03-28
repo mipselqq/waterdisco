@@ -17,6 +17,8 @@ namespace Configs {
         std::string name;
         int gid;
         int latency;
+        int connect_time_ms = 0;
+        int site_score = 0;
         std::string dl_speed;
         std::string ul_speed;
         std::string test_country;
@@ -148,9 +150,9 @@ namespace Configs {
             }
         }
 
-        // Chunked (12 params per row -> BATCH_LIMIT/12 rows per chunk)
+        // Chunked (14 params per row -> BATCH_LIMIT/14 rows per chunk)
         void execBatchInsertProfiles0(const std::vector<ProfileInsertRow>& rows) {
-            const size_t chunkSize = BATCH_LIMIT_WRITE / 12;
+            const size_t chunkSize = BATCH_LIMIT_WRITE / 14;
             for (size_t off = 0; off < rows.size(); off += chunkSize) {
                 size_t end = std::min(off + chunkSize, rows.size());
                 std::vector<ProfileInsertRow> chunk(rows.begin() + static_cast<std::ptrdiff_t>(off),
@@ -161,7 +163,7 @@ namespace Configs {
 
         // Same chunking as execBatchInsertProfiles; INSERT OR REPLACE for batch save/update
         void execBatchReplaceProfiles0(const std::vector<ProfileInsertRow>& rows) {
-            const size_t chunkSize = BATCH_LIMIT_WRITE / 12;
+            const size_t chunkSize = BATCH_LIMIT_WRITE / 14;
             for (size_t off = 0; off < rows.size(); off += chunkSize) {
                 size_t end = std::min(off + chunkSize, rows.size());
                 std::vector<ProfileInsertRow> chunk(rows.begin() + static_cast<std::ptrdiff_t>(off),

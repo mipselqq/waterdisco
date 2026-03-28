@@ -41,6 +41,8 @@ namespace Configs {
                 name TEXT,
                 gid INTEGER NOT NULL DEFAULT 0,
                 latency INTEGER NOT NULL DEFAULT 0,
+                connect_time_ms INTEGER NOT NULL DEFAULT 0,
+                site_score INTEGER NOT NULL DEFAULT 0,
                 dl_speed TEXT,
                 ul_speed TEXT,
                 test_country TEXT,
@@ -54,6 +56,24 @@ namespace Configs {
             )
         )");
 
+        // Backward-compatible migration for existing databases.
+        auto hasColumn = [this](const QString& columnName) {
+            auto pragma = db.query("PRAGMA table_info(profiles)");
+            if (!pragma) return false;
+            while (pragma->executeStep()) {
+                if (QString::fromStdString(pragma->getColumn(1).getText()) == columnName) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (!hasColumn("connect_time_ms")) {
+            db.exec("ALTER TABLE profiles ADD COLUMN connect_time_ms INTEGER NOT NULL DEFAULT 0");
+        }
+        if (!hasColumn("site_score")) {
+            db.exec("ALTER TABLE profiles ADD COLUMN site_score INTEGER NOT NULL DEFAULT 0");
+        }
+
         db.exec("CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name)");
     }
 
@@ -66,6 +86,8 @@ namespace Configs {
         json["id"] = profile->id;
         json["gid"] = profile->gid;
         json["latency"] = profile->latency;
+        json["connect_time_ms"] = profile->connect_time_ms;
+        json["site_score"] = profile->site_score;
         json["dl_speed"] = profile->dl_speed;
         json["ul_speed"] = profile->ul_speed;
         json["test_country"] = "";
@@ -91,6 +113,8 @@ namespace Configs {
         profile->id = json["id"].toInt();
         profile->gid = json["gid"].toInt();
         profile->latency = json["latency"].toInt();
+        profile->connect_time_ms = json.contains("connect_time_ms") ? json["connect_time_ms"].toInt() : 0;
+        profile->site_score = json.contains("site_score") ? json["site_score"].toInt() : 0;
         profile->dl_speed = json["dl_speed"].toString();
         profile->ul_speed = json["ul_speed"].toString();
         profile->dl_speed_mbps = parseSpeedToMbps(profile->dl_speed);
@@ -186,7 +210,7 @@ namespace Configs {
         if (exists) {
             db.exec(R"(
                 UPDATE profiles 
-                SET type = ?, name = ?, gid = ?, latency = ?, dl_speed = ?, ul_speed = ?, 
+                SET type = ?, name = ?, gid = ?, latency = ?, connect_time_ms = ?, site_score = ?, dl_speed = ?, ul_speed = ?, 
                     test_country = ?, ip_out = ?, outbound_json = ?,
                     traffic_dl = ?, traffic_up = ?, updated_at = strftime('%s', 'now')
                 WHERE id = ?
@@ -195,6 +219,8 @@ namespace Configs {
                 name.toStdString(),
                 profile->gid,
                 profile->latency,
+                profile->connect_time_ms,
+                profile->site_score,
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
                 "",
@@ -207,15 +233,17 @@ namespace Configs {
         } else {
             db.exec(R"(
                 INSERT INTO profiles 
-                (id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
+                (id, type, name, gid, latency, connect_time_ms, site_score, dl_speed, ul_speed, test_country, 
                 ip_out, outbound_json, traffic_dl, traffic_up)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 profile->type.toStdString(),
                 name.toStdString(),
                 profile->gid,
                 profile->latency,
+                profile->connect_time_ms,
+                profile->site_score,
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
                 "",
@@ -239,6 +267,8 @@ namespace Configs {
         row.name = name.toStdString();
         row.gid = gid;
         row.latency = profile->latency;
+        row.connect_time_ms = profile->connect_time_ms;
+        row.site_score = profile->site_score;
         row.dl_speed = profile->dl_speed.toStdString();
         row.ul_speed = profile->ul_speed.toStdString();
         row.test_country = "";
@@ -256,26 +286,28 @@ namespace Configs {
         json["name"] = QString::fromStdString(stmt.getColumn(2).getText());
         json["gid"] = stmt.getColumn(3).getInt();
         json["latency"] = stmt.getColumn(4).getInt();
-        json["dl_speed"] = QString::fromStdString(stmt.getColumn(5).getText());
-        json["ul_speed"] = QString::fromStdString(stmt.getColumn(6).getText());
-        json["test_country"] = QString::fromStdString(stmt.getColumn(7).getText());
-        json["ip_out"] = QString::fromStdString(stmt.getColumn(8).getText());
+        json["connect_time_ms"] = stmt.getColumn(5).getInt();
+        json["site_score"] = stmt.getColumn(6).getInt();
+        json["dl_speed"] = QString::fromStdString(stmt.getColumn(7).getText());
+        json["ul_speed"] = QString::fromStdString(stmt.getColumn(8).getText());
+        json["test_country"] = QString::fromStdString(stmt.getColumn(9).getText());
+        json["ip_out"] = QString::fromStdString(stmt.getColumn(10).getText());
         
-        QString outboundJsonStr = QString::fromStdString(stmt.getColumn(9).getText());
+        QString outboundJsonStr = QString::fromStdString(stmt.getColumn(11).getText());
         QJsonDocument outboundDoc = QJsonDocument::fromJson(outboundJsonStr.toUtf8());
         if (!outboundDoc.isNull() && outboundDoc.isObject()) {
             json["outbound"] = outboundDoc.object();
         }
         
-        json["traffic_dl"] = static_cast<qint64>(stmt.getColumn(10).getInt64());
-        json["traffic_up"] = static_cast<qint64>(stmt.getColumn(11).getInt64());
+        json["traffic_dl"] = static_cast<qint64>(stmt.getColumn(12).getInt64());
+        json["traffic_up"] = static_cast<qint64>(stmt.getColumn(13).getInt64());
         
         return profileFromJson(json);
     }
 
     std::shared_ptr<Profile> ProfilesRepo::loadFromDatabase(int id) const {
         auto query = db.query(R"(
-            SELECT id, type, name, gid, latency, dl_speed, ul_speed, test_country, 
+            SELECT id, type, name, gid, latency, connect_time_ms, site_score, dl_speed, ul_speed, test_country, 
                    ip_out, outbound_json, traffic_dl, traffic_up
             FROM profiles WHERE id = ?
         )", id);
@@ -414,7 +446,7 @@ namespace Configs {
             if (i > 0) idList += ",";
             idList += QString::number(chunkIds[i]);
         }
-        std::string sql = "SELECT id, type, name, gid, latency, dl_speed, ul_speed, test_country, "
+        std::string sql = "SELECT id, type, name, gid, latency, connect_time_ms, site_score, dl_speed, ul_speed, test_country, "
                          "ip_out, outbound_json, traffic_dl, traffic_up FROM profiles WHERE id IN (" +
                          idList.toStdString() + ") ORDER BY id";
         auto query = db.query(sql);

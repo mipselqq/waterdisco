@@ -568,7 +568,8 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
         const bool canAutoConnect = completedFully && !stopSpeedtest.load();
         speedtestRunning.unlock();
         runOnUiThread([=,this]{
-            refresh_proxy_list(profileIDs);
+            // Finalize with a full model refresh to avoid stale row state after speedtest completes.
+            refresh_proxy_list({}, true);
             ui->pushButton_cancel_speedtest->setVisible(false);
             ui->pushButton_cancel_speedtest->setEnabled(false);
             MW_show_log(canAutoConnect ? tr("Speedtest finished!") : tr("Speedtest interrupted."));
@@ -733,13 +734,15 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
             if (ent->latency <= 0 && res.latency.value() > 0) ent->latency = res.latency.value();
             ent->site_score = CalcSiteScore(ent->connect_time_ms, ent->dl_speed_mbps);
         } else {
-            ent->dl_speed = "N/A";
-            ent->ul_speed = "N/A";
-            ent->dl_speed_mbps = 0.0;
-            ent->ul_speed_mbps = 0.0;
-            ent->connect_time_ms = -1;
-            ent->latency = -1;
-            ent->site_score = 0;
+            // Do not clobber previous successful metrics with a later failed pass.
+            // This keeps post-speedtest sorting consistent for all profiles.
+            if (ent->dl_speed.isEmpty()) ent->dl_speed = "N/A";
+            if (ent->ul_speed.isEmpty()) ent->ul_speed = "N/A";
+            if (ent->dl_speed_mbps <= 0.0 && ent->ul_speed_mbps <= 0.0 && ent->connect_time_ms <= 0) {
+                ent->connect_time_ms = -1;
+                if (ent->latency <= 0) ent->latency = -1;
+                ent->site_score = 0;
+            }
             MW_show_log(tr("[%1] speed test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
         }
         Configs::dataManager->profilesRepo->Save(ent);
