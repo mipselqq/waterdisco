@@ -43,12 +43,21 @@ double ParseSpeedToMbps(QString speed) {
     return v / 1000000.0;
 }
 
+/**
+ * Calculates "Site Score" (0-100) representing perceived web browsing performance.
+ * Logic:
+ * - This model simulates typical browsing (opening new sockets, then transferring data).
+ * - Connection Time (35% weight) captures the delay before a page starts loading.
+ * - Rx Speed (65% weight) measures the throughput once the stream is established.
+ * - High raw speed can significantly offset minor latency gaps (common for Reality/advanced protocols).
+ * - A high score implies the site will both "snap" open and finish loading large media quickly.
+ */
 int CalcSiteScore(int connectMs, double rxMbps) {
     if (connectMs <= 0 || rxMbps <= 0.0) return 0;
     auto clamp01 = [](double v) { return std::max(0.0, std::min(100.0, v)); };
-    const double connectScore = clamp01(100.0 - (static_cast<double>(connectMs) / 8.0));
-    const double rxScore = clamp01(rxMbps * 2.5);
-    return static_cast<int>(std::round(connectScore * 0.45 + rxScore * 0.55));
+    const double connectScore = clamp01(100.0 - (static_cast<double>(connectMs) / 10.0));
+    const double rxScore = clamp01(rxMbps * 1.5);
+    return static_cast<int>(std::round(connectScore * 0.35 + rxScore * 0.65));
 }
 }
 
