@@ -2055,20 +2055,31 @@ void MainWindow::refresh_proxy_list_column_size() {
         // First-time calculation: compute a stable baseline width, then keep interactive.
         group->clearCalculatedColumnWidth();
         group->calculated_column_width.resize(colCount);
-        for (int i = 0; i < colCount; ++i) {
-            if (i == 3 || i == 5) {
-                group->calculated_column_width[i] = hHeader->sectionSize(i);
-                continue;
-            }
-            ui->profilesTableView->setColumnHidden(i, false);
 
-            // Resize to content once, then preserve this width for subsequent refreshes.
-            hHeader->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+        QVector<int> rawWidths(colCount, 0);
+        for (int i = 0; i < colCount; ++i) {
+            ui->profilesTableView->setColumnHidden(i, false);
+            QString originalHeader = profilesTableModel->headerData(i, Qt::Horizontal).toString();
+            profilesTableModel->setHeaderData(i, Qt::Horizontal, "");
             ui->profilesTableView->resizeColumnToContents(i);
-            const int width = hHeader->sectionSize(i);
+            rawWidths[i] = hHeader->sectionSize(i);
+            profilesTableModel->setHeaderData(i, Qt::Horizontal, originalHeader);
+        }
+
+        // Apply aesthetic grouping: max(Speedtest, Off)
+        int checkGroupWidth = std::max(rawWidths[0], rawWidths[1]);
+        rawWidths[0] = rawWidths[1] = checkGroupWidth;
+
+        // Apply aesthetic grouping: max(Rx speed, Connection time, Site score, Rx, Tx)
+        // Indices: 6 (Rx speed), 7 (Conn time), 8 (Site score), 9 (Rx), 10 (Tx)
+        int statsGroupWidth = rawWidths[6];
+        for (int i = 7; i <= 10; ++i) statsGroupWidth = std::max(statsGroupWidth, rawWidths[i]);
+        for (int i = 6; i <= 10; ++i) rawWidths[i] = statsGroupWidth;
+
+        for (int i = 0; i < colCount; ++i) {
             hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-            hHeader->resizeSection(i, width);
-            group->calculated_column_width[i] = width;
+            hHeader->resizeSection(i, rawWidths[i]);
+            group->calculated_column_width[i] = rawWidths[i];
         }
 
         ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);

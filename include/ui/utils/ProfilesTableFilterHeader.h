@@ -13,7 +13,8 @@ public:
         : QHeaderView(Qt::Horizontal, parent) {
         setSectionsClickable(true);
         setSortIndicatorShown(true);
-        setDefaultAlignment(Qt::AlignHCenter | Qt::AlignTop);
+        setDefaultAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        setTextElideMode(Qt::ElideNone);
 
         type_filter = new QLineEdit(this->viewport()); 
         type_filter->setPlaceholderText(tr("Filter..."));

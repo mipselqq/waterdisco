@@ -217,14 +217,14 @@ QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation
     if (role != Qt::DisplayRole) return {};
     if (orientation == Qt::Horizontal) {
         switch (section) {
-        case 0: return tr("Speedtest on startup");
-        case 1: return tr("Disabled");
+        case 0: return tr("Speedtest\non startup");
+        case 1: return tr("Off");
         case 2: return tr("Type");
         case 3: return tr("Address");
         case 4: return tr("Name");
         case 5: return tr("Latency");
         case 6: return tr("Rx speed");
-        case 7: return tr("Connection time");
+        case 7: return tr("Connection\ntime");
         case 8: return tr("Site Score");
         case 9: return tr("Rx");
         case 10: return tr("Tx");
