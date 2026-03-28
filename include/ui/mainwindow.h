@@ -280,7 +280,7 @@ private:
 
     static void setup_rpc();
 
-    void urltest_current_group(const QList<int>& profileIDs);
+    void urltest_current_group(const QList<int>& profileIDs, bool connectionTimeTest = false);
 
     void iptest_current_group(const QList<int>& profileIDs);
 

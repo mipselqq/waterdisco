@@ -251,7 +251,7 @@
           <item row="1" column="0">
            <widget class="QLabel" name="label_14">
             <property name="text">
-                 <string>Ping parallel</string>
+              <string>Connection time test</string>
             </property>
            </widget>
           </item>

@@ -976,7 +976,7 @@
   </action>
   <action name="actionUrl_Test_Selected">
    <property name="text">
-    <string>Url Test Selected</string>
+      <string>Test Connection Speed</string>
    </property>
    <property name="shortcut">
     <string notr="true">Ctrl+Shift+S</string>

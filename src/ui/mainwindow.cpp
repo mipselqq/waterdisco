@@ -913,10 +913,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         }
     });
     connect(ui->actionUrl_Test_Selected, &QAction::triggered, this, [=,this]() {
-        urltest_current_group(get_now_selected_list());
+        urltest_current_group(get_now_selected_list(), true);
     });
     connect(ui->actionUrl_Test_Group, &QAction::triggered, this, [=,this]() {
-        urltest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles());
+        urltest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles(), false);
     });
     connect(ui->actionSpeedtest_Selected, &QAction::triggered, this, [=,this]()
     {
