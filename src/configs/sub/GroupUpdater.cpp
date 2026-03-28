@@ -279,7 +279,7 @@ namespace Subscription {
         }
 
         // Naive
-        if (Configs::HasNaive() && (str.startsWith("naive+https://") || str.startsWith("naive+quic://"))) {
+        if ((str.startsWith("naive+https://") || str.startsWith("naive+quic://")) && Configs::HasNaive()) {
             ent = Configs::ProfilesRepo::NewProfile("naive");
             auto ok = ent->Naive()->ParseFromLink(str);
             if (!ok) return;
