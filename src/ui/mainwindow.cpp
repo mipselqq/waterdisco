@@ -691,6 +691,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // Misc menu
     ui->actionRemember_last_proxy->setChecked(Configs::dataManager->settingsRepo->remember_enable);
+    ui->actionAuto_connect_with_best_site_score->setChecked(Configs::dataManager->settingsRepo->auto_connect_best_site_score);
+    if (Configs::dataManager->settingsRepo->auto_connect_best_site_score) {
+        Configs::dataManager->settingsRepo->remember_enable = false;
+        ui->actionRemember_last_proxy->setChecked(false);
+    }
     ui->actionStart_with_system->setChecked(AutoRun_IsEnabled());
     ui->actionAllow_LAN->setChecked(QStringList{"::", "0.0.0.0"}.contains(Configs::dataManager->settingsRepo->inbound_address));
 
@@ -707,7 +712,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->actionShow_window, &QAction::triggered, this, [=,this] { ActivateWindow(this); });
     connect(ui->actionRemember_last_proxy, &QAction::triggered, this, [=,this](bool checked) {
         Configs::dataManager->settingsRepo->remember_enable = checked;
+        if (checked) {
+            Configs::dataManager->settingsRepo->auto_connect_best_site_score = false;
+            ui->actionAuto_connect_with_best_site_score->setChecked(false);
+        }
         ui->actionRemember_last_proxy->setChecked(checked);
+        Configs::dataManager->settingsRepo->Save();
+    });
+    connect(ui->actionAuto_connect_with_best_site_score, &QAction::triggered, this, [=, this](bool checked) {
+        Configs::dataManager->settingsRepo->auto_connect_best_site_score = checked;
+        if (checked) {
+            Configs::dataManager->settingsRepo->remember_enable = false;
+            ui->actionRemember_last_proxy->setChecked(false);
+        }
+        ui->actionAuto_connect_with_best_site_score->setChecked(checked);
         Configs::dataManager->settingsRepo->Save();
     });
     connect(ui->actionStart_with_system, &QAction::triggered, this, [=,this](bool checked) {
@@ -921,6 +939,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->actionSpeedtest_Selected, &QAction::triggered, this, [=,this]()
     {
         speedtest_current_group(get_now_selected_list());
+    });
+    connect(ui->actionConnect_with_best_site_score, &QAction::triggered, this, [=, this]() {
+        auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+        if (!group) return;
+        auto ids = group->Profiles();
+        const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+        ids.erase(std::remove_if(ids.begin(), ids.end(), [&](int id) {
+            return disabledIds.contains(QString::number(id));
+        }), ids.end());
+        speedtest_current_group(ids, SpeedtestConnectMode::BestConnectionTime);
     });
     connect(ui->actionResolve_Selected_Out_IP, &QAction::triggered, this, [=,this]() {
         iptest_current_group(get_now_selected_list());
@@ -1294,6 +1322,21 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
 
             const auto startupIdsStr = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
             const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+            if (Configs::dataManager->settingsRepo->auto_connect_best_site_score) {
+                auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+                if (group != nullptr) {
+                    auto ids = group->Profiles();
+                    ids.erase(std::remove_if(ids.begin(), ids.end(), [&](int id) {
+                        return disabledIds.contains(QString::number(id));
+                    }), ids.end());
+                    if (!ids.isEmpty()) {
+                        setTimeout([=, this]() {
+                            speedtest_current_group(ids, SpeedtestConnectMode::BestSiteScore);
+                        }, this, 1500);
+                        return;
+                    }
+                }
+            }
             if (!startupIdsStr.isEmpty()) {
                 QList<int> startupIds;
                 for (const auto &idStr : startupIdsStr) {
@@ -3050,6 +3093,8 @@ void MainWindow::setActionsData()
     ui->actionRefresh_Column_Widths->setData(QString("m25"));
     ui->actionResolve_Out_IP->setData(QString("m26"));
     ui->actionResolve_Selected_Out_IP->setData(QString("m27"));
+    ui->actionAuto_connect_with_best_site_score->setData(QString("m28"));
+    ui->actionConnect_with_best_site_score->setData(QString("m29"));
 }
 
 QList<QAction*> MainWindow::getActionsForShortcut()

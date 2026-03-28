@@ -559,6 +559,7 @@
     <addaction name="separator"/>
     <addaction name="actionStart_with_system"/>
     <addaction name="actionRemember_last_proxy"/>
+   <addaction name="actionAuto_connect_with_best_site_score"/>
     <addaction name="actionAllow_LAN"/>
     <addaction name="menu_spmode"/>
     <addaction name="separator"/>
@@ -605,6 +606,7 @@
     <addaction name="menu_share_item"/>
     <addaction name="separator"/>
     <addaction name="actionUrl_Test_Selected"/>
+   <addaction name="actionConnect_with_best_site_score"/>
     <addaction name="menu_resolve_selected"/>
     <addaction name="actionSpeedtest_Selected"/>
     <addaction name="actionResolve_Selected_Out_IP"/>
@@ -1073,6 +1075,19 @@
     <string>Resolve Selected Out IP</string>
    </property>
   </action>
+   <action name="actionAuto_connect_with_best_site_score">
+    <property name="checkable">
+      <bool>true</bool>
+    </property>
+    <property name="text">
+      <string>Auto connect with best site score</string>
+    </property>
+   </action>
+   <action name="actionConnect_with_best_site_score">
+    <property name="text">
+      <string>Connect with best site score</string>
+    </property>
+   </action>
   <action name="actionRefresh_Column_Widths">
    <property name="text">
     <string>Refresh Column Widths</string>

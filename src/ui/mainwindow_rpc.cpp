@@ -470,7 +470,7 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
     });
 }
 
-void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
+void MainWindow::speedtest_current_group(const QList<int>& profileIDs, SpeedtestConnectMode connectMode)
 {
     if (profileIDs.isEmpty()) {
         return;
@@ -494,7 +494,8 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
         ui->pushButton_cancel_speedtest->setEnabled(true);
     });
 
-    runOnNewThread([this, profileIDs, profileToRestore]() {
+    runOnNewThread([this, profileIDs, profileToRestore, connectMode]() {
+        bool completedFully = true;
         if (Configs::dataManager->settingsRepo->started_id >= 0) {
             // Use the exact same stop path as Ctrl+S / Stop action.
             runOnUiThread([=, this] {
@@ -519,8 +520,11 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
         }
 
         stopSpeedtest.store(false);
-        auto speedTestFunc = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice) {
-            if (stopSpeedtest.load()) return;
+        auto speedTestFunc = [=, &completedFully, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice) {
+            if (stopSpeedtest.load()) {
+                completedFully = false;
+                return;
+            }
 
             auto buildObject = Configs::BuildTestConfig(profileSlice);
             if (!buildObject->error.isEmpty()) {
@@ -530,11 +534,17 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
 
             // 1) Fast parallel ping probe.
             for (const auto &entID: buildObject->fullConfigs.keys()) {
-                if (stopSpeedtest.load()) return;
+                if (stopSpeedtest.load()) {
+                    completedFully = false;
+                    return;
+                }
                 auto configStr = buildObject->fullConfigs[entID];
                 runURLTest(configStr, "", true, {}, {}, entID, Configs::dataManager->settingsRepo->test_latency_url, false);
             }
-            if (stopSpeedtest.load()) return;
+            if (stopSpeedtest.load()) {
+                completedFully = false;
+                return;
+            }
             if (!buildObject->outboundTags.empty()) {
                 auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
                 runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID,
@@ -543,11 +553,17 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
 
             // 2) 2MB simple download throughput probe.
             for (const auto &entID: buildObject->fullConfigs.keys()) {
-                if (stopSpeedtest.load()) return;
+                if (stopSpeedtest.load()) {
+                    completedFully = false;
+                    return;
+                }
                 auto configStr = buildObject->fullConfigs[entID];
                 runSpeedTest(configStr, "", true, {}, {}, entID);
             }
-            if (stopSpeedtest.load()) return;
+            if (stopSpeedtest.load()) {
+                completedFully = false;
+                return;
+            }
             if (!buildObject->outboundTags.empty()) {
                 auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
                 runSpeedTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID);
@@ -555,19 +571,57 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
         };
 
         for (int i=0;i<profileIDs.length();i+=100) {
-            if (stopSpeedtest.load()) break;
+            if (stopSpeedtest.load()) {
+                completedFully = false;
+                break;
+            }
             auto profileIDsSlice = profileIDs.mid(i, 100);
             auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
             speedTestFunc(profiles);
+            if (!completedFully) {
+                break;
+            }
         }
 
+        const bool canAutoConnect = completedFully && !stopSpeedtest.load();
         speedtestRunning.unlock();
         runOnUiThread([=,this]{
             refresh_proxy_list(profileIDs);
             ui->pushButton_cancel_speedtest->setVisible(false);
             ui->pushButton_cancel_speedtest->setEnabled(false);
-            MW_show_log(tr("Speedtest finished!"));
-            if (profileToRestore >= 0) {
+            MW_show_log(canAutoConnect ? tr("Speedtest finished!") : tr("Speedtest interrupted."));
+
+            if (connectMode != SpeedtestConnectMode::None && !canAutoConnect) {
+                MW_show_log(tr("Auto connect skipped because speedtest did not finish completely."));
+                return;
+            }
+
+            int bestId = -1;
+            if (connectMode == SpeedtestConnectMode::BestConnectionTime) {
+                int bestConn = std::numeric_limits<int>::max();
+                for (int id : profileIDs) {
+                    auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+                    if (!p || p->connect_time_ms <= 0) continue;
+                    if (p->connect_time_ms < bestConn) {
+                        bestConn = p->connect_time_ms;
+                        bestId = id;
+                    }
+                }
+            } else if (connectMode == SpeedtestConnectMode::BestSiteScore) {
+                int bestScore = -1;
+                for (int id : profileIDs) {
+                    auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+                    if (!p || p->site_score <= 0) continue;
+                    if (p->site_score > bestScore) {
+                        bestScore = p->site_score;
+                        bestId = id;
+                    }
+                }
+            }
+
+            if (bestId >= 0) {
+                profile_start(bestId);
+            } else if (connectMode == SpeedtestConnectMode::None && profileToRestore >= 0) {
                 profile_start(profileToRestore);
             }
         });

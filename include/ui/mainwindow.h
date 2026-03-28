@@ -48,6 +48,12 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
+    enum class SpeedtestConnectMode {
+        None = 0,
+        BestConnectionTime,
+        BestSiteScore
+    };
+
     explicit MainWindow(QWidget *parent = nullptr);
 
     ~MainWindow() override;
@@ -293,7 +299,7 @@ private:
 
     void url_test_current();
 
-    void speedtest_current_group(const QList<int>& profileIDs);
+    void speedtest_current_group(const QList<int>& profileIDs, SpeedtestConnectMode connectMode = SpeedtestConnectMode::None);
 
     void runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
 

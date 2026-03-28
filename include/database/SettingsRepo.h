@@ -120,6 +120,7 @@ namespace Configs {
         QStringList remember_spmode = {};
         int remember_id = -1919;
         bool remember_enable = false;
+        bool auto_connect_best_site_score = false;
         bool windows_set_admin = false;
         QMap<QString, QKeySequence> shortcuts;
         QStringList speedtest_on_startup_profile_ids = {};
