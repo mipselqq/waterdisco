@@ -471,9 +471,18 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
     if (profileIDs.isEmpty()) {
         return;
     }
+
     if (!speedtestRunning.tryLock()) {
         MessageBoxWarning(software_name, tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
         return;
+    }
+
+    int profileToRestore = deferred_profile_start_after_speedtest.exchange(-1919);
+    if (Configs::dataManager->settingsRepo->started_id >= 0) {
+        profileToRestore = Configs::dataManager->settingsRepo->started_id;
+    }
+    if (running != nullptr) {
+        profileToRestore = running->id;
     }
 
     runOnUiThread([=, this] {
@@ -481,7 +490,30 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
         ui->pushButton_cancel_speedtest->setEnabled(true);
     });
 
-    runOnNewThread([this, profileIDs]() {
+    runOnNewThread([this, profileIDs, profileToRestore]() {
+        if (Configs::dataManager->settingsRepo->started_id >= 0) {
+            // Use the exact same stop path as Ctrl+S / Stop action.
+            runOnUiThread([=, this] {
+                ui->menu_stop->trigger();
+            }, true);
+
+            // Wait until profile is fully stopped before running speedtest.
+            int waitTicks = 0;
+            while (Configs::dataManager->settingsRepo->started_id >= 0 && waitTicks++ < 200) {
+                QThread::msleep(50);
+            }
+
+            if (Configs::dataManager->settingsRepo->started_id >= 0) {
+                speedtestRunning.unlock();
+                runOnUiThread([=, this] {
+                    ui->pushButton_cancel_speedtest->setVisible(false);
+                    ui->pushButton_cancel_speedtest->setEnabled(false);
+                    MW_show_log(tr("Failed to stop active profile before speedtest; speedtest cancelled."));
+                });
+                return;
+            }
+        }
+
         stopSpeedtest.store(false);
         auto speedTestFunc = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice) {
             if (stopSpeedtest.load()) return;
@@ -544,6 +576,9 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs)
             ui->pushButton_cancel_speedtest->setVisible(false);
             ui->pushButton_cancel_speedtest->setEnabled(false);
             MW_show_log(tr("Speedtest finished!"));
+            if (profileToRestore >= 0) {
+                profile_start(profileToRestore);
+            }
         });
     });
 }

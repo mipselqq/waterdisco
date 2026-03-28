@@ -254,7 +254,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             core_process = new Configs_sys::CoreProcess(core_path, args);
             // Remember last started
             if (Configs::dataManager->settingsRepo->remember_enable && Configs::dataManager->settingsRepo->remember_id >= 0) {
-                core_process->start_profile_when_core_is_up = Configs::dataManager->settingsRepo->remember_id;
+                if (Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids.isEmpty()) {
+                    core_process->start_profile_when_core_is_up = Configs::dataManager->settingsRepo->remember_id;
+                } else {
+                    deferred_profile_start_after_speedtest.store(Configs::dataManager->settingsRepo->remember_id);
+                    core_process->start_profile_when_core_is_up = -1;
+                }
             }
             // Setup
             setup_rpc();
@@ -1280,10 +1285,7 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
             if (Configs::dataManager->settingsRepo->flag_dns_set) {
                 set_system_dns(true);
             }
-            if (auto id = info.split(",")[1].toInt(); id >= 0)
-            {
-                profile_start(id);
-            }
+            int autoStartId = info.split(",")[1].toInt();
             if (Configs::dataManager->settingsRepo->system_dns_set) {
                 set_system_dns(true);
                 ui->system_dns->setChecked(true);
@@ -1300,10 +1302,19 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
                     if (ok && !disabledIds.contains(idStr) && Configs::dataManager->profilesRepo->GetProfile(id) != nullptr) startupIds.append(id);
                 }
                 if (!startupIds.isEmpty()) {
+                    if (autoStartId >= 0) {
+                        deferred_profile_start_after_speedtest.store(autoStartId);
+                    }
                     setTimeout([=, this]() {
                         speedtest_current_group(startupIds);
                     }, this, 1500);
+                    return;
                 }
+            }
+
+            if (autoStartId >= 0)
+            {
+                profile_start(autoStartId);
             }
         }
     }

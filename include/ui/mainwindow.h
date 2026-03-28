@@ -185,6 +185,7 @@ private:
     int proxy_last_order = -1;
     int live_sort_column = -1;
     bool live_sort_descending = false;
+    std::atomic<int> deferred_profile_start_after_speedtest = -1919;
     bool select_mode = false;
     QMutex mu_starting;
     QMutex mu_stopping;
