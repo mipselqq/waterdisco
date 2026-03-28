@@ -32,7 +32,7 @@ namespace Configs {
                 profiles_json TEXT NOT NULL DEFAULT '[]',
                 scroll_last_profile INTEGER NOT NULL DEFAULT -1,
                 auto_clear_unavailable INTEGER NOT NULL DEFAULT 0,
-                test_sort_by INTEGER NOT NULL DEFAULT 0,
+                test_sort_by INTEGER NOT NULL DEFAULT 4,
                 traffic_sort_by INTEGER NOT NULL DEFAULT 0,
                 test_items_to_show INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
@@ -88,9 +88,9 @@ namespace Configs {
         group->column_width = QJsonArray2QListInt(json["column_width"].toArray());
         group->profiles = QJsonArray2QListInt(json["profiles"].toArray());
         group->scroll_last_profile = json["scroll_last_profile"].toInt(-1);
-        int testSort = json["test_sort_by"].toInt(0);
+        int testSort = json["test_sort_by"].toInt(static_cast<int>(testBy::siteScore));
         if (testSort < static_cast<int>(testBy::latency) || testSort > static_cast<int>(testBy::siteScore)) {
-            testSort = static_cast<int>(testBy::latency);
+            testSort = static_cast<int>(testBy::siteScore);
         }
         group->test_sort_by = static_cast<testBy>(testSort);
 

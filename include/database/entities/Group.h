@@ -39,7 +39,7 @@ namespace Configs
         QList<int> calculated_column_width; // memory only, no need to save to db
         QList<int> profiles;
         int scroll_last_profile = -1;
-        testBy test_sort_by = testBy::latency;
+        testBy test_sort_by = testBy::siteScore;
         trafficBy traffic_sort_by = trafficBy::tx;
 
         Group() = default;

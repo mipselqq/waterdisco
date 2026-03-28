@@ -525,10 +525,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             if (testSortBy == static_cast<int>(Configs::testBy::rxSpeed)) live_sort_column = 6;
             if (testSortBy == static_cast<int>(Configs::testBy::connectTime)) live_sort_column = 7;
             if (testSortBy == static_cast<int>(Configs::testBy::siteScore)) live_sort_column = 8;
-            live_sort_descending = false;
+            live_sort_descending = (testSortBy == static_cast<int>(Configs::testBy::siteScore));
             GroupSortAction action;
             action.method = GroupSortMethod::ByTestResult;
-            action.descending = false;
+            action.descending = live_sort_descending;
             runOnNewThread([=, this] {
                 auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
                 if (currGroup == nullptr) return;
@@ -1175,6 +1175,14 @@ void MainWindow::show_group(int gid) {
     }
 
     ui->tabWidget->widget(groupId2TabIndex(gid))->layout()->addWidget(ui->profilesTableView);
+
+    // Keep live sort in sync with group's selected test sort mode so
+    // per-profile speedtest updates can reorder rows without manual header clicks.
+    if (group->test_sort_by == Configs::testBy::latency) live_sort_column = 5;
+    if (group->test_sort_by == Configs::testBy::rxSpeed) live_sort_column = 6;
+    if (group->test_sort_by == Configs::testBy::connectTime) live_sort_column = 7;
+    if (group->test_sort_by == Configs::testBy::siteScore) live_sort_column = 8;
+    live_sort_descending = (group->test_sort_by == Configs::testBy::siteScore);
 
     // show proxies
     refresh_proxy_list({}, true);
@@ -2068,6 +2076,17 @@ void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedRese
 void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
     auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
     if (currentGroup == nullptr) return;
+
+    // Safety fallback: if live sort column was not initialized yet,
+    // derive it from the group's selected test sort mode.
+    if (live_sort_column < 0) {
+        if (currentGroup->test_sort_by == Configs::testBy::latency) live_sort_column = 5;
+        if (currentGroup->test_sort_by == Configs::testBy::rxSpeed) live_sort_column = 6;
+        if (currentGroup->test_sort_by == Configs::testBy::connectTime) live_sort_column = 7;
+        if (currentGroup->test_sort_by == Configs::testBy::siteScore) live_sort_column = 8;
+        live_sort_descending = (currentGroup->test_sort_by == Configs::testBy::siteScore);
+    }
+
     if (!ids.isEmpty()) {
         const auto changedVisibleIds = filterProfilesList(ids);
         if (changedVisibleIds.isEmpty())
