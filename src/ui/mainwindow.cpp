@@ -2436,6 +2436,8 @@ void MainWindow::log_process_loop() {
 
 bool MainWindow::should_print_log(const QString &log) {
     if (log.trimmed().isEmpty()) return false;
+    // sing-box may emit this benign line frequently when process lookup is unavailable for a flow.
+    if (log.contains("router: failed to search process: process not found", Qt::CaseInsensitive)) return false;
     bool result = true;
     if (Configs::dataManager->settingsRepo->log_enable_include) {
         result = false;
