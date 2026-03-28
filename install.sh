@@ -81,6 +81,10 @@ done
 need_cmd cmake
 
 if [[ "$SKIP_BUILD" != "1" ]]; then
+  need_cmd go
+fi
+
+if [[ "$SKIP_BUILD" != "1" ]]; then
   if command -v ninja >/dev/null 2>&1; then
     CMAKE_GENERATOR="Ninja"
   else
@@ -92,6 +96,35 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
 
   log "[2/2] Building Throne (progress below)"
   cmake --build "$BUILD_DIR" --target Throne --parallel "$(nproc)" --verbose
+
+  if [[ -z "$CORE_PATH" ]]; then
+    log "Building ThroneCore from core/server"
+    mkdir -p "$BUILD_DIR"
+    (
+      cd "$ROOT_DIR/core/server"
+      if [[ ! -f "gen/libcore.pb.go" || ! -f "gen/libcore_grpc.pb.go" ]]; then
+        need_cmd protoc
+        export PATH="$(go env GOPATH)/bin:$PATH"
+        if ! command -v protoc-gen-go >/dev/null 2>&1; then
+          log "Installing protoc-gen-go"
+          GOWORK=off GO111MODULE=on go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+        fi
+        if ! command -v protoc-gen-go-grpc >/dev/null 2>&1; then
+          log "Installing protoc-gen-go-grpc"
+          GOWORK=off GO111MODULE=on go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+        fi
+        log "Generating Go gRPC bindings from gen/libcore.proto"
+        (
+          cd gen
+          protoc -I . --go_out=. --go-grpc_out=. libcore.proto
+        )
+      fi
+
+      # Force module mode so local imports like ThroneCore/gen resolve even if user env disables modules.
+      GOWORK=off GO111MODULE=on go build -trimpath -ldflags "-s -w" -o "$BUILD_DIR/ThroneCore" .
+    )
+    CORE_PATH="$BUILD_DIR/ThroneCore"
+  fi
 fi
 
 THRONE_BIN="$BUILD_DIR/Throne"
@@ -99,7 +132,6 @@ ICON_SRC="$ROOT_DIR/res/public/Throne.png"
 
 if [[ -z "$CORE_PATH" ]]; then
   for candidate in \
-    "$ROOT_DIR/binary/ThroneCore" \
     "$BUILD_DIR/ThroneCore" \
     "$ROOT_DIR/ThroneCore" \
     "$ROOT_DIR/deployment/linux-amd64/ThroneCore" \
