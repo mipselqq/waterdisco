@@ -72,7 +72,7 @@ namespace QtGrpc {
             return networkReply;
         }
 
-        static QByteArray processReply(QNetworkReply *networkReply, QNetworkReply::NetworkError &statusCode) {
+        static QByteArray processReply(const QString &methodName, QNetworkReply *networkReply, QNetworkReply::NetworkError &statusCode) {
             // Check if no network error occured
             if (networkReply->error() != QNetworkReply::NoError) {
                 statusCode = networkReply->error();
@@ -82,10 +82,16 @@ namespace QtGrpc {
             // Check if server answer with error
             auto errCode = networkReply->rawHeader(GrpcStatusHeader).toInt();
             if (errCode != 0) {
-                QStringList errstr;
-                errstr << "grpc-status error code:" << Int2String(errCode) << ", error msg:"
-                       << QLatin1String(networkReply->rawHeader(GrpcStatusMessage));
-                MW_show_log(errstr.join(" "));
+                const QString grpcMsg = QLatin1String(networkReply->rawHeader(GrpcStatusMessage));
+                const bool isCheckNaiveNotImplemented = methodName == "CheckNaive"
+                    && errCode == 12
+                    && grpcMsg.contains("unknown method", Qt::CaseInsensitive);
+                if (!isCheckNaiveNotImplemented) {
+                    QStringList errstr;
+                    errstr << "grpc-status error code:" << Int2String(errCode) << ", error msg:"
+                           << grpcMsg;
+                    MW_show_log(errstr.join(" "));
+                }
                 statusCode = QNetworkReply::NetworkError::ProtocolUnknownError;
                 return {};
             }
@@ -117,7 +123,7 @@ namespace QtGrpc {
             }
 
             auto grpcStatus = QNetworkReply::NetworkError::ProtocolUnknownError;
-            qByteArray = processReply(networkReply, grpcStatus);
+            qByteArray = processReply(method, networkReply, grpcStatus);
 
             networkReply->deleteLater();
             return grpcStatus;
@@ -456,7 +462,8 @@ namespace API {
             return reply.has_naive.value();
         } else
         {
-            NOT_OK
+            // Older cores may not implement CheckNaive; treat this as unsupported rather than an RPC failure.
+            *rpcOK = true;
             return false;
         }
     }

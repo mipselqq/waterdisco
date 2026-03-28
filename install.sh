@@ -160,14 +160,19 @@ cat > "$STAGE_DIR/throne.desktop" <<EOF
 Type=Application
 Name=Throne
 Comment=Throne Proxy Utility
-Exec=$INSTALL_DIR/Throne
+Exec=$INSTALL_DIR/Throne -appdata
 Icon=throne
 Terminal=false
 Categories=Network;Utility;
 StartupNotify=true
 EOF
 install -m 0644 "$STAGE_DIR/throne.desktop" "$DESKTOP_DST"
-ln -sf "$INSTALL_DIR/Throne" "$BIN_LINK_DST"
+
+cat > "$STAGE_DIR/throne" <<EOF
+#!/usr/bin/env bash
+exec "$INSTALL_DIR/Throne" -appdata "\$@"
+EOF
+install -m 0755 "$STAGE_DIR/throne" "$BIN_LINK_DST"
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database /usr/share/applications || true

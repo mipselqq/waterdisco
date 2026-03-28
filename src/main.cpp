@@ -3,6 +3,8 @@
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QTranslator>
 #include <QMessageBox>
 #include <QStandardPaths>
@@ -59,6 +61,21 @@ void loadTranslate(const QString& locale) {
 
 #define LOCAL_SERVER_PREFIX "throne-"
 
+namespace {
+    bool canWriteToDir(const QString& dirPath) {
+        QDir dir(dirPath);
+        if (!dir.exists() && !dir.mkpath(".")) return false;
+        const QString probe = dir.absoluteFilePath(".throne_write_probe");
+        QFile file(probe);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            return false;
+        }
+        file.close();
+        QFile::remove(probe);
+        return true;
+    }
+}
+
 int main(int argc, char* argv[]) {
     // Core dump
 #ifdef Q_OS_WIN
@@ -112,6 +129,10 @@ int main(int argc, char* argv[]) {
             wd.setPath(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation));
         }
     }
+    if (!arguments.contains("-appdata") && !canWriteToDir(wd.absolutePath())) {
+        wd.setPath(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation));
+    }
+
     if (!wd.exists()) wd.mkpath(wd.absolutePath());
     if (!wd.exists("config")) wd.mkdir("config");
     QDir::setCurrent(wd.absoluteFilePath("config"));

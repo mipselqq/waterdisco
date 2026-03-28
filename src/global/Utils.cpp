@@ -15,6 +15,7 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QDateTime>
+#include <QDebug>
 #include <QLocale>
 
 #ifdef Q_OS_WIN
@@ -305,7 +306,13 @@ void runOnUiThread(const std::function<void()> &callback, bool wait) {
     QEventLoop loop;
     QObject::connect(timer, &QTimer::timeout, [=, &loop]() {
         // main thread
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& e) {
+            qWarning() << "Unhandled exception in runOnUiThread callback:" << e.what();
+        } catch (...) {
+            qWarning() << "Unhandled non-std exception in runOnUiThread callback";
+        }
         timer->deleteLater();
 
         if (wait)
@@ -331,7 +338,13 @@ void runOnNewThread(const std::function<void()> &callback, bool wait) {
 
     QEventLoop loop;
     QObject::connect(timer, &QTimer::timeout, [=, &loop]() {
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& e) {
+            qWarning() << "Unhandled exception in runOnNewThread callback:" << e.what();
+        } catch (...) {
+            qWarning() << "Unhandled non-std exception in runOnNewThread callback";
+        }
         timer->deleteLater();
         QMetaObject::invokeMethod(thread, "quit", Qt::QueuedConnection);
 
@@ -360,7 +373,13 @@ void runOnThread(const std::function<void()> &callback, QObject *parent, bool wa
 
     QEventLoop loop;
     QObject::connect(timer, &QTimer::timeout, [=, &loop]() {
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& e) {
+            qWarning() << "Unhandled exception in runOnThread callback:" << e.what();
+        } catch (...) {
+            qWarning() << "Unhandled non-std exception in runOnThread callback";
+        }
         timer->deleteLater();
 
         if (wait)
