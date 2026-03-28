@@ -703,6 +703,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // Misc menu
     ui->actionRemember_last_proxy->setChecked(Configs::dataManager->settingsRepo->remember_enable);
     ui->actionAuto_connect_with_best_site_score->setChecked(Configs::dataManager->settingsRepo->auto_connect_best_site_score);
+    ui->actionSpeed_test_fall_short->setChecked(Configs::dataManager->settingsRepo->speed_test_fall_short);
     if (Configs::dataManager->settingsRepo->auto_connect_best_site_score) {
         Configs::dataManager->settingsRepo->remember_enable = false;
         ui->actionRemember_last_proxy->setChecked(false);
@@ -953,6 +954,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->actionSpeedtest_Selected, &QAction::triggered, this, [=,this]()
     {
         speedtest_current_group(get_now_selected_list());
+    });
+    connect(ui->actionSpeed_test_fall_short, &QAction::toggled, this, [=, this](bool checked) {
+        Configs::dataManager->settingsRepo->speed_test_fall_short = checked;
+        Configs::dataManager->settingsRepo->Save();
+        MW_show_log(checked ? tr("Speedtest fall-short mode enabled") : tr("Speedtest fall-short mode disabled"));
     });
     connect(ui->actionConnect_with_best_site_score, &QAction::triggered, this, [=, this]() {
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();

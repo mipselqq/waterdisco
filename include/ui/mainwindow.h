@@ -313,7 +313,13 @@ private:
 
     void speedtest_current_group(const QList<int>& profileIDs, SpeedtestConnectMode connectMode = SpeedtestConnectMode::None);
 
+    void speedtest_current_group_fall_short(const QList<int>& profileIDs, SpeedtestConnectMode connectMode = SpeedtestConnectMode::None);
+
     void runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
+
+    void runSpeedTestFallShort(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags,
+                               const QMap<QString, int>& tag2entID, int entID, int timeoutMs,
+                               qint64* elapsedMsOut = nullptr, bool* successOut = nullptr, bool* skippedOut = nullptr);
 
     bool set_system_dns(bool set, bool save_set = true);
 

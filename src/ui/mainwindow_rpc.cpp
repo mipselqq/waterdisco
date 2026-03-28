@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <QElapsedTimer>
 
 #include "include/configs/generate.h"
 #include "include/database/GroupsRepo.h"
@@ -473,6 +474,11 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
 
 void MainWindow::speedtest_current_group(const QList<int>& profileIDs, SpeedtestConnectMode connectMode)
 {
+    if (ui->actionSpeed_test_fall_short != nullptr && ui->actionSpeed_test_fall_short->isChecked()) {
+        speedtest_current_group_fall_short(profileIDs, connectMode);
+        return;
+    }
+
     if (profileIDs.isEmpty()) {
         return;
     }
@@ -573,6 +579,158 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
             ui->pushButton_cancel_speedtest->setVisible(false);
             ui->pushButton_cancel_speedtest->setEnabled(false);
             MW_show_log(canAutoConnect ? tr("Speedtest finished!") : tr("Speedtest interrupted."));
+
+            if (connectMode != SpeedtestConnectMode::None && !canAutoConnect) {
+                MW_show_log(tr("Auto connect skipped because speedtest did not finish completely."));
+                return;
+            }
+
+            int bestId = -1;
+            if (connectMode == SpeedtestConnectMode::BestConnectionTime) {
+                int bestConn = std::numeric_limits<int>::max();
+                for (int id : profileIDs) {
+                    auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+                    if (!p || p->connect_time_ms <= 0) continue;
+                    if (p->connect_time_ms < bestConn) {
+                        bestConn = p->connect_time_ms;
+                        bestId = id;
+                    }
+                }
+            } else if (connectMode == SpeedtestConnectMode::BestSiteScore) {
+                int bestScore = -1;
+                for (int id : profileIDs) {
+                    auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+                    if (!p || p->site_score <= 0) continue;
+                    if (p->site_score > bestScore) {
+                        bestScore = p->site_score;
+                        bestId = id;
+                    }
+                }
+            }
+
+            if (bestId >= 0) {
+                profile_start(bestId);
+            } else if (connectMode == SpeedtestConnectMode::None && profileToRestore >= 0) {
+                profile_start(profileToRestore);
+            }
+        });
+    });
+}
+
+void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs, SpeedtestConnectMode connectMode)
+{
+    if (profileIDs.isEmpty()) {
+        MW_show_log(tr("No selected profiles for fall-short speedtest."));
+        return;
+    }
+
+    if (!speedtestRunning.tryLock()) {
+        MessageBoxWarning(software_name, tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
+        return;
+    }
+
+    int profileToRestore = deferred_profile_start_after_speedtest.exchange(-1919);
+    if (Configs::dataManager->settingsRepo->started_id >= 0) {
+        profileToRestore = Configs::dataManager->settingsRepo->started_id;
+    }
+    if (running != nullptr) {
+        profileToRestore = running->id;
+    }
+
+    runOnUiThread([=, this] {
+        ui->pushButton_cancel_speedtest->setVisible(true);
+        ui->pushButton_cancel_speedtest->setEnabled(true);
+    });
+
+    runOnNewThread([this, profileIDs, profileToRestore, connectMode]() {
+        bool completedFully = true;
+        if (Configs::dataManager->settingsRepo->started_id >= 0) {
+            runOnUiThread([=, this] {
+                ui->menu_stop->trigger();
+            }, true);
+
+            int waitTicks = 0;
+            while (Configs::dataManager->settingsRepo->started_id >= 0 && waitTicks++ < 200) {
+                QThread::msleep(50);
+            }
+
+            if (Configs::dataManager->settingsRepo->started_id >= 0) {
+                speedtestRunning.unlock();
+                runOnUiThread([=, this] {
+                    ui->pushButton_cancel_speedtest->setVisible(false);
+                    ui->pushButton_cancel_speedtest->setEnabled(false);
+                    MW_show_log(tr("Failed to stop active profile before speedtest; speedtest cancelled."));
+                });
+                return;
+            }
+        }
+
+        QList<int> orderedIds = profileIDs;
+        std::stable_sort(orderedIds.begin(), orderedIds.end(), [](int lhs, int rhs) {
+            auto l = Configs::dataManager->profilesRepo->GetProfile(lhs);
+            auto r = Configs::dataManager->profilesRepo->GetProfile(rhs);
+            const bool lHas = (l != nullptr && l->dl_speed_mbps > 0.0);
+            const bool rHas = (r != nullptr && r->dl_speed_mbps > 0.0);
+            if (lHas != rHas) return lHas > rHas;
+            if (!lHas) return false;
+            return l->dl_speed_mbps > r->dl_speed_mbps;
+        });
+
+        stopSpeedtest.store(false);
+        qint64 minFinishedMs = -1;
+        const int defaultTimeoutMs = Configs::dataManager->settingsRepo->speed_test_timeout_ms;
+
+        for (int entID : orderedIds) {
+            if (stopSpeedtest.load()) {
+                completedFully = false;
+                break;
+            }
+
+            auto ent = Configs::dataManager->profilesRepo->GetProfile(entID);
+            if (!ent) continue;
+
+            auto buildObject = Configs::BuildTestConfig({ent});
+            if (!buildObject->error.isEmpty()) {
+                MW_show_log(tr("Failed to build test config for profile %1: ").arg(ent->outbound->DisplayTypeAndName()) + buildObject->error);
+                continue;
+            }
+
+            int timeoutMs = defaultTimeoutMs;
+            if (minFinishedMs > 0) {
+                const qint64 threshold = std::max<qint64>(1, minFinishedMs * 2);
+                timeoutMs = std::min<qint64>(defaultTimeoutMs, threshold);
+            }
+
+            qint64 elapsedMs = 0;
+            bool success = false;
+            bool skipped = false;
+
+            if (buildObject->fullConfigs.contains(entID)) {
+                runSpeedTestFallShort(buildObject->fullConfigs[entID], "", true, {}, {}, entID, timeoutMs,
+                                      &elapsedMs, &success, &skipped);
+            } else {
+                auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
+                runSpeedTestFallShort(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false,
+                                      buildObject->outboundTags, buildObject->tag2entID, -1, timeoutMs,
+                                      &elapsedMs, &success, &skipped);
+            }
+
+            Q_UNUSED(skipped);
+            if (success && elapsedMs > 0) {
+                if (minFinishedMs <= 0 || elapsedMs < minFinishedMs) {
+                    minFinishedMs = elapsedMs;
+                    MW_show_log(tr("Fall-short baseline updated: %1 ms").arg(minFinishedMs));
+                }
+            }
+        }
+
+        const bool canAutoConnect = completedFully && !stopSpeedtest.load();
+        speedtestRunning.unlock();
+        runOnUiThread([=, this] {
+            refresh_proxy_list({}, true);
+            ui->pushButton_cancel_speedtest->setVisible(false);
+            ui->pushButton_cancel_speedtest->setEnabled(false);
+            MW_show_log(canAutoConnect ? tr("Fall-short speedtest finished!") : tr("Fall-short speedtest interrupted."));
 
             if (connectMode != SpeedtestConnectMode::None && !canAutoConnect) {
                 MW_show_log(tr("Auto connect skipped because speedtest did not finish completely."));
@@ -747,6 +905,146 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
         }
         Configs::dataManager->profilesRepo->Save(ent);
     }
+}
+
+void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xrayConfig, bool useDefault,
+                                       const QStringList& outboundTags, const QMap<QString, int>& tag2entID,
+                                       int entID, int timeoutMs, qint64* elapsedMsOut, bool* successOut, bool* skippedOut)
+{
+    if (elapsedMsOut) *elapsedMsOut = 0;
+    if (successOut) *successOut = false;
+    if (skippedOut) *skippedOut = false;
+
+    if (stopSpeedtest.load()) {
+        MW_show_log(tr("Profile speed test aborted"));
+        return;
+    }
+
+    libcore::SpeedTestRequest req;
+    for (const auto &item: outboundTags) {
+        req.outbound_tags.push_back(item.toStdString());
+    }
+    req.config = config.toStdString();
+    req.use_default_outbound = useDefault;
+    req.test_download = true;
+    req.test_upload = false;
+    req.simple_download = true;
+    req.simple_download_addr = Configs::dataManager->settingsRepo->simple_dl_url.toStdString();
+    req.test_current = false;
+    req.timeout_ms = timeoutMs;
+    req.only_country = false;
+    req.country_concurrency = 0;
+    req.xray_config = xrayConfig.toStdString();
+    req.need_xray = !xrayConfig.isEmpty();
+
+    auto doneMu = new QMutex;
+    doneMu->lock();
+    runOnNewThread([=, this]
+    {
+        QDateTime lastProxyListUpdate = QDateTime::currentDateTime();
+        while (true) {
+            QThread::msleep(100);
+            if (doneMu->tryLock())
+            {
+                break;
+            }
+            querySpeedtest(lastProxyListUpdate, tag2entID);
+        }
+        runOnUiThread([=, this]
+        {
+            showSpeedtestData = false;
+            UpdateDataView(true);
+        });
+        doneMu->unlock();
+        delete doneMu;
+    });
+
+    QElapsedTimer timer;
+    timer.start();
+
+    bool rpcOK;
+    auto result = defaultClient->SpeedTest(&rpcOK, req);
+    doneMu->unlock();
+    if (elapsedMsOut) *elapsedMsOut = timer.elapsed();
+    if (!rpcOK || result.results.empty()) {
+        QList<int> idsToSkip;
+        if (entID >= 0) {
+            idsToSkip << entID;
+        } else {
+            for (auto it = tag2entID.constBegin(); it != tag2entID.constEnd(); ++it) {
+                idsToSkip << it.value();
+            }
+        }
+        for (int id : idsToSkip) {
+            auto ent = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (!ent) continue;
+            ent->dl_speed = "Skipped";
+            ent->dl_speed_mbps = 0.0;
+            ent->ul_speed = "N/A";
+            ent->ul_speed_mbps = 0.0;
+            ent->site_score = 0;
+            Configs::dataManager->profilesRepo->Save(ent);
+            MW_show_log(tr("[%1] fall-short: skipped by timeout threshold (%2 ms)").arg(ent->outbound->DisplayTypeAndName()).arg(timeoutMs));
+        }
+        if (skippedOut) *skippedOut = !idsToSkip.isEmpty();
+        return;
+    }
+
+    bool hasSuccess = false;
+    for (const auto &res: result.results) {
+        if (!tag2entID.empty()) {
+            entID = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
+        }
+        if (entID == -1) {
+            MW_show_log(tr("Something is very wrong, the subject ent cannot be found!"));
+            continue;
+        }
+
+        auto ent = Configs::dataManager->profilesRepo->GetProfile(entID);
+        if (ent == nullptr) {
+            MW_show_log(tr("Profile manager data is corrupted, try again."));
+            continue;
+        }
+
+        if (res.cancelled.value()) continue;
+
+        if (res.error.value().empty()) {
+            hasSuccess = true;
+            ent->dl_speed = QString::fromStdString(res.dl_speed.value());
+            ent->ul_speed = QString::fromStdString(res.ul_speed.value());
+            ent->dl_speed_mbps = ParseSpeedToMbps(ent->dl_speed);
+            ent->ul_speed_mbps = ParseSpeedToMbps(ent->ul_speed);
+            if (res.latency.value() > 0) ent->connect_time_ms = res.latency.value();
+            else if (ent->connect_time_ms <= 0) ent->connect_time_ms = -1;
+            if (ent->latency <= 0 && res.latency.value() > 0) ent->latency = res.latency.value();
+            ent->site_score = CalcSiteScore(ent->connect_time_ms, ent->dl_speed_mbps);
+        } else {
+            const QString err = QString::fromStdString(res.error.value());
+            const QString low = err.toLower();
+            const bool timedOut = low.contains("timeout") || low.contains("deadline") || low.contains("context deadline exceeded");
+            if (timedOut) {
+                ent->dl_speed = "Skipped";
+                ent->dl_speed_mbps = 0.0;
+                ent->ul_speed = "N/A";
+                ent->ul_speed_mbps = 0.0;
+                ent->site_score = 0;
+                if (skippedOut) *skippedOut = true;
+                MW_show_log(tr("[%1] fall-short: skipped by timeout threshold (%2 ms)").arg(ent->outbound->DisplayTypeAndName()).arg(timeoutMs));
+            } else {
+                if (ent->dl_speed.isEmpty()) ent->dl_speed = "N/A";
+                if (ent->ul_speed.isEmpty()) ent->ul_speed = "N/A";
+                if (ent->dl_speed_mbps <= 0.0 && ent->ul_speed_mbps <= 0.0 && ent->connect_time_ms <= 0) {
+                    ent->connect_time_ms = -1;
+                    if (ent->latency <= 0) ent->latency = -1;
+                    ent->site_score = 0;
+                }
+                MW_show_log(tr("[%1] speed test error: %2").arg(ent->outbound->DisplayTypeAndName(), err));
+            }
+        }
+        Configs::dataManager->profilesRepo->Save(ent);
+    }
+
+    if (successOut) *successOut = hasSuccess;
 }
 
 bool MainWindow::set_system_dns(bool set, bool save_set) {

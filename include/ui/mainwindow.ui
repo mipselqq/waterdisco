@@ -561,6 +561,7 @@
     <addaction name="actionRemember_last_proxy"/>
    <addaction name="actionAuto_connect_with_best_site_score"/>
     <addaction name="actionAllow_LAN"/>
+    <addaction name="actionSpeed_test_fall_short"/>
     <addaction name="actionRun_easter"/>
     <addaction name="menu_spmode"/>
     <addaction name="separator"/>
@@ -1092,6 +1093,14 @@
   <action name="actionRun_easter">
    <property name="text">
     <string>Improve mood</string>
+   </property>
+  </action>
+  <action name="actionSpeed_test_fall_short">
+    <property name="checkable">
+     <bool>true</bool>
+    </property>
+   <property name="text">
+    <string>Speed test fall short</string>
    </property>
   </action>
   <action name="actionRefresh_Column_Widths">

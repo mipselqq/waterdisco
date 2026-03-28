@@ -15,6 +15,7 @@ namespace Configs {
             "net_use_proxy",
             "remember_enable",
             "auto_connect_best_site_score",
+            "speed_test_fall_short",
             "skip_cert",
             "fakedns",
             "disable_traffic_stats",
@@ -290,6 +291,7 @@ namespace Configs {
                 else if (key == "remember_id") remember_id = varValue.toInt();
                 else if (key == "remember_enable") remember_enable = varValue.toBool();
                 else if (key == "auto_connect_best_site_score") auto_connect_best_site_score = varValue.toBool();
+                else if (key == "speed_test_fall_short") speed_test_fall_short = varValue.toBool();
                 else if (key == "windows_set_admin") windows_set_admin = varValue.toBool();
                 else if (key == "shortcuts") shortcuts = varValue.value<QMap<QString, QKeySequence>>();
                 else if (key == "speedtest_on_startup_profile_ids") speedtest_on_startup_profile_ids = varValue.toStringList();
@@ -423,6 +425,7 @@ namespace Configs {
             {"remember_id", remember_id},
             {"remember_enable", remember_enable},
             {"auto_connect_best_site_score", auto_connect_best_site_score},
+            {"speed_test_fall_short", speed_test_fall_short},
             {"windows_set_admin", windows_set_admin},
             {"shortcuts", QVariant::fromValue(shortcuts)},
             {"speedtest_on_startup_profile_ids", speedtest_on_startup_profile_ids},
