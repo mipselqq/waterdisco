@@ -79,26 +79,32 @@ class CenteredCheckBoxDelegate final : public QStyledItemDelegate {
 public:
     explicit CenteredCheckBoxDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
 
+protected:
+    void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
+        QStyledItemDelegate::initStyleOption(option, index);
+        option->features &= ~QStyleOptionViewItem::HasCheckIndicator;
+        option->features &= ~QStyleOptionViewItem::HasDisplay;
+        option->text.clear();
+    }
+
+public:
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
         const QVariant checkState = index.data(Qt::CheckStateRole);
-        if (!checkState.isValid()) {
-            QStyledItemDelegate::paint(painter, option, index);
-            return;
+
+        // We draw the background and focus
+        QStyledItemDelegate::paint(painter, option, index);
+
+        if (checkState.isValid()) {
+            QStyleOptionViewItem opt(option);
+            initStyleOption(&opt, index);
+
+            QStyleOptionButton checkbox;
+            checkbox.state = QStyle::State_Enabled |
+                (checkState.toInt() == Qt::Checked ? QStyle::State_On : QStyle::State_Off);
+            const QRect indicator = QApplication::style()->subElementRect(QStyle::SE_CheckBoxIndicator, &checkbox);
+            checkbox.rect = QStyle::alignedRect(opt.direction, Qt::AlignCenter, indicator.size(), opt.rect);
+            QApplication::style()->drawControl(QStyle::CE_CheckBox, &checkbox, painter);
         }
-
-        QStyleOptionViewItem opt(option);
-        initStyleOption(&opt, index);
-        opt.text.clear();
-        // We draw the checkbox ourselves in the center; disable default display and check indicator.
-        opt.features &= ~(QStyleOptionViewItem::HasDisplay | QStyleOptionViewItem::HasCheckIndicator);
-        QStyledItemDelegate::paint(painter, opt, index);
-
-        QStyleOptionButton checkbox;
-        checkbox.state = QStyle::State_Enabled |
-            (checkState.toInt() == Qt::Checked ? QStyle::State_On : QStyle::State_Off);
-        const QRect indicator = QApplication::style()->subElementRect(QStyle::SE_CheckBoxIndicator, &checkbox);
-        checkbox.rect = QStyle::alignedRect(opt.direction, Qt::AlignCenter, indicator.size(), option.rect);
-        QApplication::style()->drawControl(QStyle::CE_CheckBox, &checkbox, painter);
     }
 };
 }
@@ -515,10 +521,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->profilesTableView->setTabKeyNavigation(false);
     ui->profilesTableView->horizontalHeader()->setResizeContentsPrecision(0);
 
-    connect(ui->profilesTableView->verticalScrollBar(), &QScrollBar::valueChanged, ui->profilesTableView, [=, this] {
-        refresh_proxy_list_column_size();
-    });
-
     // search box
     connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::typeFilterChanged, this, [=,this](const QString& currentText)
     {
@@ -742,6 +744,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->actionRefresh_Column_Widths, &QAction::triggered, this, [=, this] {
         auto ent = Configs::dataManager->groupsRepo->CurrentGroup();
         ent->column_width.clear();
+        ent->clearCalculatedColumnWidth();
         Configs::dataManager->groupsRepo->Save(ent);
         show_group(ent->id);
     });
@@ -1855,26 +1858,44 @@ void MainWindow::refresh_proxy_list_column_size() {
     QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
         hHeader->blockSignals(true);
         const int colCount = hHeader->count();
+        const bool hasCachedWidths = (group->calculated_column_width.size() == colCount);
+
+        // Keep hidden columns state stable.
+        ui->profilesTableView->setColumnHidden(1, true); // Address moved to Details menu.
+        ui->profilesTableView->setColumnHidden(3, true); // Latency hidden by request.
+
+        if (hasCachedWidths) {
+            for (int i = 0; i < colCount; ++i) {
+                if (i == 1 || i == 3) continue;
+                ui->profilesTableView->setColumnHidden(i, false);
+                hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
+                hHeader->resizeSection(i, group->calculated_column_width[i]);
+            }
+            hHeader->adjustPositions();
+            hHeader->blockSignals(false);
+            return;
+        }
+
+        // First-time calculation: compute a stable baseline width, then keep interactive.
+        group->clearCalculatedColumnWidth();
+        group->calculated_column_width.resize(colCount);
         for (int i = 0; i < colCount; ++i) {
             if (i == 1 || i == 3) {
-                ui->profilesTableView->setColumnHidden(i, true);
+                group->calculated_column_width[i] = hHeader->sectionSize(i);
                 continue;
             }
             ui->profilesTableView->setColumnHidden(i, false);
 
-            // Resize to content once, then freeze width so it does not jitter on hover.
+            // Resize to content once, then preserve this width for subsequent refreshes.
             hHeader->setSectionResizeMode(i, QHeaderView::ResizeToContents);
             ui->profilesTableView->resizeColumnToContents(i);
             const int width = hHeader->sectionSize(i);
-            hHeader->setSectionResizeMode(i, QHeaderView::Fixed);
+            hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
             hHeader->resizeSection(i, width);
+            group->calculated_column_width[i] = width;
         }
 
         ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        group->clearCalculatedColumnWidth();
-        for (int i = 0; i < colCount; ++i) {
-            group->calculated_column_width << hHeader->sectionSize(i);
-        }
         hHeader->adjustPositions();
         hHeader->blockSignals(false);
     });
