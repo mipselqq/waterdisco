@@ -170,7 +170,8 @@ private slots:
 private:
     class QMediaPlayer *easterPlayer = nullptr;
     class QAudioOutput *easterAudioOutput = nullptr;
-    class QVideoWidget *easterVideoWidget = nullptr;
+    class QVideoSink *easterVideoSink = nullptr;
+    class QLabel *easterVideoLabel = nullptr;
     class QWidget *easterOverlay = nullptr;
     bool easterStopping = false;
 

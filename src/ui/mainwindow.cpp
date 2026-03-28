@@ -71,7 +71,8 @@
 #include <QUrl>
 #include <QAudioOutput>
 #include <QMediaPlayer>
-#include <QVideoWidget>
+#include <QVideoSink>
+#include <QVideoFrame>
 #include <random>
 #include <3rdparty/QHotkey/qhotkey.h>
 #include <3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.hpp>
@@ -2099,10 +2100,22 @@ void MainWindow::runEasterVideo() {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    easterVideoWidget = new QVideoWidget(easterOverlay);
-    easterVideoWidget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-    easterVideoWidget->setAspectRatioMode(Qt::KeepAspectRatio);
-    layout->addWidget(easterVideoWidget);
+    easterVideoLabel = new QLabel(easterOverlay);
+    easterVideoLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    easterVideoLabel->setAlignment(Qt::AlignCenter);
+    easterVideoLabel->setStyleSheet("background: black;");
+    layout->addWidget(easterVideoLabel);
+
+    easterVideoSink = new QVideoSink(this);
+    connect(easterVideoSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
+        if (easterVideoLabel == nullptr || !frame.isValid()) return;
+        const QImage image = frame.toImage();
+        if (image.isNull()) return;
+
+        const QSize targetSize = easterVideoLabel->size();
+        if (targetSize.width() <= 0 || targetSize.height() <= 0) return;
+        easterVideoLabel->setPixmap(QPixmap::fromImage(image).scaled(targetSize, Qt::KeepAspectRatio, Qt::FastTransformation));
+    });
 
     easterAudioOutput = new QAudioOutput(this);
     easterAudioOutput->setMuted(false);
@@ -2110,7 +2123,7 @@ void MainWindow::runEasterVideo() {
 
     easterPlayer = new QMediaPlayer(this);
     easterPlayer->setAudioOutput(easterAudioOutput);
-    easterPlayer->setVideoOutput(easterVideoWidget);
+    easterPlayer->setVideoOutput(easterVideoSink);
     easterPlayer->setSource(QUrl("qrc:/Throne/easter.mp4"));
 
     connect(easterPlayer, &QMediaPlayer::mediaStatusChanged, this, [=, this](QMediaPlayer::MediaStatus status) {
@@ -2131,23 +2144,29 @@ void MainWindow::stopEasterVideo() {
 
     auto *player = easterPlayer;
     auto *audio = easterAudioOutput;
+    auto *sink = easterVideoSink;
     auto *overlay = easterOverlay;
 
     easterPlayer = nullptr;
     easterAudioOutput = nullptr;
-    easterVideoWidget = nullptr;
+    easterVideoSink = nullptr;
+    easterVideoLabel = nullptr;
     easterOverlay = nullptr;
 
     if (player != nullptr) {
         player->disconnect(this);
         player->stop();
         player->setSource(QUrl());
-        player->setVideoOutput(nullptr);
+        player->setVideoOutput(static_cast<QVideoSink *>(nullptr));
         player->setAudioOutput(nullptr);
         delete player;
     }
     if (audio != nullptr) {
         delete audio;
+    }
+    if (sink != nullptr) {
+        sink->disconnect(this);
+        delete sink;
     }
     if (overlay != nullptr) {
         overlay->hide();
