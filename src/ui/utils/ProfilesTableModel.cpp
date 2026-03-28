@@ -19,14 +19,25 @@ int ProfilesTableModel::rowCount(const QModelIndex &parent) const {
 
 int ProfilesTableModel::columnCount(const QModelIndex &parent) const {
     if (parent.isValid()) return 0;
-    return 10;
+    return 11;
 }
 
 Qt::ItemFlags ProfilesTableModel::flags(const QModelIndex &index) const {
     Qt::ItemFlags defaultFlags = QAbstractTableModel::flags(index);
     if (index.isValid()) {
-        if (index.column() == 7) {
+        const int profileId = m_profileIds.value(index.row(), -1);
+        const bool disabled = Configs::dataManager->settingsRepo->disabled_profile_ids.contains(QString::number(profileId));
+
+        if (index.column() == 1) {
+            if (disabled) return Qt::ItemIsEnabled | Qt::ItemIsUserCheckable;
             return Qt::ItemIsEnabled | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled;
+        }
+        if (index.column() == 0) {
+            if (disabled) return Qt::ItemIsEnabled | Qt::ItemIsUserCheckable;
+            return Qt::ItemIsEnabled | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled;
+        }
+        if (disabled) {
+            return Qt::ItemIsEnabled;
         }
         return Qt::ItemIsDragEnabled | defaultFlags;
     }
@@ -84,7 +95,7 @@ void ProfilesTableModel::evictOne() const {
 
 QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_profileIds.size()
-        || index.column() < 0 || index.column() >= 10) {
+        || index.column() < 0 || index.column() >= 11) {
         return {};
     }
     const int profileId = m_profileIds[index.row()];
@@ -103,39 +114,53 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
 
     if (role == Qt::DisplayRole) {
         switch (index.column()) {
-        case 0: return profile->outbound ? profile->outbound->DisplayType() : QString();
-        case 1: return profile->outbound ? profile->outbound->DisplayAddress() : QString();
-        case 2: return profile->outbound ? profile->outbound->name : QString();
-        case 3: return profile->DisplayLatency();
-        case 4: return profile->DisplayRxSpeed();
-        case 5: return profile->DisplayConnectionTime();
-        case 6: return profile->DisplaySiteScore();
-        case 7: return QString();
-        case 8: return profile->DisplayTrafficRx();
-        case 9: return profile->DisplayTrafficTx();
+        case 0: return QString();
+        case 1: return QString();
+        case 2: return profile->outbound ? profile->outbound->DisplayType() : QString();
+        case 3: return profile->outbound ? profile->outbound->DisplayAddress() : QString();
+        case 4: return profile->outbound ? profile->outbound->name : QString();
+        case 5: return profile->DisplayLatency();
+        case 6: return profile->DisplayRxSpeed();
+        case 7: return profile->DisplayConnectionTime();
+        case 8: return profile->DisplaySiteScore();
+        case 9: return profile->DisplayTrafficRx();
+        case 10: return profile->DisplayTrafficTx();
         default: return {};
         }
     }
-    if (role == Qt::CheckStateRole && index.column() == 7) {
+    if (role == Qt::CheckStateRole && index.column() == 0) {
         const auto startupIds = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
         return startupIds.contains(QString::number(profileId)) ? Qt::Checked : Qt::Unchecked;
     }
-    if (role == Qt::TextAlignmentRole && index.column() == 7) {
+    if (role == Qt::CheckStateRole && index.column() == 1) {
+        const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+        return disabledIds.contains(QString::number(profileId)) ? Qt::Checked : Qt::Unchecked;
+    }
+    if (role == Qt::TextAlignmentRole && (index.column() == 0 || index.column() == 1)) {
         return static_cast<int>(Qt::AlignCenter);
     }
+    const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+    const bool isDisabledRow = disabledIds.contains(QString::number(profileId));
+
+    if (role == Qt::BackgroundRole && isDisabledRow) {
+        return QColor(25, 25, 25);
+    }
     if (role == Qt::ForegroundRole) {
-        if (index.column() == 3) {
+        if (isDisabledRow) {
+            return QColor(Qt::darkGray);
+        }
+        if (index.column() == 5) {
             QColor latencyColor = profile->DisplayLatencyColor();
             if (latencyColor.isValid()) return latencyColor;
         }
-        if (index.column() == 4) {
+        if (index.column() == 6) {
             const auto rxText = profile->DisplayRxSpeed().trimmed();
             if (rxText.compare("N/A", Qt::CaseInsensitive) == 0 ||
                 rxText.compare("Unavailable", Qt::CaseInsensitive) == 0) {
                 return QColor(Qt::darkGray);
             }
         }
-        if (index.column() == 5) {
+        if (index.column() == 7) {
             if (profile->connect_time_ms < 0) {
                 return QColor(Qt::darkGray);
             }
@@ -145,7 +170,7 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
                 return QColor(Qt::red);
             }
         }
-        if (index.column() == 6 && profile->site_score > 0) {
+        if (index.column() == 8 && profile->site_score > 0) {
             if (profile->site_score >= 80) return QColor(Qt::darkGreen);
             if (profile->site_score >= 55) return QColor(Qt::darkYellow);
             return QColor(Qt::red);
@@ -157,21 +182,34 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
 }
 
 bool ProfilesTableModel::setData(const QModelIndex &index, const QVariant &value, int role) {
-    if (!index.isValid() || index.column() != 7 || role != Qt::CheckStateRole) return false;
+    if (!index.isValid() || role != Qt::CheckStateRole) return false;
     const int profileId = m_profileIds[index.row()];
-    auto startupIds = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
     const QString idStr = QString::number(profileId);
     const bool checked = (value.toInt() == Qt::Checked);
 
-    if (checked) {
-        if (!startupIds.contains(idStr)) startupIds.append(idStr);
+    if (index.column() == 0) {
+        auto startupIds = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
+        if (checked) {
+            if (!startupIds.contains(idStr)) startupIds.append(idStr);
+        } else {
+            startupIds.removeAll(idStr);
+        }
+        Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids = startupIds;
+    } else if (index.column() == 1) {
+        auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+        if (checked) {
+            if (!disabledIds.contains(idStr)) disabledIds.append(idStr);
+        } else {
+            disabledIds.removeAll(idStr);
+        }
+        Configs::dataManager->settingsRepo->disabled_profile_ids = disabledIds;
     } else {
-        startupIds.removeAll(idStr);
+        return false;
     }
 
-    Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids = startupIds;
     Configs::dataManager->settingsRepo->Save();
-    emit dataChanged(index, index, {Qt::CheckStateRole});
+    emit dataChanged(this->index(index.row(), index.column()), this->index(index.row(), columnCount() - 1),
+                     {Qt::CheckStateRole, Qt::ForegroundRole, Qt::BackgroundRole});
     return true;
 }
 
@@ -179,16 +217,17 @@ QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation
     if (role != Qt::DisplayRole) return {};
     if (orientation == Qt::Horizontal) {
         switch (section) {
-        case 0: return tr("Type");
-        case 1: return tr("Address");
-        case 2: return tr("Name");
-        case 3: return tr("Latency");
-        case 4: return tr("Rx speed");
-        case 5: return tr("Connection time");
-        case 6: return tr("Site Score");
-        case 7: return tr("Speedtest on startup");
-        case 8: return tr("Rx");
-        case 9: return tr("Tx");
+        case 0: return tr("Speedtest on startup");
+        case 1: return tr("Disabled");
+        case 2: return tr("Type");
+        case 3: return tr("Address");
+        case 4: return tr("Name");
+        case 5: return tr("Latency");
+        case 6: return tr("Rx speed");
+        case 7: return tr("Connection time");
+        case 8: return tr("Site Score");
+        case 9: return tr("Rx");
+        case 10: return tr("Tx");
         default: return {};
         }
     }

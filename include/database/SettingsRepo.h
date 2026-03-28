@@ -123,6 +123,7 @@ namespace Configs {
         bool windows_set_admin = false;
         QMap<QString, QKeySequence> shortcuts;
         QStringList speedtest_on_startup_profile_ids = {};
+        QStringList disabled_profile_ids = {};
 
         // Routing
         int current_route_id = 1;

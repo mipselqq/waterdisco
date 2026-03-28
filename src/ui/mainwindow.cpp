@@ -66,6 +66,7 @@
 #include <QFileDialog>
 #include <QToolTip>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <random>
 #include <3rdparty/QHotkey/qhotkey.h>
 #include <3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.hpp>
@@ -78,6 +79,13 @@ namespace {
 class CenteredCheckBoxDelegate final : public QStyledItemDelegate {
 public:
     explicit CenteredCheckBoxDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    static QRect indicatorRect(const QStyleOptionViewItem &option) {
+        QStyleOptionButton checkbox;
+        checkbox.state = QStyle::State_Enabled;
+        const QRect indicator = QApplication::style()->subElementRect(QStyle::SE_CheckBoxIndicator, &checkbox);
+        return QStyle::alignedRect(option.direction, Qt::AlignCenter, indicator.size(), option.rect);
+    }
 
 protected:
     void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
@@ -101,10 +109,33 @@ public:
             QStyleOptionButton checkbox;
             checkbox.state = QStyle::State_Enabled |
                 (checkState.toInt() == Qt::Checked ? QStyle::State_On : QStyle::State_Off);
-            const QRect indicator = QApplication::style()->subElementRect(QStyle::SE_CheckBoxIndicator, &checkbox);
-            checkbox.rect = QStyle::alignedRect(opt.direction, Qt::AlignCenter, indicator.size(), opt.rect);
+            checkbox.rect = indicatorRect(opt);
             QApplication::style()->drawControl(QStyle::CE_CheckBox, &checkbox, painter);
         }
+    }
+
+    bool editorEvent(QEvent *event,
+                     QAbstractItemModel *model,
+                     const QStyleOptionViewItem &option,
+                     const QModelIndex &index) override {
+        if (!(index.flags() & Qt::ItemIsEnabled) || !(index.flags() & Qt::ItemIsUserCheckable)) {
+            return false;
+        }
+
+        if (event->type() == QEvent::MouseButtonRelease) {
+            auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if (mouseEvent->button() != Qt::LeftButton) return false;
+            if (!indicatorRect(option).contains(mouseEvent->pos())) return false;
+        } else if (event->type() == QEvent::KeyPress) {
+            auto *keyEvent = static_cast<QKeyEvent *>(event);
+            if (keyEvent->key() != Qt::Key_Space && keyEvent->key() != Qt::Key_Select) return false;
+        } else {
+            return false;
+        }
+
+        const Qt::CheckState current = static_cast<Qt::CheckState>(index.data(Qt::CheckStateRole).toInt());
+        const Qt::CheckState next = (current == Qt::Checked) ? Qt::Unchecked : Qt::Checked;
+        return model->setData(index, next, Qt::CheckStateRole);
     }
 };
 }
@@ -351,13 +382,44 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // table UI: model-backed view with on-demand row data
     profilesTableModel = new ProfilesTableModel(this);
     ui->profilesTableView->setModel(profilesTableModel);
-    ui->profilesTableView->setItemDelegateForColumn(7, new CenteredCheckBoxDelegate(ui->profilesTableView));
-    ui->profilesTableView->setColumnHidden(1, true);
+    ui->profilesTableView->setItemDelegateForColumn(0, new CenteredCheckBoxDelegate(ui->profilesTableView));
+    ui->profilesTableView->setItemDelegateForColumn(1, new CenteredCheckBoxDelegate(ui->profilesTableView));
     ui->profilesTableView->setColumnHidden(3, true);
+    ui->profilesTableView->setColumnHidden(5, true);
+    connect(profilesTableModel, &QAbstractItemModel::dataChanged, this, [=, this](const QModelIndex &topLeft, const QModelIndex &, const QList<int> &) {
+        if (topLeft.isValid() && topLeft.column() == 1) {
+            refresh_proxy_list({}, true);
+        }
+    });
+    connect(ui->profilesTableView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+        [=, this](const QItemSelection &selected, const QItemSelection &) {
+            const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+            for (const auto &idx : selected.indexes()) {
+                const int id = profilesTableModel->data(profilesTableModel->index(idx.row(), 0), ProfilesTableModel::ProfileIdRole).toInt();
+                if (disabledIds.contains(QString::number(id))) {
+                    ui->profilesTableView->selectionModel()->select(idx, QItemSelectionModel::Deselect | QItemSelectionModel::Rows);
+                }
+            }
+        });
     ui->profilesTableView->rowsSwapped = [=,this](int row1, int row2)
     {
         if (!addressFilterString.isEmpty() || !nameFilterString.isEmpty() || !typeFilterString.isEmpty() || !countryFilterString.isEmpty()) return;
         if (row1 == row2) return;
+
+        const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+        const int movedId = profilesTableModel->profileIdAt(row1);
+        if (disabledIds.contains(QString::number(movedId))) return;
+
+        int firstDisabledRow = profilesTableModel->rowCount();
+        for (int r = 0; r < profilesTableModel->rowCount(); ++r) {
+            const int pid = profilesTableModel->profileIdAt(r);
+            if (disabledIds.contains(QString::number(pid))) {
+                firstDisabledRow = r;
+                break;
+            }
+        }
+        if (firstDisabledRow > 0) row2 = std::min(row2, firstDisabledRow - 1);
+
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         group->EmplaceProfile(row1, row2);
         profilesTableModel->emplaceProfiles(row1, row2);
@@ -371,27 +433,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         } else {
             proxy_last_order = logicalIndex;
         }
-        if (logicalIndex == 0) {
+        if (logicalIndex == 2) {
             action.method = GroupSortMethod::ByType;
-        } else if (logicalIndex == 1) {
+        } else if (logicalIndex == 3) {
             action.method = GroupSortMethod::ByAddress;
-        } else if (logicalIndex == 2) {
+        } else if (logicalIndex == 4) {
             action.method = GroupSortMethod::ByName;
-        } else if (logicalIndex >= 3 && logicalIndex <= 6) {
+        } else if (logicalIndex >= 5 && logicalIndex <= 8) {
             action.method = GroupSortMethod::ByTestResult;
             auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
             if (currGroup != nullptr) {
-                if (logicalIndex == 3) currGroup->test_sort_by = Configs::testBy::latency;
-                if (logicalIndex == 4) currGroup->test_sort_by = Configs::testBy::rxSpeed;
-                if (logicalIndex == 5) currGroup->test_sort_by = Configs::testBy::connectTime;
-                if (logicalIndex == 6) currGroup->test_sort_by = Configs::testBy::siteScore;
+                if (logicalIndex == 5) currGroup->test_sort_by = Configs::testBy::latency;
+                if (logicalIndex == 6) currGroup->test_sort_by = Configs::testBy::rxSpeed;
+                if (logicalIndex == 7) currGroup->test_sort_by = Configs::testBy::connectTime;
+                if (logicalIndex == 8) currGroup->test_sort_by = Configs::testBy::siteScore;
                 Configs::dataManager->groupsRepo->Save(currGroup);
             }
-        } else if (logicalIndex == 8 || logicalIndex == 9) {
+        } else if (logicalIndex == 9 || logicalIndex == 10) {
             action.method = GroupSortMethod::ByTraffic;
             auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
             if (currGroup != nullptr) {
-                currGroup->traffic_sort_by = logicalIndex == 8 ? Configs::trafficBy::rx : Configs::trafficBy::tx;
+                currGroup->traffic_sort_by = logicalIndex == 9 ? Configs::trafficBy::rx : Configs::trafficBy::tx;
                 Configs::dataManager->groupsRepo->Save(currGroup);
             }
         } else {
@@ -427,7 +489,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         int columnIndex = header->logicalIndexAt(pos);
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         if (group == nullptr) return;
-        if (columnIndex >= 3 && columnIndex <= 6) {
+        if (columnIndex >= 5 && columnIndex <= 8) {
             QMenu menu(this);
             auto* sortByLabel = menu.addAction(tr("Sort By:"));
             sortByLabel->setEnabled(false);
@@ -471,7 +533,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 });
             return;
         }
-        if (columnIndex == 8 || columnIndex == 9) {
+        if (columnIndex == 9 || columnIndex == 10) {
             QMenu menu(this);
             auto* sortByLabel = menu.addAction(tr("Sort By:"));
             sortByLabel->setEnabled(false);
@@ -929,7 +991,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             MW_show_log("File too large, will not process it");
             return;
         }
-        file.open(QIODevice::ReadOnly);
+        if (!file.open(QIODevice::ReadOnly)) {
+            MW_show_log(tr("Failed to open file: ") + path);
+            return;
+        }
         auto contents = file.readAll();
         file.close();
         Subscription::groupUpdater->AsyncUpdate(contents);
@@ -990,7 +1055,10 @@ void MainWindow::dropEvent(QDropEvent* event)
                     parseQrImage(&qpx);
                 } else if (auto file = QFile(url.toLocalFile()); file.exists())
                 {
-                    file.open(QFile::ReadOnly);
+                    if (!file.open(QFile::ReadOnly)) {
+                        MW_show_log(tr("Failed to open dropped file: ") + url.toLocalFile());
+                        continue;
+                    }
                     if (file.size() > 50 * 1024 * 1024)
                     {
                         file.close();
@@ -1214,12 +1282,13 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
             refresh_status();
 
             const auto startupIdsStr = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
+            const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
             if (!startupIdsStr.isEmpty()) {
                 QList<int> startupIds;
                 for (const auto &idStr : startupIdsStr) {
                     bool ok = false;
                     const int id = idStr.toInt(&ok);
-                    if (ok && Configs::dataManager->profilesRepo->GetProfile(id) != nullptr) startupIds.append(id);
+                    if (ok && !disabledIds.contains(idStr) && Configs::dataManager->profilesRepo->GetProfile(id) != nullptr) startupIds.append(id);
                 }
                 if (!startupIds.isEmpty()) {
                     setTimeout([=, this]() {
@@ -1678,8 +1747,19 @@ void MainWindow::updateLogFilterFields() {
 
 QList<int> MainWindow::filterProfilesList(const QList<int>& profileIDs)
 {
-    if (addressFilterString.isEmpty() && nameFilterString.isEmpty() && typeFilterString.isEmpty() && countryFilterString.isEmpty()) return profileIDs;
-    QList<int> res;
+    const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+    QList<int> resEnabled;
+    QList<int> resDisabled;
+
+    if (addressFilterString.isEmpty() && nameFilterString.isEmpty() && typeFilterString.isEmpty() && countryFilterString.isEmpty()) {
+        for (const auto id : profileIDs) {
+            if (disabledIds.contains(QString::number(id))) resDisabled.append(id);
+            else resEnabled.append(id);
+        }
+        resEnabled.append(resDisabled);
+        return resEnabled;
+    }
+
     auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
     for (const auto& profile : profiles)
     {
@@ -1695,9 +1775,13 @@ QList<int> MainWindow::filterProfilesList(const QList<int>& profileIDs)
                 || profile->DisplayLatency().contains(countryFilterString, Qt::CaseInsensitive)
                 || profile->DisplayConnectionTime().contains(countryFilterString, Qt::CaseInsensitive)
                 || profile->DisplayRxSpeed().contains(countryFilterString, Qt::CaseInsensitive)))
-            res.append(profile->id);
+        {
+            if (disabledIds.contains(QString::number(profile->id))) resDisabled.append(profile->id);
+            else resEnabled.append(profile->id);
+        }
     }
-    return res;
+    resEnabled.append(resDisabled);
+    return resEnabled;
 }
 
 void MainWindow::refresh_status(const QString &traffic_update) {
@@ -1861,12 +1945,12 @@ void MainWindow::refresh_proxy_list_column_size() {
         const bool hasCachedWidths = (group->calculated_column_width.size() == colCount);
 
         // Keep hidden columns state stable.
-        ui->profilesTableView->setColumnHidden(1, true); // Address moved to Details menu.
-        ui->profilesTableView->setColumnHidden(3, true); // Latency hidden by request.
+        ui->profilesTableView->setColumnHidden(3, true); // Address moved to Details menu.
+        ui->profilesTableView->setColumnHidden(5, true); // Latency hidden by request.
 
         if (hasCachedWidths) {
             for (int i = 0; i < colCount; ++i) {
-                if (i == 1 || i == 3) continue;
+                if (i == 3 || i == 5) continue;
                 ui->profilesTableView->setColumnHidden(i, false);
                 hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
                 hHeader->resizeSection(i, group->calculated_column_width[i]);
@@ -1880,7 +1964,7 @@ void MainWindow::refresh_proxy_list_column_size() {
         group->clearCalculatedColumnWidth();
         group->calculated_column_width.resize(colCount);
         for (int i = 0; i < colCount; ++i) {
-            if (i == 1 || i == 3) {
+            if (i == 3 || i == 5) {
                 group->calculated_column_width[i] = hHeader->sectionSize(i);
                 continue;
             }
@@ -2019,7 +2103,7 @@ void MainWindow::on_menu_reset_traffic_triggered() {
         Configs::dataManager->profilesRepo->SaveTraffic(ent);
     }
     if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid); group &&
-        group->calculated_column_width.size() > 4) group->calculated_column_width[4] = 0;
+        group->calculated_column_width.size() > 9) group->calculated_column_width[9] = 0;
     refresh_proxy_list(entIDs);
 }
 
@@ -2286,7 +2370,7 @@ void MainWindow::on_menu_clear_test_result_triggered() {
     }
     Configs::dataManager->profilesRepo->SaveBatch(ents);
     if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid); group &&
-        group->calculated_column_width.size() > 3) group->calculated_column_width[3] = 0;
+        group->calculated_column_width.size() > 5) group->calculated_column_width[5] = 0;
     refresh_proxy_list();
 }
 
@@ -2295,7 +2379,16 @@ void MainWindow::on_menu_select_all_triggered() {
         ui->masterLogBrowser->selectAll();
         return;
     }
-    ui->profilesTableView->selectAll();
+    if (!profilesTableModel || !ui->profilesTableView->selectionModel()) return;
+
+    const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+    ui->profilesTableView->clearSelection();
+    for (int row = 0; row < profilesTableModel->rowCount(); ++row) {
+        const int id = profilesTableModel->profileIdAt(row);
+        if (disabledIds.contains(QString::number(id))) continue;
+        const QModelIndex idx = profilesTableModel->index(row, 0);
+        ui->profilesTableView->selectionModel()->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+    }
 }
 
 bool mw_sub_updating = false;
@@ -2416,6 +2509,13 @@ void MainWindow::on_menu_resolve_domain_triggered() {
 void MainWindow::on_profilesTableView_customContextMenuRequested(const QPoint &pos) {
     auto idx = ui->profilesTableView->indexAt(pos);
     if (idx.isValid()) {
+        const int id = profilesTableModel->data(profilesTableModel->index(idx.row(), 0), ProfilesTableModel::ProfileIdRole).toInt();
+        const bool disabled = Configs::dataManager->settingsRepo->disabled_profile_ids.contains(QString::number(id));
+        if (disabled) {
+            ui->profilesTableView->clearSelection();
+            ui->menu_server->popup(ui->profilesTableView->viewport()->mapToGlobal(pos));
+            return;
+        }
         const auto selRows = ui->profilesTableView->selectionModel()->selectedRows();
         bool alreadySelected = false;
         for (const auto &rIdx : selRows) {
@@ -2435,9 +2535,11 @@ void MainWindow::on_profilesTableView_customContextMenuRequested(const QPoint &p
 QList<int> MainWindow::get_now_selected_list() {
     QList<int> list;
     if (!profilesTableModel) return list;
+    const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
     QModelIndexList indices = ui->profilesTableView->selectionModel()->selectedRows(0);
     for (const QModelIndex &idx : indices) {
         int id = profilesTableModel->data(idx, ProfilesTableModel::ProfileIdRole).toInt();
+        if (disabledIds.contains(QString::number(id))) continue;
         list << id;
     }
     return list;

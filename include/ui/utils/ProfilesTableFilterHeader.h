@@ -93,10 +93,10 @@ public slots:
         const int editHeight = 24;
         const int topPos = height() - editHeight - 4;
 
-        type_filter->setGeometry(sectionViewportPosition(0) + 2, topPos, sectionSize(0) - 4, editHeight);
-        address_filter->setGeometry(sectionViewportPosition(1) + 2, topPos, sectionSize(1) - 4, editHeight);
-        name_filter->setGeometry(sectionViewportPosition(2) + 2, topPos, sectionSize(2) - 4, editHeight);
-        test_filter->setGeometry(sectionViewportPosition(4) + 2, topPos, sectionSize(4) - 4, editHeight);
+        type_filter->setGeometry(sectionViewportPosition(2) + 2, topPos, sectionSize(2) - 4, editHeight);
+        address_filter->setGeometry(sectionViewportPosition(3) + 2, topPos, sectionSize(3) - 4, editHeight);
+        name_filter->setGeometry(sectionViewportPosition(4) + 2, topPos, sectionSize(4) - 4, editHeight);
+        test_filter->setGeometry(sectionViewportPosition(6) + 2, topPos, sectionSize(6) - 4, editHeight);
     }
 
 signals:

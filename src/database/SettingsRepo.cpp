@@ -85,7 +85,8 @@ namespace Configs {
             "log_exclude_keyword",
             "log_exclude_regex",
             "warp_ifc_addrs",
-            "speedtest_on_startup_profile_ids"
+            "speedtest_on_startup_profile_ids",
+            "disabled_profile_ids"
         };
 
         const QSet<QString> stringKeys = {
@@ -290,6 +291,7 @@ namespace Configs {
                 else if (key == "windows_set_admin") windows_set_admin = varValue.toBool();
                 else if (key == "shortcuts") shortcuts = varValue.value<QMap<QString, QKeySequence>>();
                 else if (key == "speedtest_on_startup_profile_ids") speedtest_on_startup_profile_ids = varValue.toStringList();
+                else if (key == "disabled_profile_ids") disabled_profile_ids = varValue.toStringList();
                 else if (key == "current_route_id") current_route_id = varValue.toInt();
                 else if (key == "remote_dns") remote_dns = varValue.toString();
                 else if (key == "remote_dns_strategy") remote_dns_strategy = varValue.toString();
@@ -421,6 +423,7 @@ namespace Configs {
             {"windows_set_admin", windows_set_admin},
             {"shortcuts", QVariant::fromValue(shortcuts)},
             {"speedtest_on_startup_profile_ids", speedtest_on_startup_profile_ids},
+            {"disabled_profile_ids", disabled_profile_ids},
             {"current_route_id", current_route_id},
             {"remote_dns", remote_dns},
             {"remote_dns_strategy", remote_dns_strategy},
