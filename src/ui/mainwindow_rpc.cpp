@@ -472,7 +472,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, bool test
     });
 }
 
-void MainWindow::querySpeedtest(QDateTime lastProxyListUpdate, const QMap<QString, int>& tag2entID, bool testCurrent)
+void MainWindow::querySpeedtest(const QMap<QString, int>& tag2entID, bool testCurrent)
 {
     bool ok;
     auto res = defaultClient->QueryCurrentSpeedTests(&ok);
@@ -485,21 +485,20 @@ void MainWindow::querySpeedtest(QDateTime lastProxyListUpdate, const QMap<QStrin
     {
         return;
     }
-    runOnUiThread([=, this, &lastProxyListUpdate]
+    runOnUiThread([=, this]
     {
         showSpeedtestData = true;
         currentSptProfileName = profile->outbound->name;
         currentTestResult = res.result.value();
         UpdateDataView();
 
-        if (res.result.value().error.value().empty() && !res.result.value().cancelled.value() && lastProxyListUpdate.msecsTo(QDateTime::currentDateTime()) >= 500)
+        if (res.result.value().error.value().empty() && !res.result.value().cancelled.value())
         {
             if (!res.result.value().dl_speed.value().empty()) profile->dl_speed = QString::fromStdString(res.result.value().dl_speed.value());
             if (!res.result.value().ul_speed.value().empty()) profile->ul_speed = QString::fromStdString(res.result.value().ul_speed.value());
             if (profile->latency <= 0 && res.result.value().latency.value() > 0) profile->latency = res.result.value().latency.value();
             if (!res.result->server_country.value().empty()) profile->test_country = CountryNameToCode(QString::fromStdString(res.result.value().server_country.value()));
             refresh_proxy_list({profile->id});
-            lastProxyListUpdate = QDateTime::currentDateTime();
         }
     });
 }
@@ -574,7 +573,7 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
                 queryCountryTest(tag2entID, testCurrent);
             } else
             {
-                querySpeedtest(lastProxyListUpdate, tag2entID, testCurrent);
+                querySpeedtest(tag2entID, testCurrent);
             }
         }
         runOnUiThread([=, this]
