@@ -9,22 +9,15 @@ namespace Configs
 {
     enum class testBy : int {
         latency = 0,
-        dlSpeed,
-        ulSpeed,
-        ipOut
-    };
-
-    enum class testShowItems : int {
-        all = 0,
-        none,
-        ipOnly,
-        speedOnly
+        txSpeed,
+        rxSpeed,
+        connectTime,
+        siteScore
     };
 
     enum class trafficBy : int {
-        total = 0,
-        dl,
-        ul
+        tx = 0,
+        rx
     };
 
     class Group {
@@ -47,8 +40,7 @@ namespace Configs
         QList<int> profiles;
         int scroll_last_profile = -1;
         testBy test_sort_by = testBy::latency;
-        trafficBy traffic_sort_by = trafficBy::total;
-        testShowItems test_items_to_show = testShowItems::all;
+        trafficBy traffic_sort_by = trafficBy::tx;
 
         Group() = default;
 

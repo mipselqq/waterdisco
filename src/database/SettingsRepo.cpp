@@ -84,7 +84,8 @@ namespace Configs {
             "log_include_regex",
             "log_exclude_keyword",
             "log_exclude_regex",
-            "warp_ifc_addrs"
+            "warp_ifc_addrs",
+            "speedtest_on_startup_profile_ids"
         };
 
         const QSet<QString> stringKeys = {
@@ -288,6 +289,7 @@ namespace Configs {
                 else if (key == "remember_enable") remember_enable = varValue.toBool();
                 else if (key == "windows_set_admin") windows_set_admin = varValue.toBool();
                 else if (key == "shortcuts") shortcuts = varValue.value<QMap<QString, QKeySequence>>();
+                else if (key == "speedtest_on_startup_profile_ids") speedtest_on_startup_profile_ids = varValue.toStringList();
                 else if (key == "current_route_id") current_route_id = varValue.toInt();
                 else if (key == "remote_dns") remote_dns = varValue.toString();
                 else if (key == "remote_dns_strategy") remote_dns_strategy = varValue.toString();
@@ -353,6 +355,10 @@ namespace Configs {
                 else if (key == "warp_ifc_addrs") warp_ifc_addrs = varValue.toStringList();
                 else if (key == "warp_ep") warp_ep = varValue.toString();
             }
+            const QString normalizedDlUrl = simple_dl_url.trimmed().toLower();
+            if (normalizedDlUrl.isEmpty() || normalizedDlUrl.contains("cachefly.cachefly.net/1mb.test") || normalizedDlUrl.contains("cachefly.cachefly.net/2mb.test")) {
+                simple_dl_url = "https://speed.cloudflare.com/__down?bytes=2000000";
+            }
         }
     }
 
@@ -414,6 +420,7 @@ namespace Configs {
             {"remember_enable", remember_enable},
             {"windows_set_admin", windows_set_admin},
             {"shortcuts", QVariant::fromValue(shortcuts)},
+            {"speedtest_on_startup_profile_ids", speedtest_on_startup_profile_ids},
             {"current_route_id", current_route_id},
             {"remote_dns", remote_dns},
             {"remote_dns_strategy", remote_dns_strategy},

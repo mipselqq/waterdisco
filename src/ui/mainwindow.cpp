@@ -55,6 +55,8 @@
 #include <QThread>
 #include <QTimer>
 #include <QMessageBox>
+#include <QStyledItemDelegate>
+#include <QStyleOptionButton>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -71,6 +73,35 @@
 #include "include/global/DeviceDetailsHelper.hpp"
 
 #include "include/sys/macos/MacOS.h"
+
+namespace {
+class CenteredCheckBoxDelegate final : public QStyledItemDelegate {
+public:
+    explicit CenteredCheckBoxDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+        const QVariant checkState = index.data(Qt::CheckStateRole);
+        if (!checkState.isValid()) {
+            QStyledItemDelegate::paint(painter, option, index);
+            return;
+        }
+
+        QStyleOptionViewItem opt(option);
+        initStyleOption(&opt, index);
+        opt.text.clear();
+        // We draw the checkbox ourselves in the center; disable default display and check indicator.
+        opt.features &= ~(QStyleOptionViewItem::HasDisplay | QStyleOptionViewItem::HasCheckIndicator);
+        QStyledItemDelegate::paint(painter, opt, index);
+
+        QStyleOptionButton checkbox;
+        checkbox.state = QStyle::State_Enabled |
+            (checkState.toInt() == Qt::Checked ? QStyle::State_On : QStyle::State_Off);
+        const QRect indicator = QApplication::style()->subElementRect(QStyle::SE_CheckBoxIndicator, &checkbox);
+        checkbox.rect = QStyle::alignedRect(opt.direction, Qt::AlignCenter, indicator.size(), option.rect);
+        QApplication::style()->drawControl(QStyle::CE_CheckBox, &checkbox, painter);
+    }
+};
+}
 
 void UI_InitMainWindow() {
     mainwindow = new MainWindow;
@@ -314,6 +345,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // table UI: model-backed view with on-demand row data
     profilesTableModel = new ProfilesTableModel(this);
     ui->profilesTableView->setModel(profilesTableModel);
+    ui->profilesTableView->setItemDelegateForColumn(7, new CenteredCheckBoxDelegate(ui->profilesTableView));
+    ui->profilesTableView->setColumnHidden(1, true);
+    ui->profilesTableView->setColumnHidden(3, true);
     ui->profilesTableView->rowsSwapped = [=,this](int row1, int row2)
     {
         if (!addressFilterString.isEmpty() || !nameFilterString.isEmpty() || !typeFilterString.isEmpty() || !countryFilterString.isEmpty()) return;
@@ -337,10 +371,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             action.method = GroupSortMethod::ByAddress;
         } else if (logicalIndex == 2) {
             action.method = GroupSortMethod::ByName;
-        } else if (logicalIndex == 3) {
+        } else if (logicalIndex >= 3 && logicalIndex <= 6) {
             action.method = GroupSortMethod::ByTestResult;
-        } else if (logicalIndex == 4) {
+            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+            if (currGroup != nullptr) {
+                if (logicalIndex == 3) currGroup->test_sort_by = Configs::testBy::latency;
+                if (logicalIndex == 4) currGroup->test_sort_by = Configs::testBy::rxSpeed;
+                if (logicalIndex == 5) currGroup->test_sort_by = Configs::testBy::connectTime;
+                if (logicalIndex == 6) currGroup->test_sort_by = Configs::testBy::siteScore;
+                Configs::dataManager->groupsRepo->Save(currGroup);
+            }
+        } else if (logicalIndex == 8 || logicalIndex == 9) {
             action.method = GroupSortMethod::ByTraffic;
+            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+            if (currGroup != nullptr) {
+                currGroup->traffic_sort_by = logicalIndex == 8 ? Configs::trafficBy::rx : Configs::trafficBy::tx;
+                Configs::dataManager->groupsRepo->Save(currGroup);
+            }
         } else {
             return;
         }
@@ -374,48 +421,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         int columnIndex = header->logicalIndexAt(pos);
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         if (group == nullptr) return;
-        if (columnIndex == 3) {
+        if (columnIndex >= 3 && columnIndex <= 6) {
             QMenu menu(this);
-            auto* includeLabel = menu.addAction(tr("Include:"));
-            includeLabel->setEnabled(false);
-
-            auto* actionShowOutIP = menu.addAction(tr("Out IP"));
-            actionShowOutIP->setCheckable(true);
-            actionShowOutIP->setChecked(group->test_items_to_show == Configs::testShowItems::all ||
-                group->test_items_to_show == Configs::testShowItems::ipOnly);
-
-            auto* actionShowSpeed = menu.addAction(tr("Speed"));
-            actionShowSpeed->setCheckable(true);
-            actionShowSpeed->setChecked(group->test_items_to_show == Configs::testShowItems::all ||
-                group->test_items_to_show == Configs::testShowItems::speedOnly);
-
-            auto updateTestItemsToShow = [this, group, actionShowOutIP, actionShowSpeed] {
-                    const bool ip = actionShowOutIP->isChecked();
-                    const bool speed = actionShowSpeed->isChecked();
-                    if (ip && speed) group->test_items_to_show = Configs::testShowItems::all;
-                    else if (ip) group->test_items_to_show = Configs::testShowItems::ipOnly;
-                    else if (speed) group->test_items_to_show = Configs::testShowItems::speedOnly;
-                    else group->test_items_to_show = Configs::testShowItems::none;
-                    Configs::dataManager->groupsRepo->Save(group);
-                    if (group->calculated_column_width.size() > 3) {
-                        group->calculated_column_width[3] = 0;
-                    }
-                    refresh_proxy_list();
-                };
-
-            connect(actionShowOutIP, &QAction::triggered, this, updateTestItemsToShow);
-            connect(actionShowSpeed, &QAction::triggered, this, updateTestItemsToShow);
-
-            menu.addSeparator();
             auto* sortByLabel = menu.addAction(tr("Sort By:"));
             sortByLabel->setEnabled(false);
 
             struct SortOption { int value; QString label; };
             QList<SortOption> options = {
                 { static_cast<int>(Configs::testBy::latency), tr("Latency") },
-                { static_cast<int>(Configs::testBy::dlSpeed), tr("Download Speed") },
-                { static_cast<int>(Configs::testBy::ulSpeed), tr("Upload Speed") },
-                { static_cast<int>(Configs::testBy::ipOut), tr("IP Out") }
+                { static_cast<int>(Configs::testBy::rxSpeed), tr("Rx Speed") },
+                { static_cast<int>(Configs::testBy::connectTime), tr("Connection Time") },
+                { static_cast<int>(Configs::testBy::siteScore), tr("Site Score") }
             };
             for (const auto& opt : options) {
                 auto* act = menu.addAction(opt.label);
@@ -449,16 +465,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 });
             return;
         }
-        if (columnIndex == 4) {
+        if (columnIndex == 8 || columnIndex == 9) {
             QMenu menu(this);
             auto* sortByLabel = menu.addAction(tr("Sort By:"));
             sortByLabel->setEnabled(false);
 
             struct TrafficSortOption { int value; QString label; };
             QList<TrafficSortOption> options = {
-                { 0, tr("Total") },
-                { 1, tr("Downloaded") },
-                { 2, tr("Uploaded") }
+                { static_cast<int>(Configs::trafficBy::rx), tr("Rx") },
+                { static_cast<int>(Configs::trafficBy::tx), tr("Tx") }
             };
 
             for (const auto& opt : options) {
@@ -651,15 +666,39 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     if (Configs::dataManager->settingsRepo->show_system_dns) ui->system_dns->show();
     else ui->system_dns->hide();
 
+    auto *detailsMenu = new QMenu(tr("Details"), ui->menu_server);
+    ui->menu_server->insertMenu(ui->actionSpeedtest_Selected, detailsMenu);
+
     connect(ui->menu_server, &QMenu::aboutToShow, this, [=,this](){
-        if (running)
-        {
-            ui->actionSpeedtest_Current->setEnabled(true);
-        } else
-        {
-            ui->actionSpeedtest_Current->setEnabled(false);
+        auto selected = get_now_selected_list();
+
+        detailsMenu->clear();
+        detailsMenu->setEnabled(false);
+        if (selected.size() == 1) {
+            auto profile = Configs::dataManager->profilesRepo->GetProfile(selected.first());
+            if (profile && profile->outbound) {
+                const QString typeText = profile->outbound->DisplayType();
+                const QString nameText = profile->outbound->name;
+                const QString addressText = profile->outbound->DisplayAddress();
+
+                auto *typeAction = detailsMenu->addAction(tr("Type: %1").arg(typeText));
+                typeAction->setEnabled(false);
+                auto *nameAction = detailsMenu->addAction(tr("Name: %1").arg(nameText));
+                nameAction->setEnabled(false);
+                auto *addressAction = detailsMenu->addAction(tr("Address: %1").arg(addressText));
+                addressAction->setEnabled(false);
+                detailsMenu->addSeparator();
+
+                auto *copyAddressAction = detailsMenu->addAction(tr("Copy Address"));
+                connect(copyAddressAction, &QAction::triggered, this, [=, this]() {
+                    QApplication::clipboard()->setText(addressText);
+                    MW_show_log(tr("Address copied"));
+                });
+                detailsMenu->setEnabled(true);
+            }
         }
-        if (auto selected = get_now_selected_list(); selected.empty())
+
+        if (selected.empty())
         {
             ui->actionSpeedtest_Selected->setEnabled(false);
             ui->actionUrl_Test_Selected->setEnabled(false);
@@ -800,20 +839,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->actionUrl_Test_Group, &QAction::triggered, this, [=,this]() {
         urltest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles());
     });
-    connect(ui->actionSpeedtest_Current, &QAction::triggered, this, [=,this]()
-    {
-        if (running != nullptr)
-        {
-            speedtest_current_group({}, true);
-        }
-    });
     connect(ui->actionSpeedtest_Selected, &QAction::triggered, this, [=,this]()
     {
         speedtest_current_group(get_now_selected_list());
-    });
-    connect(ui->actionSpeedtest_Group, &QAction::triggered, this, [=,this]()
-    {
-        speedtest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles());
     });
     connect(ui->actionResolve_Selected_Out_IP, &QAction::triggered, this, [=,this]() {
         iptest_current_group(get_now_selected_list());
@@ -822,6 +850,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         iptest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles());
     });
     connect(ui->menu_stop_testing, &QAction::triggered, this, [=,this]() { stopTests(); });
+    connect(ui->pushButton_cancel_speedtest, &QPushButton::clicked, this, [=, this]() {
+        ui->pushButton_cancel_speedtest->setEnabled(false);
+        stopTests();
+    });
+    ui->actionSpeedtest_Current->setVisible(false);
+    ui->actionSpeedtest_Group->setVisible(false);
     //
     auto set_selected_or_group = [=,this](int mode) {
         // 0=group 1=select 2=unknown(menu is hide)
@@ -1175,6 +1209,21 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
                 ui->system_dns->setChecked(true);
             }
             refresh_status();
+
+            const auto startupIdsStr = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
+            if (!startupIdsStr.isEmpty()) {
+                QList<int> startupIds;
+                for (const auto &idStr : startupIdsStr) {
+                    bool ok = false;
+                    const int id = idStr.toInt(&ok);
+                    if (ok && Configs::dataManager->profilesRepo->GetProfile(id) != nullptr) startupIds.append(id);
+                }
+                if (!startupIds.isEmpty()) {
+                    setTimeout([=, this]() {
+                        speedtest_current_group(startupIds);
+                    }, this, 1500);
+                }
+            }
         }
     }
 }
@@ -1449,11 +1498,10 @@ void MainWindow::UpdateDataView(bool force)
     "<span style='color: #3299FF;'>Dl↓ %2</span>  "
     "<span style='color: #86C43F;'>Ul↑ %3</span>"
     "</div>"
-    "<p style='text-align:center;margin:0;'>Server: %4%5, %6</p>"
+    "<p style='text-align:center;margin:0;'>Server: %4, %5</p>"
         ).arg(currentSptProfileName,
             currentTestResult.dl_speed.value().c_str(),
             currentTestResult.ul_speed.value().c_str(),
-            CountryCodeToFlag(CountryNameToCode(QString::fromStdString(currentTestResult.server_country.value()))),
             currentTestResult.server_country.value().c_str(),
             currentTestResult.server_name.value().c_str());
     }
@@ -1640,7 +1688,10 @@ QList<int> MainWindow::filterProfilesList(const QList<int>& profileIDs)
         if ((addressFilterString.isEmpty() || profile->outbound->server.contains(addressFilterString, Qt::CaseInsensitive))
             && (nameFilterString.isEmpty() || profile->outbound->name.contains(nameFilterString, Qt::CaseInsensitive))
             && (typeFilterString.isEmpty() || profile->type.contains(typeFilterString, Qt::CaseInsensitive))
-            && (countryFilterString.isEmpty() || profile->test_country.contains(countryFilterString, Qt::CaseInsensitive)))
+            && (countryFilterString.isEmpty()
+                || profile->DisplayLatency().contains(countryFilterString, Qt::CaseInsensitive)
+                || profile->DisplayConnectionTime().contains(countryFilterString, Qt::CaseInsensitive)
+                || profile->DisplayRxSpeed().contains(countryFilterString, Qt::CaseInsensitive)))
             res.append(profile->id);
     }
     return res;
@@ -1800,41 +1851,29 @@ void MainWindow::refresh_proxy_list_column_size() {
     if (!group) return;
 
     auto *hHeader = dynamic_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
+    if (!hHeader) return;
     QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
         hHeader->blockSignals(true);
-        if (group->column_width.isEmpty()) {
-            hHeader->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(1, QHeaderView::Stretch);
-            hHeader->setSectionResizeMode(2, QHeaderView::Stretch);
-            hHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-            if (!group->calculated_column_width.empty() && group->calculated_column_width[0] > hHeader->sectionSize(0)) {
-                hHeader->setSectionResizeMode(0, QHeaderView::Fixed);
-                hHeader->resizeSection(0, group->calculated_column_width[0]);
+        const int colCount = hHeader->count();
+        for (int i = 0; i < colCount; ++i) {
+            if (i == 1 || i == 3) {
+                ui->profilesTableView->setColumnHidden(i, true);
+                continue;
             }
-            if (group->calculated_column_width.size() > 3 && group->calculated_column_width[3] > hHeader->sectionSize(3)) {
-                hHeader->setSectionResizeMode(3, QHeaderView::Fixed);
-                hHeader->resizeSection(3, group->calculated_column_width[3]);
-            }
-            if (group->calculated_column_width.size() > 4 && group->calculated_column_width[4] > hHeader->sectionSize(4)) {
-                hHeader->setSectionResizeMode(4, QHeaderView::Fixed);
-                hHeader->resizeSection(4, group->calculated_column_width[4]);
-            }
-            ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-            group->clearCalculatedColumnWidth();
-            for (int i=0;i<=4;i++) {
-                auto size = hHeader->sectionSize(i);
-                hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-                hHeader->resizeSection(i, size);
-                group->calculated_column_width << size;
-            }
-        } else {
-            group->clearCalculatedColumnWidth();
-            for (int i=0;i<=4;i++) {
-                hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-                hHeader->resizeSection(i, group->column_width.at(i));
-            }
-            ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+            ui->profilesTableView->setColumnHidden(i, false);
+
+            // Resize to content once, then freeze width so it does not jitter on hover.
+            hHeader->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+            ui->profilesTableView->resizeColumnToContents(i);
+            const int width = hHeader->sectionSize(i);
+            hHeader->setSectionResizeMode(i, QHeaderView::Fixed);
+            hHeader->resizeSection(i, width);
+        }
+
+        ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        group->clearCalculatedColumnWidth();
+        for (int i = 0; i < colCount; ++i) {
+            group->calculated_column_width << hHeader->sectionSize(i);
         }
         hHeader->adjustPositions();
         hHeader->blockSignals(false);
@@ -2354,6 +2393,21 @@ void MainWindow::on_menu_resolve_domain_triggered() {
 }
 
 void MainWindow::on_profilesTableView_customContextMenuRequested(const QPoint &pos) {
+    auto idx = ui->profilesTableView->indexAt(pos);
+    if (idx.isValid()) {
+        const auto selRows = ui->profilesTableView->selectionModel()->selectedRows();
+        bool alreadySelected = false;
+        for (const auto &rIdx : selRows) {
+            if (rIdx.row() == idx.row()) {
+                alreadySelected = true;
+                break;
+            }
+        }
+        if (!alreadySelected) {
+            ui->profilesTableView->clearSelection();
+            ui->profilesTableView->selectRow(idx.row());
+        }
+    }
     ui->menu_server->popup(ui->profilesTableView->viewport()->mapToGlobal(pos));
 }
 
@@ -2597,7 +2651,6 @@ void MainWindow::on_tabWidget_customContextMenuRequested(const QPoint &p) {
     if (Configs::dataManager->groupsRepo->GetAllGroupIds().size() > 1) menu->addAction(deleteAction);
     if (!group->Profiles().empty()) {
         menu->addAction(ui->actionUrl_Test_Group);
-        menu->addAction(ui->actionSpeedtest_Group);
         menu->addAction(ui->actionResolve_Out_IP);
         menu->addAction(ui->menu_resolve_domain);
         menu->addAction(ui->menu_clear_test_result);

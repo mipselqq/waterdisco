@@ -16,30 +16,39 @@ namespace Configs
     }
 
     void Profile::ClearTestResults() {
-        test_country.clear();
         ip_out.clear();
         latency = 0;
+        connect_time_ms = 0;
+        site_score = 0;
         dl_speed.clear();
         ul_speed.clear();
+        dl_speed_mbps = 0.0;
+        ul_speed_mbps = 0.0;
     }
 
-    QString Profile::DisplayTestResult() const {
-        auto group = dataManager->groupsRepo->GetGroup(gid);
-        if (group == nullptr) return "";
-        QString result;
-        if (!test_country.isEmpty()) result += UNICODE_LRO + CountryCodeToFlag(test_country) + " ";
-        if (latency < 0) {
-            result = "Unavailable";
-            return result;
-        } else if (latency > 0) {
-            result += QString("%1 ms").arg(latency);
-        }
-        bool showSpeed = group->test_items_to_show == testShowItems::all || group->test_items_to_show == testShowItems::speedOnly;
-        bool showIP = group->test_items_to_show == testShowItems::all || group->test_items_to_show == testShowItems::ipOnly;
-        if (!dl_speed.isEmpty() && dl_speed != "N/A" && showSpeed) result += " ↓" + dl_speed;
-        if (!ul_speed.isEmpty() && ul_speed != "N/A" && showSpeed) result += " ↑" + ul_speed;
-        if (!ip_out.isEmpty() && showIP) result += " 🌐" + ip_out;
-        return result;
+    QString Profile::DisplayLatency() const {
+        if (latency < 0) return "Unavailable";
+        if (latency == 0) return "";
+        return QString("%1 ms").arg(latency);
+    }
+
+    QString Profile::DisplayTxSpeed() const {
+        return ul_speed;
+    }
+
+    QString Profile::DisplayRxSpeed() const {
+        return dl_speed;
+    }
+
+    QString Profile::DisplayConnectionTime() const {
+        if (connect_time_ms < 0) return "Unavailable";
+        if (connect_time_ms == 0) return "";
+        return QString("%1 ms").arg(connect_time_ms);
+    }
+
+    QString Profile::DisplaySiteScore() const {
+        if (site_score <= 0) return "";
+        return QString::number(site_score);
     }
 
     QColor Profile::DisplayLatencyColor() const {
@@ -59,9 +68,14 @@ namespace Configs
         }
     }
 
-    QString Profile::DisplayTraffic() const {
-        if (traffic_downlink + traffic_uplink == 0) return "";
-        return UNICODE_LRO + QString("%1↑ %2↓").arg(ReadableSize(traffic_uplink), ReadableSize(traffic_downlink));
+    QString Profile::DisplayTrafficTx() const {
+        if (traffic_uplink == 0) return "";
+        return UNICODE_LRO + ReadableSize(traffic_uplink);
+    }
+
+    QString Profile::DisplayTrafficRx() const {
+        if (traffic_downlink == 0) return "";
+        return UNICODE_LRO + ReadableSize(traffic_downlink);
     }
 
     void Profile::ResetTraffic() {

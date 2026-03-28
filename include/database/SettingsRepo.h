@@ -68,7 +68,7 @@ namespace Configs {
         QString test_latency_url = "http://cp.cloudflare.com/";
         int url_test_timeout_ms = 3000;
         bool disable_tray = false;
-        int test_concurrent = 10;
+        int test_concurrent = 100;
         bool disable_traffic_stats = false;
         int current_group = 0; // group id
         QString mux_protocol = "smux";
@@ -93,7 +93,7 @@ namespace Configs {
         int stats_tab = 0; // either connection or log
         int speed_test_mode = TestConfig::FULL;
         int speed_test_timeout_ms = 5000;
-        QString simple_dl_url = "http://cachefly.cachefly.net/1mb.test";
+        QString simple_dl_url = "https://speed.cloudflare.com/__down?bytes=2000000";
         bool allow_beta_update = false;
         bool show_system_dns = false;
         bool use_custom_icons = false;
@@ -122,6 +122,7 @@ namespace Configs {
         bool remember_enable = false;
         bool windows_set_admin = false;
         QMap<QString, QKeySequence> shortcuts;
+        QStringList speedtest_on_startup_profile_ids = {};
 
         // Routing
         int current_route_id = 1;

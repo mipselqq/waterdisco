@@ -204,6 +204,19 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_cancel_speedtest">
+        <property name="text">
+         <string>Cancel</string>
+        </property>
+        <property name="visible">
+         <bool>false</bool>
+        </property>
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
      </layout>
     </item>
     <item>
@@ -476,7 +489,7 @@
     </item>
     <item>
      <layout class="QGridLayout" name="horizontalLayout">
-      <item row="0" column="0" colspan="2">
+    <item row="0" column="0" colspan="2">
        <widget class="QLabel" name="label_running">
         <property name="text">
          <string/>
@@ -593,7 +606,6 @@
     <addaction name="separator"/>
     <addaction name="actionUrl_Test_Selected"/>
     <addaction name="menu_resolve_selected"/>
-    <addaction name="actionSpeedtest_Current"/>
     <addaction name="actionSpeedtest_Selected"/>
     <addaction name="actionResolve_Selected_Out_IP"/>
    </widget>
@@ -608,7 +620,6 @@
     <addaction name="menu_remove_unavailable"/>
     <addaction name="menu_clear_test_result"/>
     <addaction name="menu_delete_repeat"/>
-    <addaction name="actionSpeedtest_Group"/>
     <addaction name="actionResolve_Out_IP"/>
     <addaction name="actionRefresh_Column_Widths"/>
    </widget>

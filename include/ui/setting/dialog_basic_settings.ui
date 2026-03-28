@@ -244,14 +244,14 @@
           <item row="2" column="0">
            <widget class="QLabel" name="label_12">
             <property name="text">
-             <string>Speedtest mode</string>
+                 <string>Speedtest mode (legacy)</string>
             </property>
            </widget>
           </item>
           <item row="1" column="0">
            <widget class="QLabel" name="label_14">
             <property name="text">
-             <string>Concurrent</string>
+                 <string>Ping parallel</string>
             </property>
            </widget>
           </item>

@@ -45,6 +45,8 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_BOOL(disable_tray)
     ui->url_timeout->setText(Int2String(Configs::dataManager->settingsRepo->url_test_timeout_ms));
     ui->speedtest_mode->setCurrentIndex(Configs::dataManager->settingsRepo->speed_test_mode);
+    ui->speedtest_mode->setEnabled(false);
+    ui->speedtest_mode->setToolTip(tr("Speedtest mode is fixed to fast ping + connect + 2MB download."));
     ui->test_timeout->setText(Int2String(Configs::dataManager->settingsRepo->speed_test_timeout_ms));
     ui->simple_down_url->setText(Configs::dataManager->settingsRepo->simple_dl_url);
     ui->allow_beta->setChecked(Configs::dataManager->settingsRepo->allow_beta_update);
@@ -272,7 +274,7 @@ void DialogBasicSettings::accept() {
     D_SAVE_STRING(test_latency_url)
     D_SAVE_BOOL(disable_tray)
     Configs::dataManager->settingsRepo->proxy_scheme = ui->proxy_scheme->currentText().toLower();
-    Configs::dataManager->settingsRepo->speed_test_mode = ui->speedtest_mode->currentIndex();
+    Configs::dataManager->settingsRepo->speed_test_mode = Configs::TestConfig::SIMPLEDL;
     Configs::dataManager->settingsRepo->simple_dl_url = ui->simple_down_url->text();
     Configs::dataManager->settingsRepo->url_test_timeout_ms = ui->url_timeout->text().toInt();
     Configs::dataManager->settingsRepo->speed_test_timeout_ms = ui->test_timeout->text().toInt();

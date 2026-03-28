@@ -22,8 +22,9 @@ void ProxyItem::refresh_data() {
     ui->type->setText(ent->outbound->DisplayType());
     ui->name->setText(ent->outbound->DisplayName());
     ui->address->setText(ent->outbound->DisplayAddress());
-    ui->traffic->setText(ent->DisplayTraffic());
-    ui->test_result->setText(ent->DisplayTestResult());
+    ui->traffic->setText(QString("%1↑ %2↓").arg(ent->DisplayTrafficTx(), ent->DisplayTrafficRx()));
+    ui->test_result->setText(QString("%1 | Rx %2 | Conn %3 | Score %4")
+                             .arg(ent->DisplayLatency(), ent->DisplayRxSpeed(), ent->DisplayConnectionTime(), ent->DisplaySiteScore()));
 
     runOnThread(
         [=,this] {

@@ -67,7 +67,7 @@ namespace Configs {
         json["scroll_last_profile"] = group->scroll_last_profile;
         json["test_sort_by"] = static_cast<int>(group->test_sort_by);
         json["traffic_sort_by"] = static_cast<int>(group->traffic_sort_by);
-        json["test_items_to_show"] = static_cast<int>(group->test_items_to_show);
+        json["test_items_to_show"] = 0;
         
         return json;
     }
@@ -88,9 +88,17 @@ namespace Configs {
         group->column_width = QJsonArray2QListInt(json["column_width"].toArray());
         group->profiles = QJsonArray2QListInt(json["profiles"].toArray());
         group->scroll_last_profile = json["scroll_last_profile"].toInt(-1);
-        group->test_sort_by = static_cast<testBy>(json["test_sort_by"].toInt(0));
-        group->traffic_sort_by = static_cast<trafficBy>(json["traffic_sort_by"].toInt(0));
-        group->test_items_to_show = static_cast<testShowItems>(json["test_items_to_show"].toInt(0));
+        int testSort = json["test_sort_by"].toInt(0);
+        if (testSort < static_cast<int>(testBy::latency) || testSort > static_cast<int>(testBy::siteScore)) {
+            testSort = static_cast<int>(testBy::latency);
+        }
+        group->test_sort_by = static_cast<testBy>(testSort);
+
+        int trafficSort = json["traffic_sort_by"].toInt(0);
+        if (trafficSort < static_cast<int>(trafficBy::tx) || trafficSort > static_cast<int>(trafficBy::rx)) {
+            trafficSort = static_cast<int>(trafficBy::tx);
+        }
+        group->traffic_sort_by = static_cast<trafficBy>(trafficSort);
         
         return group;
     }
@@ -134,7 +142,7 @@ namespace Configs {
                 group->scroll_last_profile,
                 static_cast<int>(group->test_sort_by),
                 static_cast<int>(group->traffic_sort_by),
-                static_cast<int>(group->test_items_to_show),
+                0,
                 id
             );
         } else {
@@ -161,7 +169,7 @@ namespace Configs {
                 group->scroll_last_profile,
                 static_cast<int>(group->test_sort_by),
                 static_cast<int>(group->traffic_sort_by),
-                static_cast<int>(group->test_items_to_show)
+                0
             );
         }
     }

@@ -55,26 +55,28 @@ namespace Configs
                                           if (test_sort_by == testBy::latency) {
                                               return sortAction.descending ? get_latency_for_sort(profA) > get_latency_for_sort(profB) : get_latency_for_sort(profA) < get_latency_for_sort(profB);
                                           }
-                                          if (test_sort_by == testBy::dlSpeed) {
-                                              return sortAction.descending ? profA->dl_speed > profB->dl_speed : profA->dl_speed < profB->dl_speed;
+                                          if (test_sort_by == testBy::txSpeed) {
+                                              return sortAction.descending ? profA->ul_speed_mbps > profB->ul_speed_mbps : profA->ul_speed_mbps < profB->ul_speed_mbps;
                                           }
-                                          if (test_sort_by == testBy::ulSpeed) {
-                                              return sortAction.descending ? profA->ul_speed > profB->ul_speed : profA->ul_speed < profB->ul_speed;
+                                          if (test_sort_by == testBy::rxSpeed) {
+                                              return sortAction.descending ? profA->dl_speed_mbps > profB->dl_speed_mbps : profA->dl_speed_mbps < profB->dl_speed_mbps;
                                           }
-                                          if (test_sort_by == testBy::ipOut) {
-                                              return sortAction.descending ? profA->ip_out > profB->ip_out : profA->ip_out < profB->ip_out;
+                                          if (test_sort_by == testBy::connectTime) {
+                                              auto connA = profA->connect_time_ms == 0 ? 100000 : profA->connect_time_ms;
+                                              auto connB = profB->connect_time_ms == 0 ? 100000 : profB->connect_time_ms;
+                                              if (connA < 0) connA = 99999;
+                                              if (connB < 0) connB = 99999;
+                                              return sortAction.descending ? connA > connB : connA < connB;
+                                          }
+                                          if (test_sort_by == testBy::siteScore) {
+                                              return sortAction.descending ? profA->site_score > profB->site_score : profA->site_score < profB->site_score;
                                           }
                                       } else if (sortAction.method == GroupSortMethod::ByTraffic) {
-                                          if (traffic_sort_by == trafficBy::total) {
-                                              auto totalA = profA->traffic_downlink + profA->traffic_uplink;
-                                              auto totalB = profB->traffic_downlink + profB->traffic_uplink;
-                                              return sortAction.descending ? totalA > totalB  : totalA < totalB;
-                                          }
-                                          if (traffic_sort_by == trafficBy::dl) {
-                                              return sortAction.descending ? profA->traffic_downlink > profB->traffic_downlink : profA->traffic_downlink < profB->traffic_downlink;
-                                          }
-                                          if (traffic_sort_by == trafficBy::ul) {
+                                          if (traffic_sort_by == trafficBy::tx) {
                                               return sortAction.descending ? profA->traffic_uplink > profB->traffic_uplink : profA->traffic_uplink < profB->traffic_uplink;
+                                          }
+                                          if (traffic_sort_by == trafficBy::rx) {
+                                              return sortAction.descending ? profA->traffic_downlink > profB->traffic_downlink : profA->traffic_downlink < profB->traffic_downlink;
                                           }
                                       }
                                       return sortAction.descending ? ms_a > ms_b : ms_a < ms_b;

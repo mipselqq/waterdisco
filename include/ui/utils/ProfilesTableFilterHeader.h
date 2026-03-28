@@ -37,7 +37,7 @@ public:
         });
 
         test_filter = new QLineEdit(this->viewport()); 
-        test_filter->setPlaceholderText(tr("Filter by country..."));
+        test_filter->setPlaceholderText(tr("Filter by latency/speed..."));
         test_filter->setClearButtonEnabled(true);
         connect(test_filter, &QLineEdit::textChanged, [this](const QString &text) {
             emit testFilterChanged(text);
@@ -86,7 +86,7 @@ public slots:
     }
 
     void adjustPositions() {
-        if (!m_filtersVisible || !address_filter || !name_filter || !type_filter || !test_filter || count() < 4) {
+        if (!m_filtersVisible || !address_filter || !name_filter || !type_filter || !test_filter || count() < 5) {
 	        return;
 	    }
 
@@ -96,7 +96,7 @@ public slots:
         type_filter->setGeometry(sectionViewportPosition(0) + 2, topPos, sectionSize(0) - 4, editHeight);
         address_filter->setGeometry(sectionViewportPosition(1) + 2, topPos, sectionSize(1) - 4, editHeight);
         name_filter->setGeometry(sectionViewportPosition(2) + 2, topPos, sectionSize(2) - 4, editHeight);
-        test_filter->setGeometry(sectionViewportPosition(3) + 2, topPos, sectionSize(3) - 4, editHeight);
+        test_filter->setGeometry(sectionViewportPosition(4) + 2, topPos, sectionSize(4) - 4, editHeight);
     }
 
 signals:

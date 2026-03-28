@@ -23,8 +23,6 @@
 #include "include/configs/outbounds/vmess.h"
 #include "include/configs/outbounds/xrayVless.h"
 
-#include "include/global/CountryHelper.hpp"
-
 namespace Configs {
     class Profile {
     public:
@@ -34,9 +32,12 @@ namespace Configs {
         int id = -1;
         int gid = 0;
         int latency = 0;
+        int connect_time_ms = 0;
+        int site_score = 0;
         QString dl_speed;
         QString ul_speed;
-        QString test_country;
+        double dl_speed_mbps = 0.0;
+        double ul_speed_mbps = 0.0;
         std::shared_ptr<Configs::outbound> outbound;
 
         qint64 traffic_downlink = 0;
@@ -49,11 +50,16 @@ namespace Configs {
 
         void ClearTestResults();
 
-        [[nodiscard]] QString DisplayTestResult() const;
+        [[nodiscard]] QString DisplayLatency() const;
+        [[nodiscard]] QString DisplayTxSpeed() const;
+        [[nodiscard]] QString DisplayRxSpeed() const;
+        [[nodiscard]] QString DisplayConnectionTime() const;
+        [[nodiscard]] QString DisplaySiteScore() const;
 
         [[nodiscard]] QColor DisplayLatencyColor() const;
 
-        [[nodiscard]] QString DisplayTraffic() const;
+        [[nodiscard]] QString DisplayTrafficTx() const;
+        [[nodiscard]] QString DisplayTrafficRx() const;
         void ResetTraffic();
 
         [[nodiscard]] Configs::socks *Socks() const {

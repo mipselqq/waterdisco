@@ -5,9 +5,26 @@
 
 #include "include/database/GroupsRepo.h"
 #include "include/ui/mainwindow.h"
+#include <QRegularExpression>
 
 
 namespace Configs {
+    namespace {
+        double parseSpeedToMbps(QString speed) {
+            speed = speed.trimmed();
+            if (speed.isEmpty()) return 0.0;
+            QRegularExpression re(R"(([-+]?\d*\.?\d+)\s*([kKmMgG])?bps)");
+            auto m = re.match(speed);
+            if (!m.hasMatch()) return 0.0;
+            const double v = m.captured(1).toDouble();
+            const QString u = m.captured(2).toLower();
+            if (u == "g") return v * 1000.0;
+            if (u == "m") return v;
+            if (u == "k") return v / 1000.0;
+            return v / 1000000.0;
+        }
+    }
+
     ProfilesRepo::ProfilesRepo(Database& database) : db(database) {
         createTables();
     }
@@ -51,7 +68,7 @@ namespace Configs {
         json["latency"] = profile->latency;
         json["dl_speed"] = profile->dl_speed;
         json["ul_speed"] = profile->ul_speed;
-        json["test_country"] = profile->test_country;
+        json["test_country"] = "";
         json["ip_out"] = profile->ip_out;
         
         // Complex objects - serialize to JSON strings
@@ -76,7 +93,8 @@ namespace Configs {
         profile->latency = json["latency"].toInt();
         profile->dl_speed = json["dl_speed"].toString();
         profile->ul_speed = json["ul_speed"].toString();
-        profile->test_country = json["test_country"].toString();
+        profile->dl_speed_mbps = parseSpeedToMbps(profile->dl_speed);
+        profile->ul_speed_mbps = parseSpeedToMbps(profile->ul_speed);
         profile->ip_out = json["ip_out"].toString();
         
         // Reconstruct outbound (bean is not needed in new implementation)
@@ -179,7 +197,7 @@ namespace Configs {
                 profile->latency,
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
-                profile->test_country.toStdString(),
+                "",
                 profile->ip_out.toStdString(),
                 outboundJson.toStdString(),
                 traffic_dl,
@@ -200,7 +218,7 @@ namespace Configs {
                 profile->latency,
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
-                profile->test_country.toStdString(),
+                "",
                 profile->ip_out.toStdString(),
                 outboundJson.toStdString(),
                 traffic_dl,
@@ -223,7 +241,7 @@ namespace Configs {
         row.latency = profile->latency;
         row.dl_speed = profile->dl_speed.toStdString();
         row.ul_speed = profile->ul_speed.toStdString();
-        row.test_country = profile->test_country.toStdString();
+        row.test_country = "";
         row.ip_out = profile->ip_out.toStdString();
         row.outbound_json = outboundJson.toStdString();
         row.traffic_dl = static_cast<long long>(profile->traffic_downlink);
