@@ -1655,18 +1655,25 @@ void MainWindow::UpdateDataView(bool force)
     }
     if (showSpeedtestData)
     {
+        QString details;
+        if (!currentTestResult.outbound_tag.value().empty()) {
+            details = QString("<span style='color: #3299FF;'>Dl↓ %1</span> | <span style='color: #86C43F;'>Ul↑ %2</span> | <span style='color: #777;'>Server: %3, %4</span>")
+                .arg(currentTestResult.dl_speed.value().c_str(),
+                    currentTestResult.ul_speed.value().c_str(),
+                    currentTestResult.server_country.value().c_str(),
+                    currentTestResult.server_name.value().c_str());
+        }
+
         html += QString(
-    "<p style='text-align:center;margin:0;'>Running Speedtest: %1</p>"
-    "<div style='text-align: center;'>"
-    "<span style='color: #3299FF;'>Dl↓ %2</span>  "
-    "<span style='color: #86C43F;'>Ul↑ %3</span>"
+    "<body style='padding-top: 10px;'>"
+    "<div style='text-align: right;'>"
+    "<p style='margin:0;'>%1: %2</p>"
+    "<p style='margin:0;'>%3</p>"
     "</div>"
-    "<p style='text-align:center;margin:0;'>Server: %4, %5</p>"
-        ).arg(currentSptProfileName,
-            currentTestResult.dl_speed.value().c_str(),
-            currentTestResult.ul_speed.value().c_str(),
-            currentTestResult.server_country.value().c_str(),
-            currentTestResult.server_name.value().c_str());
+    "</body>"
+        ).arg(currentTestStatusText.isEmpty() ? tr("Running") : currentTestStatusText,
+            currentSptProfileName,
+            details);
     }
     ui->data_view->setHtml(html);
     lastUpdated = QDateTime::currentDateTime();

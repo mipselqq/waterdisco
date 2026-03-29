@@ -124,6 +124,15 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
                 if (ent == nullptr) {
                     continue;
                 }
+
+                runOnUiThread([=, this] {
+                    showSpeedtestData = true;
+                    currentSptProfileName = ent->outbound->name;
+                    currentTestStatusText = saveConnectTime ? tr("Connection Test") : tr("Latency Test");
+                    currentTestResult = {};
+                    UpdateDataView(true);
+                });
+
                 if (res.error.value().empty()) {
                     if (saveConnectTime) ent->connect_time_ms = res.latency_ms.value();
                     else ent->latency = res.latency_ms.value();
@@ -151,6 +160,12 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
         }
         done->unlock();
         delete done;
+        runOnUiThread([=, this] {
+            QTimer::singleShot(1000, this, [this] {
+                showSpeedtestData = false;
+                UpdateDataView();
+            });
+        });
     });
     bool rpcOK;
     auto result = defaultClient->Test(&rpcOK, req);
@@ -240,6 +255,15 @@ void MainWindow::runIPTest(const QString& config, const QString& xrayConfig, boo
                 if (ent == nullptr) {
                     continue;
                 }
+
+                runOnUiThread([=, this] {
+                    showSpeedtestData = true;
+                    currentSptProfileName = ent->outbound->name;
+                    currentTestStatusText = tr("IP Test");
+                    currentTestResult = {};
+                    UpdateDataView();
+                });
+
                 if (res.error.value().empty()) {
                     ent->ip_out = QString::fromStdString(res.ip.value());
                 } else {
@@ -261,6 +285,12 @@ void MainWindow::runIPTest(const QString& config, const QString& xrayConfig, boo
         }
         done->unlock();
         delete done;
+        runOnUiThread([=, this] {
+            QTimer::singleShot(1000, this, [this] {
+                showSpeedtestData = false;
+                UpdateDataView();
+            });
+        });
     });
     bool rpcOK;
     auto result = defaultClient->IPTest(&rpcOK, req);
@@ -382,6 +412,8 @@ void MainWindow::stopTests() {
     runOnUiThread([=, this] {
         ui->pushButton_cancel_speedtest->setEnabled(false);
         showSpeedtestData = false;
+        currentTestStatusText.clear();
+        currentSptProfileName.clear();
         UpdateDataView(true);
     });
 
@@ -649,6 +681,8 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
     runOnUiThread([=, this] {
         ui->pushButton_cancel_speedtest->setVisible(true);
         ui->pushButton_cancel_speedtest->setEnabled(true);
+        showSpeedtestData = true;
+        currentTestStatusText = tr("Speedtest (Fall-short)");
     });
 
     runOnNewThread([this, profileIDs, profileToRestore, connectMode]() {
@@ -798,8 +832,9 @@ void MainWindow::querySpeedtest(QDateTime lastProxyListUpdate, const QMap<QStrin
     {
         showSpeedtestData = true;
         currentSptProfileName = profile->outbound->name;
+        currentTestStatusText = tr("Speedtest");
         currentTestResult = res.result.value();
-        UpdateDataView();
+        UpdateDataView(false); // don't force update if already in correct state
 
         if (res.result.value().error.value().empty() && !res.result.value().cancelled.value() && lastProxyListUpdate.msecsTo(QDateTime::currentDateTime()) >= 500)
         {

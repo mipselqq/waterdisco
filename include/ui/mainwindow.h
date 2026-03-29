@@ -217,6 +217,7 @@ private:
     // for data view
     QDateTime lastUpdated = QDateTime::currentDateTime();
     QString currentSptProfileName;
+    QString currentTestStatusText;
     bool showSpeedtestData = false;
     bool showDownloadData = false;
     libcore::SpeedTestResult currentTestResult;
