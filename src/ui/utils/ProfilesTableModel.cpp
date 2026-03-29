@@ -136,8 +136,23 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
         return disabledIds.contains(QString::number(profileId)) ? Qt::Checked : Qt::Unchecked;
     }
-    if (role == Qt::TextAlignmentRole && (index.column() == 0 || index.column() == 1)) {
-        return static_cast<int>(Qt::AlignCenter);
+    if (role == Qt::TextAlignmentRole) {
+        // UI rhythm: text columns left, boolean/metric columns centered.
+        switch (index.column()) {
+        case 0: // Speedtest on startup (checkbox)
+        case 1: // Off (checkbox)
+        case 5: // Latency
+        case 6: // Rx speed
+        case 7: // Connection time
+        case 8: // Site Score
+        case 9: // Rx traffic
+        case 10: // Tx traffic
+            return static_cast<int>(Qt::AlignCenter);
+        case 2: // Type
+        case 4: // Name
+        default:
+            return static_cast<int>(Qt::AlignVCenter | Qt::AlignLeft);
+        }
     }
     const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
     const bool isDisabledRow = disabledIds.contains(QString::number(profileId));
@@ -214,6 +229,24 @@ bool ProfilesTableModel::setData(const QModelIndex &index, const QVariant &value
 }
 
 QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation, int role) const {
+    if (orientation == Qt::Horizontal && role == Qt::TextAlignmentRole) {
+        switch (section) {
+        case 0:
+        case 1:
+        case 2:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+        case 9:
+        case 10:
+            return static_cast<int>(Qt::AlignCenter);
+        default:
+            return static_cast<int>(Qt::AlignVCenter | Qt::AlignLeft);
+        }
+    }
+
     if (role != Qt::DisplayRole) return {};
     if (orientation == Qt::Horizontal) {
         switch (section) {
