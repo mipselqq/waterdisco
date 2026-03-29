@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QSemaphore>
 
 #include <algorithm>
 #include <cmath>
@@ -330,8 +331,8 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
     if (profileIDs.isEmpty()) {
         return;
     }
-    if (!speedtestRunning.tryLock()) {
-        MessageBoxWarning(software_name, tr("The last test did not exit completely, please wait. If it persists, please restart the program."));
+    if (speedtestRunning.exchange(true)) {
+        MW_show_log(tr("A test is already running; ignoring duplicate start request."));
         return;
     }
 
@@ -345,39 +346,38 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
                 return;
             }
 
-            std::atomic<int> counter(0);
             auto testCount = buildObject->fullConfigs.size() + (!buildObject->outboundTags.empty());
+            if (testCount == 0) {
+                return;
+            }
+
+            QSemaphore doneSem(0);
             for (const auto &entID: buildObject->fullConfigs.keys()) {
                 auto configStr = buildObject->fullConfigs[entID];
-                auto func = [this, &counter, testCount, configStr, entID]() {
+                auto func = [this, &doneSem, configStr, entID]() {
                     runURLTest(configStr, "", true, {}, {}, entID,
                                Configs::dataManager->settingsRepo->simple_dl_url,
                                true);
-                    ++counter;
-                    if (counter.load() == testCount) {
-                        speedtestRunning.unlock();
-                    }
+                    doneSem.release();
                 };
                 parallelCoreCallPool->start(func);
             }
 
             if (!buildObject->outboundTags.empty()) {
-                auto func = [this, &buildObject, &counter, testCount]() {
+                auto func = [this, &buildObject, &doneSem]() {
                     auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
                     runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID,
                                -1,
                                Configs::dataManager->settingsRepo->simple_dl_url,
                                true);
-                    ++counter;
-                    if (counter.load() == testCount) {
-                        speedtestRunning.unlock();
-                    }
+                    doneSem.release();
                 };
                 parallelCoreCallPool->start(func);
             }
-            if (testCount == 0) speedtestRunning.unlock();
 
-            speedtestRunning.lock();
+            for (int i = 0; i < testCount; ++i) {
+                doneSem.acquire();
+            }
             MW_show_log("Connection-time test for batch done.");
             runOnUiThread([=,this]{
                 refresh_proxy_list(ids);
@@ -393,8 +393,8 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
             }
             speedTestFunc(profiles, profileIDsSlice);
         }
-        speedtestRunning.unlock();
-        if (currentGroup->auto_clear_unavailable) {
+        speedtestRunning.store(false);
+        if (currentGroup && currentGroup->auto_clear_unavailable) {
             MW_show_log("Connection-time test finished, clearing unavailable profiles...");
             runOnUiThread([=, this] {
                clearUnavailableProfiles(false, profileIDs);
@@ -406,6 +406,7 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
 
 void MainWindow::stopTests() {
     stopSpeedtest.store(true);
+    speedtestRunning.store(false);
     bool ok;
     defaultClient->StopTests(&ok);
 
@@ -455,8 +456,8 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
     if (profileIDs.isEmpty()) {
         return;
     }
-    if (!speedtestRunning.tryLock()) {
-        MessageBoxWarning(software_name, tr("The last test did not exit completely, please wait. If it persists, please restart the program."));
+    if (speedtestRunning.exchange(true)) {
+        MW_show_log(tr("A test is already running; ignoring duplicate start request."));
         return;
     }
 
@@ -469,34 +470,33 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
                 return;
             }
 
-            std::atomic<int> counter(0);
             auto testCount = buildObject->fullConfigs.size() + (!buildObject->outboundTags.empty());
+            if (testCount == 0) {
+                return;
+            }
+
+            QSemaphore doneSem(0);
             for (const auto &entID: buildObject->fullConfigs.keys()) {
                 auto configStr = buildObject->fullConfigs[entID];
-                auto func = [this, &counter, testCount, configStr, entID]() {
+                auto func = [this, &doneSem, configStr, entID]() {
                     runIPTest(configStr, "", true, {}, {}, entID);
-                    ++counter;
-                    if (counter.load() == testCount) {
-                        speedtestRunning.unlock();
-                    }
+                    doneSem.release();
                 };
                 parallelCoreCallPool->start(func);
             }
 
             if (!buildObject->outboundTags.empty()) {
-                auto func = [this, &buildObject, &counter, testCount]() {
+                auto func = [this, &buildObject, &doneSem]() {
                     auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
                     runIPTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID);
-                    ++counter;
-                    if (counter.load() == testCount) {
-                        speedtestRunning.unlock();
-                    }
+                    doneSem.release();
                 };
                 parallelCoreCallPool->start(func);
             }
-            if (testCount == 0) speedtestRunning.unlock();
 
-            speedtestRunning.lock();
+            for (int i = 0; i < testCount; ++i) {
+                doneSem.acquire();
+            }
             MW_show_log("IP test for batch done.");
             runOnUiThread([=,this]{
                 refresh_proxy_list(ids);
@@ -508,7 +508,7 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
             auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
             ipTestFunc(profiles, profileIDsSlice);
         }
-        speedtestRunning.unlock();
+        speedtestRunning.store(false);
         MW_show_log(tr("IP test finished!"));
     });
 }
@@ -524,8 +524,8 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
         return;
     }
 
-    if (!speedtestRunning.tryLock()) {
-        MessageBoxWarning(software_name, tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
+    if (speedtestRunning.exchange(true)) {
+        MW_show_log(tr("A test is already running; ignoring duplicate start request."));
         return;
     }
 
@@ -557,7 +557,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
             }
 
             if (Configs::dataManager->settingsRepo->started_id >= 0) {
-                speedtestRunning.unlock();
+                speedtestRunning.store(false);
                 runOnUiThread([=, this] {
                     ui->pushButton_cancel_speedtest->setVisible(false);
                     ui->pushButton_cancel_speedtest->setEnabled(false);
@@ -613,7 +613,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
         }
 
         const bool canAutoConnect = completedFully && !stopSpeedtest.load();
-        speedtestRunning.unlock();
+        speedtestRunning.store(false);
         runOnUiThread([=,this]{
             // Finalize with a full model refresh to avoid stale row state after speedtest completes.
             refresh_proxy_list({}, true);
@@ -665,8 +665,8 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
         return;
     }
 
-    if (!speedtestRunning.tryLock()) {
-        MessageBoxWarning(software_name, tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
+    if (speedtestRunning.exchange(true)) {
+        MW_show_log(tr("A test is already running; ignoring duplicate start request."));
         return;
     }
 
@@ -698,7 +698,7 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
             }
 
             if (Configs::dataManager->settingsRepo->started_id >= 0) {
-                speedtestRunning.unlock();
+                speedtestRunning.store(false);
                 runOnUiThread([=, this] {
                     ui->pushButton_cancel_speedtest->setVisible(false);
                     ui->pushButton_cancel_speedtest->setEnabled(false);
@@ -768,7 +768,7 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
         }
 
         const bool canAutoConnect = completedFully && !stopSpeedtest.load();
-        speedtestRunning.unlock();
+        speedtestRunning.store(false);
         runOnUiThread([=, this] {
             refresh_proxy_list({}, true);
             ui->pushButton_cancel_speedtest->setVisible(false);

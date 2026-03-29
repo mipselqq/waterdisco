@@ -182,7 +182,7 @@ private:
     //
     QThreadPool *parallelCoreCallPool = new QThreadPool(this);
     std::atomic<bool> stopSpeedtest = false;
-    QMutex speedtestRunning;
+    std::atomic<bool> speedtestRunning = false;
     //
     Configs_sys::CoreProcess *core_process;
     qint64 vpn_pid = 0;

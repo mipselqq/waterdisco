@@ -12,7 +12,8 @@
 namespace Configs_sys {
     namespace {
         bool isIgnorableRouterProcessLookupLog(const QByteArray& log) {
-            return log.contains("router: failed to search process: process not found");
+            return log.contains("router: failed to search process: process not found") ||
+                   log.contains("network: updated default interface");
         }
     }
 

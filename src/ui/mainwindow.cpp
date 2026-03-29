@@ -822,10 +822,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             ui->menu_resolve_selected->setEnabled(true);
             ui->actionResolve_Selected_Out_IP->setEnabled(true);
         }
-        if (!speedtestRunning.tryLock()) {
+        if (speedtestRunning.load()) {
             ui->menu_server->addAction(ui->menu_stop_testing);
         } else {
-            speedtestRunning.unlock();
             ui->menu_server->removeAction(ui->menu_stop_testing);
         }
     });
@@ -1554,25 +1553,23 @@ bool MainWindow::get_elevated_permissions(int reason) {
         MessageBoxWarning(software_name, "Please install \"pkexec\" first.");
         return false;
     }
-    auto n = QMessageBox::warning(GetMessageBoxParent(), software_name, tr("Please give the core root privileges"), QMessageBox::Yes | QMessageBox::No);
-    if (n == QMessageBox::Yes) {
-        runOnNewThread([=,this]
-        {
-            auto chownArgs = QString("root:root " + Configs::FindCoreRealPath());
-            auto ret = Linux_Run_Command("chown", chownArgs);
-            if (ret != 0) {
-                MW_show_log(QString("Failed to run chown %1 code is %2").arg(chownArgs).arg(ret));
+    auto corePath = Configs::FindCoreRealPath();
+    auto quotedCorePath = corePath;
+    quotedCorePath.replace("'", "'\\''");
+    int ret = Linux_Run_Command("sh", QString("-c \"chown root:root '%1' && chmod u+s '%1'\"").arg(quotedCorePath));
+    if (ret == 0) {
+        // Restart core so the newly applied setuid takes effect for the running process.
+        runOnThread([=, this] {
+            profile_stop(true, true, true);
+            if (core_process != nullptr) {
+                core_process->Restart();
             }
-            auto chmodArgs = QString("u+s " + Configs::FindCoreRealPath());
-            ret = Linux_Run_Command("chmod", chmodArgs);
-            if (ret == 0) {
-                StopVPNProcess();
-            } else {
-                MW_show_log(QString("Failed to run chmod %1").arg(chmodArgs));
-            }
-        });
-        return false;
+        }, DS_cores, true);
+        MW_show_log(tr("Core privileges granted."));
+        return true;
     }
+    MW_show_log(QString("Failed to grant core privileges, code: %1").arg(ret));
+    return false;
 #endif
 #ifdef Q_OS_WIN
     auto n = QMessageBox::warning(GetMessageBoxParent(), software_name, tr("Please run Throne as admin"), QMessageBox::Yes | QMessageBox::No);
@@ -3163,10 +3160,9 @@ void MainWindow::on_tabWidget_customContextMenuRequested(const QPoint &p) {
         menu->addAction(ui->menu_remove_invalid);
     }
     if (!group->url.isEmpty()) menu->addAction(ui->menu_update_subscription);
-    if (!speedtestRunning.tryLock()) {
+    if (speedtestRunning.load()) {
         menu->addAction(ui->menu_stop_testing);
     } else {
-        speedtestRunning.unlock();
         menu->removeAction(ui->menu_stop_testing);
     }
     menu->exec(ui->tabWidget->tabBar()->mapToGlobal(p));
