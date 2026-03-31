@@ -2035,6 +2035,34 @@ void MainWindow::refresh_proxy_list_column_size() {
     auto *hHeader = dynamic_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
     if (!hHeader) return;
     QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
+        auto maxRowTextWidth = [=](int column) {
+            if (!profilesTableModel) return 0;
+            const QFontMetrics cellFm(ui->profilesTableView->font());
+            const int rowCount = profilesTableModel->rowCount();
+            int maxWidth = 0;
+            for (int row = 0; row < rowCount; ++row) {
+                const QString text = profilesTableModel->data(profilesTableModel->index(row, column), Qt::DisplayRole).toString();
+                maxWidth = std::max(maxWidth, cellFm.horizontalAdvance(text));
+            }
+            return maxWidth + 18;
+        };
+
+        auto measuredWidthForColumn = [=](int column) {
+            const int headerViewportWidth = std::max(0, hHeader->viewport()->width());
+            const QFontMetrics headerFm(hHeader->font());
+            const QString headerText = profilesTableModel ? profilesTableModel->headerData(column, Qt::Horizontal).toString() : QString();
+            const QStringList headerLines = headerText.split('\n');
+            int headerTextWidth = 0;
+            for (const auto &line : headerLines) {
+                headerTextWidth = std::max(headerTextWidth, headerFm.horizontalAdvance(line));
+            }
+            headerTextWidth += 24;
+
+            const int rowsWidth = maxRowTextWidth(column);
+            const int preferred = std::max(headerTextWidth, rowsWidth);
+            return std::min(headerViewportWidth, preferred);
+        };
+
         hHeader->blockSignals(true);
         const int colCount = hHeader->count();
         const bool hasCachedWidths = (group->calculated_column_width.size() == colCount);
@@ -2048,7 +2076,12 @@ void MainWindow::refresh_proxy_list_column_size() {
                 if (i == 3 || i == 5) continue;
                 ui->profilesTableView->setColumnHidden(i, false);
                 hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-                hHeader->resizeSection(i, group->calculated_column_width[i]);
+                int width = group->calculated_column_width[i];
+                if (i == 2 || i == 4) {
+                    width = std::max(width, measuredWidthForColumn(i));
+                    group->calculated_column_width[i] = width;
+                }
+                hHeader->resizeSection(i, width);
             }
             hHeader->adjustPositions();
             hHeader->blockSignals(false);
@@ -2073,6 +2106,9 @@ void MainWindow::refresh_proxy_list_column_size() {
         // Apply aesthetic grouping: max(Speedtest, Off)
         int checkGroupWidth = std::max(rawWidths[0], rawWidths[1]);
         rawWidths[0] = rawWidths[1] = checkGroupWidth;
+
+        rawWidths[2] = measuredWidthForColumn(2);
+        rawWidths[4] = measuredWidthForColumn(4);
 
         // Apply aesthetic grouping: max(Rx speed, Connection time, Site score, Rx, Tx)
         // Indices: 6 (Rx speed), 7 (Conn time), 8 (Site score), 9 (Rx), 10 (Tx)
