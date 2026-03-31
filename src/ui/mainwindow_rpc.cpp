@@ -808,7 +808,16 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
         QList<int> orderedIds = getOrderedSpeedtestProfileIDs(profileIDs, startMode);
 
         qint64 minFinishedMs = -1;
+        qint64 minConnectionTimeMs = -1;
         const int defaultTimeoutMs = Configs::dataManager->settingsRepo->speed_test_timeout_ms;
+
+        for (int id : orderedIds) {
+            auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (!p || p->connect_time_ms <= 0) continue;
+            if (minConnectionTimeMs <= 0 || p->connect_time_ms < minConnectionTimeMs) {
+                minConnectionTimeMs = p->connect_time_ms;
+            }
+        }
 
         for (int entID : orderedIds) {
             if (stopSpeedtest.load()) {
@@ -830,6 +839,10 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
                 const qint64 threshold = std::max<qint64>(1, minFinishedMs * 2);
                 timeoutMs = std::min<qint64>(defaultTimeoutMs, threshold);
             }
+            if (minConnectionTimeMs > 0) {
+                const qint64 connectionThreshold = std::max<qint64>(1, minConnectionTimeMs * 3);
+                timeoutMs = std::min<qint64>(timeoutMs, connectionThreshold);
+            }
 
             qint64 elapsedMs = 0;
             bool success = false;
@@ -850,6 +863,14 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
                 if (minFinishedMs <= 0 || elapsedMs < minFinishedMs) {
                     minFinishedMs = elapsedMs;
                     MW_show_log(tr("Fall-short baseline updated: %1 ms").arg(minFinishedMs));
+                }
+            }
+
+            auto updatedProfile = Configs::dataManager->profilesRepo->GetProfile(entID);
+            if (updatedProfile && updatedProfile->connect_time_ms > 0) {
+                if (minConnectionTimeMs <= 0 || updatedProfile->connect_time_ms < minConnectionTimeMs) {
+                    minConnectionTimeMs = updatedProfile->connect_time_ms;
+                    MW_show_log(tr("Fall-short connection baseline updated: %1 ms").arg(minConnectionTimeMs));
                 }
             }
         }
