@@ -7,14 +7,12 @@
 #include <QTimer>
 #include <QFile>
 #include <QApplication>
-#include <QMap>
 #include <QStringList>
 
 
 
 #include "include/global/Configs.hpp"
 #include "include/ui/mainwindow.h"
-#include "include/global/DeviceDetailsHelper.hpp"
 
 namespace Configs_network {
 
@@ -35,69 +33,21 @@ namespace Configs_network {
         }
         // Set attribute
         request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-        request.setHeader(QNetworkRequest::KnownHeaders::UserAgentHeader, Configs::dataManager->settingsRepo->GetUserAgent());
         if (Configs::dataManager->settingsRepo->net_insecure) {
             QSslConfiguration c;
             c.setPeerVerifyMode(QSslSocket::PeerVerifyMode::VerifyNone);
             request.setSslConfiguration(c);
         }
-        //Attach HWID and device info headers if enabled in settings
-        if (sendHwid) {
-            auto details = GetDeviceDetails();
-
-            // Parse custom parameters if provided
-            QMap<QString, QString> customParams;
-            if (!Configs::dataManager->settingsRepo->sub_custom_hwid_params.isEmpty()) {
-                QStringList pairs = Configs::dataManager->settingsRepo->sub_custom_hwid_params.split(',');
-                for (const QString &pair : pairs) {
-                    QString trimmed = pair.trimmed();
-                    int eqPos = trimmed.indexOf('=');
-                    if (eqPos > 0) {
-                        QString key = trimmed.left(eqPos).trimmed();
-                        QString value = trimmed.mid(eqPos + 1).trimmed();
-                        // Validate: key must be one of the allowed parameters, value must not contain newlines
-                        if (!key.isEmpty() && !value.isEmpty() &&
-                            !value.contains('\n') && !value.contains('\r') &&
-                            value.length() < 1000) { // Reasonable length limit
-                            QString lowerKey = key.toLower();
-                            // Only accept known parameter keys
-                            if (lowerKey == "hwid" || lowerKey == "os" ||
-                                lowerKey == "osversion" || lowerKey == "model") {
-                                customParams[lowerKey] = value;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Use custom values if provided, otherwise use default values
-            QString hwid = customParams.contains("hwid") ? customParams["hwid"] : details.hwid;
-            QString os = customParams.contains("os") ? customParams["os"] : details.os;
-            QString osVersion = customParams.contains("osversion") ? customParams["osversion"] : details.osVersion;
-            QString model = customParams.contains("model") ? customParams["model"] : details.model;
-
-            if (!hwid.isEmpty()) request.setRawHeader("x-hwid", hwid.toUtf8());
-            if (!os.isEmpty()) request.setRawHeader("x-device-os", os.toUtf8());
-            if (!osVersion.isEmpty()) request.setRawHeader("x-ver-os", osVersion.toUtf8());
-            if (!model.isEmpty()) request.setRawHeader("x-device-model", model.toUtf8());
-        }
-
-        // Hardcoded headers
+        // Keep request shape identical to the previously working one,
+        // but source header values from settings (with same defaults).
+        Q_UNUSED(sendHwid);
         request.setRawHeader("accept", "text/plain, */*;q=0.1");
         request.setRawHeader("accept-language", "en-US,en;q=0.9");
-        request.setRawHeader("priority", "u=1, i");
-        request.setRawHeader("sec-ch-ua", "\"Not-A.Brand\";v=\"24\", \"Chromium\";v=\"146\"");
-        request.setRawHeader("sec-ch-ua-mobile", "?0");
-        request.setRawHeader("sec-ch-ua-platform", "\"Linux\"");
-        request.setRawHeader("sec-fetch-dest", "empty");
-        request.setRawHeader("sec-fetch-mode", "cors");
-        request.setRawHeader("sec-fetch-site", "none");
-        request.setRawHeader("sec-fetch-storage-access", "active");
-        request.setRawHeader("user-agent", "elix-client/0.1.0");
-        request.setRawHeader("x-device-model", "Linux x86_64 (x86-64)");
-        request.setRawHeader("x-device-os", "linux");
-        request.setRawHeader("x-hwid", "472e9bd8af6552c730f016261b66601d2305f8f15723830459275742824b789a");
-        request.setRawHeader("x-ver-os", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
+        request.setRawHeader("user-agent", Configs::dataManager->settingsRepo->GetUserAgent().toUtf8());
+        request.setRawHeader("x-device-model", Configs::dataManager->settingsRepo->sub_device_model.toUtf8());
+        request.setRawHeader("x-device-os", Configs::dataManager->settingsRepo->sub_device_os.toUtf8());
+        request.setRawHeader("x-hwid", Configs::dataManager->settingsRepo->sub_hwid.toUtf8());
+        request.setRawHeader("x-ver-os", Configs::dataManager->settingsRepo->sub_ver_os.toUtf8());
         //
         auto _reply = accessManager.get(request);
         connect(_reply, &QNetworkReply::sslErrors, _reply, [](const QList<QSslError> &errors) {

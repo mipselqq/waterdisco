@@ -177,7 +177,10 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_BOOL(sub_clear)
     D_LOAD_BOOL(net_insecure)
     D_LOAD_BOOL(sub_send_hwid)
-    D_LOAD_STRING(sub_custom_hwid_params)
+    D_LOAD_STRING(sub_device_model)
+    D_LOAD_STRING(sub_device_os)
+    D_LOAD_STRING(sub_hwid)
+    D_LOAD_STRING(sub_ver_os)
     D_LOAD_INT_ENABLE(sub_auto_update, sub_auto_update_enable)
     auto details = GetDeviceDetails();
 	ui->sub_send_hwid->setToolTip(
@@ -329,7 +332,10 @@ void DialogBasicSettings::accept() {
     D_SAVE_BOOL(sub_clear)
     D_SAVE_BOOL(net_insecure)
     D_SAVE_BOOL(sub_send_hwid)
-    D_SAVE_STRING(sub_custom_hwid_params)
+    D_SAVE_STRING(sub_device_model)
+    D_SAVE_STRING(sub_device_os)
+    D_SAVE_STRING(sub_hwid)
+    D_SAVE_STRING(sub_ver_os)
     D_SAVE_INT_ENABLE(sub_auto_update, sub_auto_update_enable)
 
     // Core

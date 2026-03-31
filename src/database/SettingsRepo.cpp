@@ -111,7 +111,10 @@ namespace Configs {
             "vpn_impl",
             "vpn_tun_ipv4_cidr",
             "vpn_tun_ipv6_cidr",
-            "sub_custom_hwid_params",
+            "sub_device_model",
+            "sub_device_os",
+            "sub_hwid",
+            "sub_ver_os",
             "splitter_state",
             "utlsFingerprint",
             "core_box_clash_listen_addr",
@@ -282,7 +285,10 @@ namespace Configs {
                 else if (key == "sub_auto_update") sub_auto_update = varValue.toInt();
                 else if (key == "sub_clear") sub_clear = varValue.toBool();
                 else if (key == "sub_send_hwid") sub_send_hwid = varValue.toBool();
-                else if (key == "sub_custom_hwid_params") sub_custom_hwid_params = varValue.toString();
+                else if (key == "sub_device_model") sub_device_model = varValue.toString();
+                else if (key == "sub_device_os") sub_device_os = varValue.toString();
+                else if (key == "sub_hwid") sub_hwid = varValue.toString();
+                else if (key == "sub_ver_os") sub_ver_os = varValue.toString();
                 else if (key == "skip_cert") skip_cert = varValue.toBool();
                 else if (key == "utlsFingerprint") utlsFingerprint = varValue.toString();
                 else if (key == "disable_win_admin") disable_run_admin = varValue.toBool();
@@ -365,6 +371,12 @@ namespace Configs {
             if (normalizedDlUrl.isEmpty() || normalizedDlUrl.contains("cachefly.cachefly.net/1mb.test") || normalizedDlUrl.contains("cachefly.cachefly.net/2mb.test")) {
                 simple_dl_url = "https://speed.cloudflare.com/__down?bytes=2000000";
             }
+
+            if (user_agent.trimmed().isEmpty()) user_agent = "elix-client/0.1.0";
+            if (sub_device_model.trimmed().isEmpty()) sub_device_model = "Linux x86_64 (x86-64)";
+            if (sub_device_os.trimmed().isEmpty()) sub_device_os = "linux";
+            if (sub_hwid.trimmed().isEmpty()) sub_hwid = "472e9bd8af6552c730f016261b66601d2305f8f15723830459275742824b789a";
+            if (sub_ver_os.trimmed().isEmpty()) sub_ver_os = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
         }
     }
 
@@ -416,7 +428,10 @@ namespace Configs {
             {"sub_auto_update", sub_auto_update},
             {"sub_clear", sub_clear},
             {"sub_send_hwid", sub_send_hwid},
-            {"sub_custom_hwid_params", sub_custom_hwid_params},
+            {"sub_device_model", sub_device_model},
+            {"sub_device_os", sub_device_os},
+            {"sub_hwid", sub_hwid},
+            {"sub_ver_os", sub_ver_os},
             {"skip_cert", skip_cert},
             {"utlsFingerprint", utlsFingerprint},
             {"disable_win_admin", disable_run_admin},
@@ -521,9 +536,7 @@ namespace Configs {
             isDefault = true;
         }
         if (isDefault) {
-            QString version = SubStrBefore(NKR_VERSION, "-");
-            if (!version.contains(".")) version = "1.0.0";
-            return "Throne/" + version;
+            return "elix-client/0.1.0";
         }
         return user_agent;
     }
