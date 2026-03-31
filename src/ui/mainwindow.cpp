@@ -439,12 +439,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     };
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionClicked, this, [=, this](int logicalIndex) {
         GroupSortAction action;
+        const bool defaultDescending = (logicalIndex == 8); // Site Score: higher is better.
         if (proxy_last_order == logicalIndex) {
-            action.descending = true;
-            proxy_last_order = -1;
+            action.descending = !live_sort_descending;
         } else {
-            proxy_last_order = logicalIndex;
+            action.descending = defaultDescending;
         }
+        proxy_last_order = logicalIndex;
         if (logicalIndex == 2) {
             action.method = GroupSortMethod::ByType;
         } else if (logicalIndex == 3) {
@@ -1202,6 +1203,15 @@ void MainWindow::show_group(int gid) {
     if (group->test_sort_by == Configs::testBy::connectTime) live_sort_column = 7;
     if (group->test_sort_by == Configs::testBy::siteScore) live_sort_column = 8;
     live_sort_descending = (group->test_sort_by == Configs::testBy::siteScore);
+
+    // Default startup sort: ensure the list enforces the active sorting behavior,
+    // especially fixing any lingering incorrect orders from previous sessions.
+    if (live_sort_column >= 5 && live_sort_column <= 8) {
+        GroupSortAction initSortAction;
+        initSortAction.method = GroupSortMethod::ByTestResult;
+        initSortAction.descending = live_sort_descending;
+        group->SortProfiles(initSortAction);
+    }
 
     // show proxies
     refresh_proxy_list({}, true);

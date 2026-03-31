@@ -957,6 +957,10 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
             MW_show_log(tr("[%1] speed test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
         }
         Configs::dataManager->profilesRepo->Save(ent);
+        int profileId = ent->id;
+        runOnUiThread([=, this]() {
+            refresh_proxy_list({profileId});
+        });
     }
 }
 
@@ -1035,8 +1039,12 @@ void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xra
             ent->dl_speed_mbps = 0.0;
             ent->ul_speed = "N/A";
             ent->ul_speed_mbps = 0.0;
-            ent->site_score = 0;
+            ent->site_score = -1;
             Configs::dataManager->profilesRepo->Save(ent);
+            int profileId = ent->id;
+            runOnUiThread([=, this]() {
+                refresh_proxy_list({profileId});
+            });
             MW_show_log(tr("[%1] fall-short: skipped by timeout threshold (%2 ms)").arg(ent->outbound->DisplayTypeAndName()).arg(timeoutMs));
         }
         if (skippedOut) *skippedOut = !idsToSkip.isEmpty();
@@ -1080,7 +1088,7 @@ void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xra
                 ent->dl_speed_mbps = 0.0;
                 ent->ul_speed = "N/A";
                 ent->ul_speed_mbps = 0.0;
-                ent->site_score = 0;
+                ent->site_score = -1;
                 if (skippedOut) *skippedOut = true;
                 MW_show_log(tr("[%1] fall-short: skipped by timeout threshold (%2 ms)").arg(ent->outbound->DisplayTypeAndName()).arg(timeoutMs));
             } else {
@@ -1095,6 +1103,10 @@ void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xra
             }
         }
         Configs::dataManager->profilesRepo->Save(ent);
+        int profileId = ent->id;
+        runOnUiThread([=, this]() {
+            refresh_proxy_list({profileId});
+        });
     }
 
     if (successOut) *successOut = hasSuccess;

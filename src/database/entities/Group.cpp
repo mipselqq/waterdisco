@@ -69,6 +69,9 @@ namespace Configs
                                               return sortAction.descending ? connA > connB : connA < connB;
                                           }
                                           if (test_sort_by == testBy::siteScore) {
+                                              if (profA->site_score == profB->site_score) {
+                                                  return false;
+                                              }
                                               return sortAction.descending ? profA->site_score > profB->site_score : profA->site_score < profB->site_score;
                                           }
                                       } else if (sortAction.method == GroupSortMethod::ByTraffic) {
