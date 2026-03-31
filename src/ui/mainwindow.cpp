@@ -438,6 +438,74 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         Configs::dataManager->groupsRepo->Save(group);
     };
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionClicked, this, [=, this](int logicalIndex) {
+        if (logicalIndex == 0) {
+            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+            if (currGroup == nullptr) return;
+
+            auto startupIds = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
+            const auto &profileIds = currGroup->profiles;
+            if (profileIds.isEmpty()) return;
+
+            bool allEnabled = true;
+            for (int profileId : profileIds) {
+                if (!startupIds.contains(QString::number(profileId))) {
+                    allEnabled = false;
+                    break;
+                }
+            }
+
+            // Toggle all: if all enabled, disable all; otherwise enable all.
+            if (allEnabled) {
+                for (int profileId : profileIds) {
+                    startupIds.removeAll(QString::number(profileId));
+                }
+            } else {
+                for (int profileId : profileIds) {
+                    const QString idStr = QString::number(profileId);
+                    if (!startupIds.contains(idStr)) startupIds.append(idStr);
+                }
+            }
+
+            Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids = startupIds;
+            Configs::dataManager->settingsRepo->Save();
+            refresh_proxy_list({}, true);
+            return;
+        }
+
+        if (logicalIndex == 1) {
+            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+            if (currGroup == nullptr) return;
+
+            auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
+            const auto &profileIds = currGroup->profiles;
+            if (profileIds.isEmpty()) return;
+
+            bool allOff = true;
+            for (int profileId : profileIds) {
+                if (!disabledIds.contains(QString::number(profileId))) {
+                    allOff = false;
+                    break;
+                }
+            }
+
+            // Toggle all: if all are Off, enable all; otherwise disable all.
+            if (allOff) {
+                for (int profileId : profileIds) {
+                    disabledIds.removeAll(QString::number(profileId));
+                }
+            } else {
+                for (int profileId : profileIds) {
+                    const QString idStr = QString::number(profileId);
+                    if (!disabledIds.contains(idStr)) disabledIds.append(idStr);
+                }
+            }
+
+            Configs::dataManager->settingsRepo->disabled_profile_ids = disabledIds;
+            Configs::dataManager->settingsRepo->Save();
+            refresh_proxy_list({}, true);
+            return;
+        }
+
         GroupSortAction action;
         const bool defaultDescending = (logicalIndex == 8); // Site Score: higher is better.
         if (proxy_last_order == logicalIndex) {
