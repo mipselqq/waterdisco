@@ -65,6 +65,7 @@ set(PROJECT_SOURCES
         src/global/HTTPRequestHelper.cpp
         src/global/DeviceDetailsHelper.cpp
         src/global/CountryHelper.cpp
+        src/global/AppStateArchive.cpp
 
         3rdparty/qrcodegen.cpp
         3rdparty/QtExtKeySequenceEdit.cpp

@@ -15,6 +15,7 @@
 
 
 #include "include/global/Configs.hpp"
+#include "include/global/AppStateArchive.hpp"
 
 #include "include/ui/mainwindow_interface.h"
 
@@ -73,6 +74,35 @@ namespace {
         file.close();
         QFile::remove(probe);
         return true;
+    }
+
+    constexpr auto kImportMarkerFile = ".throne-import-pending";
+
+    void applyPendingImportIfAny() {
+        const QString markerPath = QDir::current().absoluteFilePath(kImportMarkerFile);
+        QFile marker(markerPath);
+        if (!marker.exists()) return;
+
+        QString archivePath;
+        if (marker.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            archivePath = QString::fromUtf8(marker.readAll()).trimmed();
+            marker.close();
+        }
+        QFile::remove(markerPath);
+
+        if (archivePath.isEmpty() || !QFile::exists(archivePath)) {
+            qWarning() << "Pending import archive missing:" << archivePath;
+            return;
+        }
+
+        QString error;
+        if (!AppStateArchive::RestoreArchive(archivePath, QDir::currentPath(), &error)) {
+            qWarning() << "Failed to restore pending import:" << error;
+        } else {
+            qDebug() << "Pending application-state import restored from" << archivePath;
+        }
+
+        QFile::remove(archivePath);
     }
 }
 
@@ -137,6 +167,7 @@ int main(int argc, char* argv[]) {
     if (!wd.exists("config")) wd.mkdir("config");
     QDir::setCurrent(wd.absoluteFilePath("config"));
     QDir("temp").removeRecursively();
+    applyPendingImportIfAny();
 
     // Load database
     Configs::initDB(QString(QDir::currentPath() + QDir::separator() + "throne.db").toStdString());

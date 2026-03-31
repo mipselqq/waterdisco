@@ -78,6 +78,7 @@
 #include <3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.hpp>
 #include <include/global/HTTPRequestHelper.hpp>
 #include "include/global/DeviceDetailsHelper.hpp"
+#include "include/global/AppStateArchive.hpp"
 
 #include "include/sys/macos/MacOS.h"
 
@@ -144,6 +145,8 @@ public:
         return model->setData(index, next, Qt::CheckStateRole);
     }
 };
+
+constexpr auto kImportMarkerFile = ".throne-import-pending";
 }
 
 void UI_InitMainWindow() {
@@ -356,6 +359,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->toolButton_preferences->setMenu(ui->menu_preferences);
     ui->toolButton_server->setMenu(ui->menu_server);
     ui->toolButton_routing->setMenu(ui->menuRouting_Menu);
+
+    auto* actionExportAppState = new QAction(tr("Export application state"), ui->menu_program);
+    auto* actionImportAppState = new QAction(tr("Import application state"), ui->menu_program);
+    if (auto actions = ui->menu_program->actions(); !actions.isEmpty()) {
+        auto* firstAction = actions.first();
+        ui->menu_program->insertAction(firstAction, actionImportAppState);
+        ui->menu_program->insertAction(actionImportAppState, actionExportAppState);
+        ui->menu_program->insertSeparator(firstAction);
+    } else {
+        ui->menu_program->addAction(actionExportAppState);
+        ui->menu_program->addAction(actionImportAppState);
+    }
+    connect(actionExportAppState, &QAction::triggered, this, &MainWindow::on_menu_export_application_state_triggered);
+    connect(actionImportAppState, &QAction::triggered, this, &MainWindow::on_menu_import_application_state_triggered);
+
     ui->menubar->setVisible(false);
     connect(ui->toolButton_update, &QToolButton::clicked, this, [=,this] { runOnNewThread([=,this] { CheckUpdate(); }); });
     if (!QFile::exists(QApplication::applicationDirPath() + "/updater") && !QFile::exists(QApplication::applicationDirPath() + "/updater.exe"))
@@ -1464,6 +1482,71 @@ void MainWindow::on_menu_hotkey_settings_triggered() {
         dialog_is_using = false;
     });
     dialog->show();
+}
+
+void MainWindow::on_menu_export_application_state_triggered() {
+    on_commitDataRequest();
+
+    QString outputPath = QFileDialog::getSaveFileName(
+        this,
+        tr("Export application state"),
+        QDir::home().absoluteFilePath("throne-state-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") + ".thronestate"),
+        tr("Throne state archive (*.thronestate);;All files (*)")
+    );
+    if (outputPath.isEmpty()) return;
+    if (!outputPath.endsWith(".thronestate")) outputPath += ".thronestate";
+
+    QString error;
+    if (!AppStateArchive::CreateArchive(QDir::currentPath(), outputPath, &error)) {
+        MessageBoxWarning(tr("Export failed"), tr("Failed to export application state:\n%1").arg(error));
+        return;
+    }
+
+    MessageBoxInfo(tr("Export completed"), tr("Application state exported to:\n%1").arg(outputPath));
+}
+
+void MainWindow::on_menu_import_application_state_triggered() {
+    const QString inputPath = QFileDialog::getOpenFileName(
+        this,
+        tr("Import application state"),
+        QDir::homePath(),
+        tr("Throne state archive (*.thronestate);;All files (*)")
+    );
+    if (inputPath.isEmpty()) return;
+    if (!QFile::exists(inputPath)) {
+        MessageBoxWarning(tr("Import failed"), tr("File does not exist:\n%1").arg(inputPath));
+        return;
+    }
+
+    if (QMessageBox::question(
+            this,
+            tr("Import application state"),
+            tr("Import will fully replace current application state and restart the app. Continue?"))
+        != QMessageBox::Yes) {
+        return;
+    }
+
+    const QString tempArchivePath = QDir::temp().absoluteFilePath(
+        QString("throne-import-%1.thronestate").arg(QDateTime::currentMSecsSinceEpoch())
+    );
+    QFile::remove(tempArchivePath);
+    if (!QFile::copy(inputPath, tempArchivePath)) {
+        MessageBoxWarning(tr("Import failed"), tr("Cannot stage archive for import:\n%1").arg(tempArchivePath));
+        return;
+    }
+
+    const QString markerPath = QDir::current().absoluteFilePath(kImportMarkerFile);
+    QFile marker(markerPath);
+    if (!marker.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        QFile::remove(tempArchivePath);
+        MessageBoxWarning(tr("Import failed"), tr("Cannot write import marker:\n%1").arg(markerPath));
+        return;
+    }
+    marker.write(tempArchivePath.toUtf8());
+    marker.close();
+
+    exit_reason = 2;
+    on_menu_exit_triggered();
 }
 
 void MainWindow::on_commitDataRequest() {
