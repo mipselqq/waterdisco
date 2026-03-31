@@ -107,7 +107,7 @@ namespace Configs {
         QString user_agent = "elix-client/0.1.0";
         int sub_auto_update = -30;
         bool sub_clear = false;
-        bool sub_send_hwid = false;
+        bool sub_send_hwid = true;
         QString sub_device_model = "Linux x86_64 (x86-64)";
         QString sub_device_os = "linux";
         QString sub_hwid = "472e9bd8af6552c730f016261b66601d2305f8f15723830459275742824b789a";

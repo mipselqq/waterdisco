@@ -40,14 +40,15 @@ namespace Configs_network {
         }
         // Keep request shape identical to the previously working one,
         // but source header values from settings (with same defaults).
-        Q_UNUSED(sendHwid);
         request.setRawHeader("accept", "text/plain, */*;q=0.1");
         request.setRawHeader("accept-language", "en-US,en;q=0.9");
         request.setRawHeader("user-agent", Configs::dataManager->settingsRepo->GetUserAgent().toUtf8());
-        request.setRawHeader("x-device-model", Configs::dataManager->settingsRepo->sub_device_model.toUtf8());
-        request.setRawHeader("x-device-os", Configs::dataManager->settingsRepo->sub_device_os.toUtf8());
-        request.setRawHeader("x-hwid", Configs::dataManager->settingsRepo->sub_hwid.toUtf8());
-        request.setRawHeader("x-ver-os", Configs::dataManager->settingsRepo->sub_ver_os.toUtf8());
+        if (sendHwid && Configs::dataManager->settingsRepo->sub_send_hwid) {
+            request.setRawHeader("x-device-model", Configs::dataManager->settingsRepo->sub_device_model.toUtf8());
+            request.setRawHeader("x-device-os", Configs::dataManager->settingsRepo->sub_device_os.toUtf8());
+            request.setRawHeader("x-hwid", Configs::dataManager->settingsRepo->sub_hwid.toUtf8());
+            request.setRawHeader("x-ver-os", Configs::dataManager->settingsRepo->sub_ver_os.toUtf8());
+        }
         //
         auto _reply = accessManager.get(request);
         connect(_reply, &QNetworkReply::sslErrors, _reply, [](const QList<QSslError> &errors) {
