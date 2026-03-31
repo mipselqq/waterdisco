@@ -182,7 +182,7 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
                 return QColor(Qt::red);
             }
         }
-        if (index.column() == 8 && profile->site_score > 0) {
+        if (index.column() == 8 && !profile->DisplaySiteScore().isEmpty()) {
             if (profile->site_score >= 80) return QColor(Qt::darkGreen);
             if (profile->site_score >= 55) return QColor(Qt::darkYellow);
             return QColor(Qt::red);

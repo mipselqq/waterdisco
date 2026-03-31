@@ -47,8 +47,17 @@ namespace Configs
     }
 
     QString Profile::DisplaySiteScore() const {
-        if (site_score <= 0) return "";
-        return QString::number(site_score);
+        if (site_score > 0) return QString::number(site_score);
+
+        const QString speed = dl_speed.trimmed();
+        const bool hasMeasuredSpeed = !speed.isEmpty()
+            && speed.compare("Skipped", Qt::CaseInsensitive) != 0
+            && speed.compare("N/A", Qt::CaseInsensitive) != 0
+            && speed.compare("Unavailable", Qt::CaseInsensitive) != 0;
+
+        // Keep true zero scores visible for completed tests with measured speeds.
+        if (site_score == 0 && connect_time_ms > 0 && hasMeasuredSpeed) return "0";
+        return "";
     }
 
     QColor Profile::DisplayLatencyColor() const {
