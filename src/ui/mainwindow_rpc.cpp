@@ -429,6 +429,7 @@ QList<int> MainWindow::getOrderedSpeedtestProfileIDs(const QList<int>& profileID
 
 bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter) {
     if (profileIDs.isEmpty()) return true;
+    const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
 
     auto runSlice = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice, const QList<int>& ids) {
         auto buildObject = Configs::BuildTestConfig(profileSlice);
@@ -469,12 +470,12 @@ bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs,
 
     std::shared_ptr<Configs::Group> currentGroup;
     bool completed = true;
-    for (int i = 0; i < profileIDs.length(); i += 100) {
+    for (int i = 0; i < profileIDs.length(); i += chunkSize) {
         if (stopSpeedtest.load()) {
             completed = false;
             break;
         }
-        auto profileIDsSlice = profileIDs.mid(i, 100);
+        auto profileIDsSlice = profileIDs.mid(i, chunkSize);
         auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
         if (!currentGroup && !profiles.isEmpty()) {
             currentGroup = Configs::dataManager->groupsRepo->GetGroup(profiles[0]->gid);
@@ -548,6 +549,7 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
 
     runOnNewThread([this, profileIDs]() {
         stopSpeedtest.store(false);
+        const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
         auto ipTestFunc = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice, const QList<int>& ids) {
             auto buildObject = Configs::BuildTestConfig(profileSlice);
             if (!buildObject->error.isEmpty()) {
@@ -587,9 +589,9 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
                 refresh_proxy_list(ids);
             });
         };
-        for (int i = 0; i < profileIDs.length(); i += 100) {
+        for (int i = 0; i < profileIDs.length(); i += chunkSize) {
             if (stopSpeedtest.load()) break;
-            auto profileIDsSlice = profileIDs.mid(i, 100);
+            auto profileIDsSlice = profileIDs.mid(i, chunkSize);
             auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
             ipTestFunc(profiles, profileIDsSlice);
         }
@@ -629,6 +631,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
 
     runOnNewThread([this, profileIDs, profileToRestore, connectMode, startMode]() {
         bool completedFully = true;
+        const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
         if (Configs::dataManager->settingsRepo->started_id >= 0) {
             // Use the exact same stop path as Ctrl+S / Stop action.
             runOnUiThread([=, this] {
@@ -689,12 +692,12 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
             }
         };
 
-        for (int i=0;i<orderedIds.length();i+=100) {
+        for (int i=0;i<orderedIds.length();i+=chunkSize) {
             if (stopSpeedtest.load()) {
                 completedFully = false;
                 break;
             }
-            auto profileIDsSlice = orderedIds.mid(i, 100);
+            auto profileIDsSlice = orderedIds.mid(i, chunkSize);
             auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
             speedTestFunc(profiles);
             if (!completedFully) {

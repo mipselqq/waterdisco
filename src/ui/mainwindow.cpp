@@ -296,7 +296,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         qApp->setFont(font);
     }
 
-    parallelCoreCallPool->setMaxThreadCount(10); // constant value
+    const int idealThreadCount = QThread::idealThreadCount();
+    const int computedThreadCount = idealThreadCount > 0 ? idealThreadCount * 4 : 32;
+    const int maxThreadCount = qMin(100, qMax(16, computedThreadCount));
+    parallelCoreCallPool->setMaxThreadCount(maxThreadCount);
     //
     connect(ui->menu_start, &QAction::triggered, this, [=,this]() { profile_start(); });
     connect(ui->menu_stop, &QAction::triggered, this, [=,this]() { profile_stop(false, false, true); });
