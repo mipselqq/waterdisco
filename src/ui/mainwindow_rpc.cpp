@@ -427,8 +427,67 @@ QList<int> MainWindow::getOrderedSpeedtestProfileIDs(const QList<int>& profileID
     return ordered;
 }
 
+static QList<int> getConnectionPrecheckProfileIDs(const QList<int>& profileIDs) {
+    if (profileIDs.size() < 2) {
+        return profileIDs;
+    }
+
+    struct KnownProfile {
+        int id;
+        qint64 connectTimeMs;
+    };
+
+    QList<KnownProfile> known;
+    QList<int> unknown;
+    known.reserve(profileIDs.size());
+    unknown.reserve(profileIDs.size());
+
+    for (int id : profileIDs) {
+        auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+        if (p && p->connect_time_ms > 0) {
+            known.push_back({id, p->connect_time_ms});
+        } else {
+            unknown.push_back(id);
+        }
+    }
+
+    if (known.isEmpty()) {
+        return profileIDs;
+    }
+
+    std::stable_sort(known.begin(), known.end(), [](const KnownProfile& lhs, const KnownProfile& rhs) {
+        return lhs.connectTimeMs < rhs.connectTimeMs;
+    });
+
+    if (unknown.isEmpty()) {
+        QList<int> ordered;
+        ordered.reserve(known.size());
+        for (const auto& item : known) {
+            ordered.push_back(item.id);
+        }
+        return ordered;
+    }
+
+    const int bestKnownCount = qMax(1, known.size() / 3);
+    QList<int> ordered;
+    ordered.reserve(profileIDs.size());
+
+    for (int i = 0; i < bestKnownCount; ++i) {
+        ordered.push_back(known[i].id);
+    }
+    for (int id : unknown) {
+        ordered.push_back(id);
+    }
+    for (int i = bestKnownCount; i < known.size(); ++i) {
+        ordered.push_back(known[i].id);
+    }
+
+    return ordered;
+}
+
 bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter) {
     if (profileIDs.isEmpty()) return true;
+    const QList<int> orderedProfileIDs = getConnectionPrecheckProfileIDs(profileIDs);
     const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
     const bool fallShortEnabled = Configs::dataManager->settingsRepo->speed_test_fall_short;
 
@@ -436,7 +495,7 @@ bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs,
         qint64 minConnectionTimeMs = -1;
         bool completed = true;
 
-        for (int entID : profileIDs) {
+        for (int entID : orderedProfileIDs) {
             if (stopSpeedtest.load()) {
                 completed = false;
                 break;
@@ -531,12 +590,12 @@ bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs,
 
     std::shared_ptr<Configs::Group> currentGroup;
     bool completed = true;
-    for (int i = 0; i < profileIDs.length(); i += chunkSize) {
+    for (int i = 0; i < orderedProfileIDs.length(); i += chunkSize) {
         if (stopSpeedtest.load()) {
             completed = false;
             break;
         }
-        auto profileIDsSlice = profileIDs.mid(i, chunkSize);
+        auto profileIDsSlice = orderedProfileIDs.mid(i, chunkSize);
         auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
         if (!currentGroup && !profiles.isEmpty()) {
             currentGroup = Configs::dataManager->groupsRepo->GetGroup(profiles[0]->gid);
