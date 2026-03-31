@@ -184,20 +184,17 @@ if [[ -f "$INSTALL_DIR/updater" ]]; then
 fi
 
 DESKTOP_DST="/usr/share/applications/throne.desktop"
-ICON_DST="/usr/share/icons/hicolor/256x256/apps/throne.png"
+LOCAL_ICON_REL="Throne.png"
 BIN_LINK_DST="/usr/local/bin/throne"
 
-log "Installing desktop entry and icon"
-install -d /usr/share/icons/hicolor/256x256/apps
-install -m 0644 "$ICON_SRC" "$ICON_DST"
-
+log "Installing desktop entry"
 cat > "$STAGE_DIR/throne.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Throne
 Comment=Throne Proxy Utility
 Exec=$INSTALL_DIR/Throne -appdata
-Icon=throne
+Icon=$INSTALL_DIR/$LOCAL_ICON_REL
 Terminal=false
 Categories=Network;Utility;
 StartupNotify=true
@@ -212,9 +209,6 @@ install -m 0755 "$STAGE_DIR/throne" "$BIN_LINK_DST"
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database /usr/share/applications || true
-fi
-if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-  gtk-update-icon-cache -f /usr/share/icons/hicolor || true
 fi
 
 log "Done"
