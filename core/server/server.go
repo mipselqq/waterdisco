@@ -255,10 +255,17 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 	}
 
 	var maxConcurrency = *in.MaxConcurrency
-	if maxConcurrency >= 500 || maxConcurrency == 0 {
-		maxConcurrency = test_utils.MaxConcurrentTests
+	enableDynamicFallShort := false
+	if maxConcurrency < 0 {
+		enableDynamicFallShort = true
+		maxConcurrency = -maxConcurrency
 	}
-	results := test_utils.BatchURLTest(test_utils.TestCtx, testInstance, outboundTags, *in.Url, int(maxConcurrency), twice, time.Duration(*in.TestTimeoutMs)*time.Millisecond)
+	if maxConcurrency <= 0 {
+		maxConcurrency = test_utils.MaxConcurrentTests
+	} else if maxConcurrency > 1000 {
+		maxConcurrency = 1000
+	}
+	results := test_utils.BatchURLTest(test_utils.TestCtx, testInstance, outboundTags, *in.Url, int(maxConcurrency), twice, time.Duration(*in.TestTimeoutMs)*time.Millisecond, enableDynamicFallShort)
 
 	res := make([]*gen.URLTestResp, 0)
 	for idx, data := range results {
@@ -331,8 +338,10 @@ func (s *server) IPTest(ctx context.Context, in *gen.IPTestRequest) (*gen.IPTest
 	}
 
 	maxConcurrency := *in.MaxConcurrency
-	if maxConcurrency >= 500 || maxConcurrency == 0 {
+	if maxConcurrency <= 0 {
 		maxConcurrency = test_utils.MaxConcurrentTests
+	} else if maxConcurrency > 1000 {
+		maxConcurrency = 1000
 	}
 	timeout := time.Duration(*in.TestTimeoutMs) * time.Millisecond
 	results := test_utils.BatchIPTest(test_utils.TestCtx, testInstance, outboundTags, int(maxConcurrency), timeout)

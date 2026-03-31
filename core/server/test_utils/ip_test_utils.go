@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing/common/metadata"
-	"github.com/sagernet/sing/service"
 	"io"
 	"net"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/service"
 )
 
 type IPInfo struct {
@@ -71,7 +72,6 @@ func BatchIPTest(ctx context.Context, i *boxbox.Box, outboundTags []string, maxC
 			}
 			resAccess.Unlock()
 		default:
-			time.Sleep(2 * time.Millisecond) // don't spawn goroutines too quickly
 			limiter <- struct{}{}
 			go func(t string) {
 				defer wg.Done()

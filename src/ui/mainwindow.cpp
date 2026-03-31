@@ -1766,6 +1766,18 @@ void MainWindow::UpdateDataView(bool force)
     if (showSpeedtestData)
     {
         QString details;
+        QString connectionCounters;
+        QString speedtestCounters;
+        if (showConnectionCounters) {
+            connectionCounters = QString("Connection tested: %1 | skipped: %2")
+                                     .arg(connectionTestedCount.load())
+                                     .arg(connectionSkippedCount.load());
+        }
+        if (showSpeedtestCounters) {
+            speedtestCounters = QString("Speedtest tested: %1 | skipped: %2")
+                                    .arg(speedtestTestedCount.load())
+                                    .arg(speedtestSkippedCount.load());
+        }
         if (!currentTestResult.outbound_tag.value().empty()) {
             details = QString("<span style='color: #3299FF;'>Dl↓ %1</span> | <span style='color: #86C43F;'>Ul↑ %2</span> | <span style='color: #777;'>Server: %3, %4</span>")
                 .arg(currentTestResult.dl_speed.value().c_str(),
@@ -1774,16 +1786,18 @@ void MainWindow::UpdateDataView(bool force)
                     currentTestResult.server_name.value().c_str());
         }
 
-        html += QString(
-    "<body style='padding-top: 10px;'>"
-    "<div style='text-align: right;'>"
-    "<p style='margin:0;'>%1: %2</p>"
-    "<p style='margin:0;'>%3</p>"
-    "</div>"
-    "</body>"
-        ).arg(currentTestStatusText.isEmpty() ? tr("Running") : currentTestStatusText,
-            currentSptProfileName,
-            details);
+        html += QString("<body style='padding-top: 10px;'><div style='text-align: right;'>");
+        html += QString("<p style='margin:0;'>%1: %2</p>")
+                    .arg(currentTestStatusText.isEmpty() ? tr("Running") : currentTestStatusText,
+                         currentSptProfileName);
+        html += QString("<p style='margin:0;'>%1</p>").arg(details);
+        if (!connectionCounters.isEmpty()) {
+            html += QString("<p style='margin:0;'>%1</p>").arg(connectionCounters);
+        }
+        if (!speedtestCounters.isEmpty()) {
+            html += QString("<p style='margin:0;'>%1</p>").arg(speedtestCounters);
+        }
+        html += QString("</div></body>");
     }
     ui->data_view->setHtml(html);
     lastUpdated = QDateTime::currentDateTime();

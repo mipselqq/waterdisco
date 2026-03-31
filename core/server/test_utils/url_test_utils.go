@@ -4,13 +4,15 @@ import (
 	"ThroneCore/internal/boxbox"
 	"context"
 	"errors"
-	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing/common/metadata"
-	"github.com/sagernet/sing/service"
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/service"
 )
 
 var URLReporter URLTestReporter
@@ -42,7 +44,7 @@ func (u *URLTestReporter) Results() []*URLTestResult {
 	return res
 }
 
-func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url string, maxConcurrency int, twice bool, timeout time.Duration) []*URLTestResult {
+func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url string, maxConcurrency int, twice bool, timeout time.Duration, dynamicFallShort bool) []*URLTestResult {
 	if timeout <= 0 {
 		timeout = URLTestTimeout
 	}
@@ -50,6 +52,7 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 	resMap := make(map[string]*URLTestResult)
 	resAccess := sync.Mutex{}
 	limiter := make(chan struct{}, maxConcurrency)
+	var bestSuccessfulMs int64
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(outboundTags))
@@ -64,7 +67,6 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 			}
 			resAccess.Unlock()
 		default:
-			time.Sleep(2 * time.Millisecond) // don't spawn goroutines too quickly
 			limiter <- struct{}{}
 			go func(t string) {
 				defer wg.Done()
@@ -74,16 +76,60 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 				}
 				client := &http.Client{
 					Transport: &http.Transport{
-						DialContext: func(_ context.Context, network string, addr string) (net.Conn, error) {
-							return outbound.DialContext(ctx, "tcp", metadata.ParseSocksaddr(addr))
+						DialContext: func(innerCtx context.Context, network string, addr string) (net.Conn, error) {
+							return outbound.DialContext(innerCtx, "tcp", metadata.ParseSocksaddr(addr))
 						},
 					},
 					Timeout: timeout,
 				}
+
+				testCtx, testCancel := context.WithCancel(ctx)
+				defer testCancel()
+				if dynamicFallShort {
+					startAt := time.Now()
+					go func() {
+						ticker := time.NewTicker(2 * time.Millisecond)
+						defer ticker.Stop()
+						for {
+							select {
+							case <-testCtx.Done():
+								return
+							case <-ticker.C:
+								bestMs := atomic.LoadInt64(&bestSuccessfulMs)
+								if bestMs <= 0 {
+									continue
+								}
+								threshold := 3 * bestMs
+								if threshold < 1 {
+									threshold = 1
+								}
+								if time.Since(startAt) > time.Duration(threshold)*time.Millisecond {
+									testCancel()
+									return
+								}
+							}
+						}
+					}()
+				}
 				// to properly measure muxed configs, let's do the test twice
-				duration, err := urlTest(ctx, client, url)
+				duration, err := urlTest(testCtx, client, url)
 				if err == nil && twice {
-					duration, err = urlTest(ctx, client, url)
+					duration, err = urlTest(testCtx, client, url)
+				}
+
+				if err == nil && dynamicFallShort {
+					ms := duration.Milliseconds()
+					if ms > 0 {
+						for {
+							current := atomic.LoadInt64(&bestSuccessfulMs)
+							if current > 0 && current <= ms {
+								break
+							}
+							if atomic.CompareAndSwapInt64(&bestSuccessfulMs, current, ms) {
+								break
+							}
+						}
+					}
 				}
 				resAccess.Lock()
 				u := &URLTestResult{

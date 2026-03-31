@@ -229,6 +229,12 @@ private:
     QString currentSptProfileName;
     QString currentTestStatusText;
     bool showSpeedtestData = false;
+    bool showConnectionCounters = false;
+    bool showSpeedtestCounters = false;
+    std::atomic<int> connectionTestedCount = 0;
+    std::atomic<int> connectionSkippedCount = 0;
+    std::atomic<int> speedtestTestedCount = 0;
+    std::atomic<int> speedtestSkippedCount = 0;
     bool showDownloadData = false;
     libcore::SpeedTestResult currentTestResult;
     DownloadProgressReport currentDownloadReport; // could use a list, but don't think can show more than one anyways
@@ -316,7 +322,9 @@ private:
     void stopTests();
 
     void runURLTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1,
-                    const QString& testUrl = {}, bool saveConnectTime = false, int timeoutMsOverride = -1);
+                    const QString& testUrl = {}, bool saveConnectTime = false, int timeoutMsOverride = -1,
+                    bool enableDynamicFallShort = false,
+                    const std::function<void(int, int, bool)>& onResult = {});
 
     void runIPTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
 
@@ -333,7 +341,7 @@ private:
     bool runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter = true);
     bool runSpeedtestConnectionPretestIfNeeded(const QList<int>& profileIDs, SpeedtestStartMode startMode);
 
-    void runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
+    bool runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
 
     void runSpeedTestFallShort(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags,
                                const QMap<QString, int>& tag2entID, int entID, int timeoutMs,

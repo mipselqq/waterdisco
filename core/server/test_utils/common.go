@@ -3,17 +3,18 @@ package test_utils
 import (
 	"context"
 	"errors"
-	"github.com/Mahdi-zarei/speedtest-go/speedtest"
-	"github.com/sagernet/sing/common/metadata"
 	"net"
 	"time"
+
+	"github.com/Mahdi-zarei/speedtest-go/speedtest"
+	"github.com/sagernet/sing/common/metadata"
 )
 
 var TestCtx context.Context
 var CancelTests context.CancelFunc
 
 const FetchServersTimeout = 8 * time.Second
-const MaxConcurrentTests = 100
+const MaxConcurrentTests = 200
 
 func getNetDialer(dialer func(ctx context.Context, network string, destination metadata.Socksaddr) (net.Conn, error)) func(ctx context.Context, network string, address string) (net.Conn, error) {
 	return func(ctx context.Context, network string, address string) (net.Conn, error) {

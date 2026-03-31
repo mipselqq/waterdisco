@@ -90,7 +90,9 @@ void MainWindow::setup_rpc() {
 }
 
 void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID,
-                            const QString& testUrl, bool saveConnectTime, int timeoutMsOverride) {
+                            const QString& testUrl, bool saveConnectTime, int timeoutMsOverride,
+                            bool enableDynamicFallShort,
+                            const std::function<void(int, int, bool)>& onResult) {
     if (stopSpeedtest.load()) {
         MW_show_log(tr("Profile test aborted"));
         return;
@@ -104,6 +106,9 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
     req.url = (testUrl.isEmpty() ? Configs::dataManager->settingsRepo->simple_dl_url : testUrl).toStdString();
     req.use_default_outbound = useDefault;
     req.max_concurrency = Configs::dataManager->settingsRepo->test_concurrent;
+    if (enableDynamicFallShort && req.max_concurrency > 0) {
+        req.max_concurrency = -req.max_concurrency.value();
+    }
     req.test_timeout_ms = timeoutMsOverride > 0 ? timeoutMsOverride : Configs::dataManager->settingsRepo->url_test_timeout_ms;
     req.xray_config = xrayConfig.toStdString();
     req.need_xray = !xrayConfig.isEmpty();
@@ -118,8 +123,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
             QThread::msleep(200);
             if (done->try_lock()) break;
             auto resp = defaultClient->QueryURLTest(&ok);
-            if (!ok || resp.results.empty())
-            {
+            if (!ok || resp.results.empty()) {
                 continue;
             }
 
@@ -148,6 +152,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
                 if (res.error.value().empty()) {
                     if (saveConnectTime) ent->connect_time_ms = res.latency_ms.value();
                     else ent->latency = res.latency_ms.value();
+                    if (onResult) onResult(entid, res.latency_ms.value(), true);
                 } else {
                     if (QString::fromStdString(res.error.value()).contains("test aborted") ||
                         QString::fromStdString(res.error.value()).contains("context canceled")) {
@@ -159,6 +164,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
                         else ent->latency = -1;
                         MW_show_log(tr("[%1] test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
                     }
+                    if (onResult) onResult(entid, 0, false);
                 }
                 Configs::dataManager->profilesRepo->Save(ent);
                 needRefresh = true;
@@ -173,10 +179,12 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
         done->unlock();
         delete done;
         runOnUiThread([=, this] {
-            QTimer::singleShot(1000, this, [this] {
-                showSpeedtestData = false;
-                UpdateDataView();
-            });
+            if (!speedtestRunning.load()) {
+                QTimer::singleShot(1000, this, [this] {
+                    showSpeedtestData = false;
+                    UpdateDataView();
+                });
+            }
         });
     });
     bool rpcOK;
@@ -228,6 +236,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
         if (res.error.value().empty()) {
             if (saveConnectTime) ent->connect_time_ms = res.latency_ms.value();
             else ent->latency = res.latency_ms.value();
+            if (onResult) onResult(entID, res.latency_ms.value(), true);
         } else {
             if (QString::fromStdString(res.error.value()).contains("test aborted") ||
                 QString::fromStdString(res.error.value()).contains("context canceled")) {
@@ -239,6 +248,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
                 else ent->latency = -1;
                 MW_show_log(tr("[%1] test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
             }
+            if (onResult) onResult(entID, 0, false);
         }
         Configs::dataManager->profilesRepo->Save(ent);
     }
@@ -271,8 +281,7 @@ void MainWindow::runIPTest(const QString& config, const QString& xrayConfig, boo
             QThread::msleep(200);
             if (done->try_lock()) break;
             auto resp = defaultClient->QueryIPTest(&ok);
-            if (!ok || resp.results.empty())
-            {
+            if (!ok || resp.results.empty()) {
                 continue;
             }
 
@@ -330,7 +339,9 @@ void MainWindow::runIPTest(const QString& config, const QString& xrayConfig, boo
     auto result = defaultClient->IPTest(&rpcOK, req);
     done->unlock();
     //
-    if (!rpcOK || result.results.empty()) return;
+    if (!rpcOK || result.results.empty()) {
+        return;
+    }
 
     for (const auto &res: result.results) {
         entID = ResolveEntID(tag2entID, entID, res.outbound_tag.value());
@@ -370,8 +381,21 @@ void MainWindow::urltest_current_group(const QList<int>& profileIDs, bool connec
     runOnNewThread([this, profileIDs, connectionTimeTest]() {
         Q_UNUSED(connectionTimeTest);
         stopSpeedtest.store(false);
+        connectionTestedCount.store(0);
+        connectionSkippedCount.store(0);
+        runOnUiThread([this] {
+            showConnectionCounters = true;
+            showSpeedtestCounters = false;
+            showSpeedtestData = true;
+            currentTestStatusText = tr("Connection Test");
+            UpdateDataView(true);
+        }, true);
         runConnectionTimeTestsForProfiles(profileIDs, true);
         speedtestRunning.store(false);
+        runOnUiThread([this] {
+            showSpeedtestData = false;
+            UpdateDataView(true);
+        });
         MW_show_log(tr("Connection-time test finished!"));
     });
 }
@@ -488,56 +512,88 @@ static QList<int> getConnectionPrecheckProfileIDs(const QList<int>& profileIDs) 
 bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter) {
     if (profileIDs.isEmpty()) return true;
     const QList<int> orderedProfileIDs = getConnectionPrecheckProfileIDs(profileIDs);
-    const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
+    const int configuredConcurrency = Configs::dataManager->settingsRepo->test_concurrent;
+    const int chunkSize = qMax(1, configuredConcurrency > 0 ? configuredConcurrency : 200);
     const bool fallShortEnabled = Configs::dataManager->settingsRepo->speed_test_fall_short;
 
     if (fallShortEnabled) {
         qint64 minConnectionTimeMs = -1;
         bool completed = true;
+        QMutex minConnectionMu;
 
-        for (int entID : orderedProfileIDs) {
+        auto updateMinConnectionTime = [this, &minConnectionTimeMs, &minConnectionMu](int /*entId*/, int latencyMs, bool success) {
+            if (!success || latencyMs <= 0) return;
+            QMutexLocker locker(&minConnectionMu);
+            if (minConnectionTimeMs <= 0 || latencyMs < minConnectionTimeMs) {
+                minConnectionTimeMs = latencyMs;
+                MW_show_log(tr("Connection test baseline updated: %1 ms").arg(minConnectionTimeMs));
+            }
+        };
+
+        for (int i = 0; i < orderedProfileIDs.length(); i += chunkSize) {
             if (stopSpeedtest.load()) {
                 completed = false;
                 break;
             }
 
-            auto ent = Configs::dataManager->profilesRepo->GetProfile(entID);
-            if (!ent) continue;
-
-            auto buildObject = Configs::BuildTestConfig({ent});
+            const QList<int> profileIDsSlice = orderedProfileIDs.mid(i, chunkSize);
+            const auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
+            const auto buildObject = Configs::BuildTestConfig(profiles);
             if (!buildObject->error.isEmpty()) {
-                MW_show_log(tr("Failed to build test config for profile %1: ").arg(ent->outbound->DisplayTypeAndName()) + buildObject->error);
+                MW_show_log(tr("Failed to build test config for batch: ") + buildObject->error);
                 continue;
             }
 
             int timeoutMs = Configs::dataManager->settingsRepo->url_test_timeout_ms;
-            if (minConnectionTimeMs > 0) {
-                const qint64 threshold = std::max<qint64>(1, minConnectionTimeMs * 3);
+            qint64 minSnapshot = -1;
+            {
+                QMutexLocker locker(&minConnectionMu);
+                minSnapshot = minConnectionTimeMs;
+            }
+            if (minSnapshot > 0) {
+                const qint64 threshold = std::max<qint64>(1, minSnapshot * 3);
                 timeoutMs = std::min<qint64>(timeoutMs, threshold);
             }
 
-            if (buildObject->fullConfigs.contains(entID)) {
-                runURLTest(buildObject->fullConfigs[entID], "", true, {}, {}, entID,
-                           Configs::dataManager->settingsRepo->simple_dl_url, true, timeoutMs);
-            } else {
-                auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
-                runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false,
-                           buildObject->outboundTags, buildObject->tag2entID, -1,
-                           Configs::dataManager->settingsRepo->simple_dl_url, true, timeoutMs);
-            }
-
-            auto updated = Configs::dataManager->profilesRepo->GetProfile(entID);
-            if (!updated || updated->connect_time_ms <= 0) {
-                MW_show_log(tr("[%1] connection test skipped by fall-short threshold (%2 ms)")
-                                .arg(ent->outbound->DisplayTypeAndName())
-                                .arg(timeoutMs));
+            if (buildObject->fullConfigs.empty() && buildObject->outboundTags.empty()) {
                 continue;
             }
 
-            if (minConnectionTimeMs <= 0 || updated->connect_time_ms < minConnectionTimeMs) {
-                minConnectionTimeMs = updated->connect_time_ms;
-                MW_show_log(tr("Connection test baseline updated: %1 ms").arg(minConnectionTimeMs));
+            if (!buildObject->outboundTags.empty()) {
+                auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
+                runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false,
+                           buildObject->outboundTags, buildObject->tag2entID, -1,
+                           Configs::dataManager->settingsRepo->simple_dl_url,
+                           true, timeoutMs, true, updateMinConnectionTime);
             }
+
+            for (const auto &sliceEntID: buildObject->fullConfigs.keys()) {
+                const auto configStr = buildObject->fullConfigs[sliceEntID];
+                runURLTest(configStr, "", true, {}, {}, sliceEntID,
+                           Configs::dataManager->settingsRepo->simple_dl_url,
+                           true, timeoutMs, true, updateMinConnectionTime);
+            }
+
+            for (int entID : profileIDsSlice) {
+                auto ent = Configs::dataManager->profilesRepo->GetProfile(entID);
+                if (!ent) {
+                    continue;
+                }
+                if (ent->connect_time_ms <= 0) {
+                    connectionSkippedCount.fetch_add(1);
+                    if (ent->connect_time_ms < 0) {
+                        ent->site_score = -2;
+                        Configs::dataManager->profilesRepo->Save(ent);
+                    }
+                    MW_show_log(tr("[%1] connection test skipped by fall-short threshold (%2 ms)")
+                                    .arg(ent->outbound->DisplayTypeAndName())
+                                    .arg(timeoutMs));
+                    continue;
+                }
+                connectionTestedCount.fetch_add(1);
+            }
+
+            runOnUiThread([=, this] { refresh_proxy_list(profileIDsSlice); });
         }
 
         if (completed && clearUnavailableAfter) {
@@ -555,37 +611,41 @@ bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs,
         auto buildObject = Configs::BuildTestConfig(profileSlice);
         if (!buildObject->error.isEmpty()) {
             MW_show_log(tr("Failed to build test config for batch: ") + buildObject->error);
-            return;
+            return false;
         }
 
-        const int testCount = buildObject->fullConfigs.size() + (!buildObject->outboundTags.empty());
-        if (testCount == 0) return;
-
-        QSemaphore doneSem(0);
-        for (const auto &entID: buildObject->fullConfigs.keys()) {
-            auto configStr = buildObject->fullConfigs[entID];
-            auto func = [this, &doneSem, configStr, entID]() {
-                runURLTest(configStr, "", true, {}, {}, entID,
-                           Configs::dataManager->settingsRepo->simple_dl_url,
-                           true);
-                doneSem.release();
-            };
-            parallelCoreCallPool->start(func);
-        }
+        if (buildObject->fullConfigs.empty() && buildObject->outboundTags.empty()) return true;
 
         if (!buildObject->outboundTags.empty()) {
-            auto func = [this, &buildObject, &doneSem]() {
-                auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
-                runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags,
-                           buildObject->tag2entID, -1, Configs::dataManager->settingsRepo->simple_dl_url, true);
-                doneSem.release();
-            };
-            parallelCoreCallPool->start(func);
+            auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
+            runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags,
+                       buildObject->tag2entID, -1, Configs::dataManager->settingsRepo->simple_dl_url, true);
         }
 
-        for (int i = 0; i < testCount; ++i) doneSem.acquire();
+        for (const auto &entID: buildObject->fullConfigs.keys()) {
+            auto configStr = buildObject->fullConfigs[entID];
+            runURLTest(configStr, "", true, {}, {}, entID,
+                       Configs::dataManager->settingsRepo->simple_dl_url,
+                       true);
+        }
+
+        for (int id : ids) {
+            auto ent = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (!ent) continue;
+            if (ent->connect_time_ms > 0) {
+                connectionTestedCount.fetch_add(1);
+            } else {
+                connectionSkippedCount.fetch_add(1);
+                if (ent->connect_time_ms < 0) {
+                    ent->site_score = -2;
+                    Configs::dataManager->profilesRepo->Save(ent);
+                }
+            }
+        }
+
         MW_show_log("Connection-time test for batch done.");
         runOnUiThread([=, this] { refresh_proxy_list(ids); });
+        return true;
     };
 
     std::shared_ptr<Configs::Group> currentGroup;
@@ -614,6 +674,13 @@ bool MainWindow::runSpeedtestConnectionPretestIfNeeded(const QList<int>& profile
     if (startMode != SpeedtestStartMode::ByConnectionTime) {
         return true;
     }
+    connectionTestedCount.store(0);
+    connectionSkippedCount.store(0);
+    runOnUiThread([this] {
+        showConnectionCounters = true;
+        UpdateDataView(true);
+    }, true);
+    MW_show_log(tr("Running connection-time precheck for speedtest..."));
     // Reuse the exact standalone connection-time test pipeline.
     return runConnectionTimeTestsForProfiles(profileIDs, false);
 }
@@ -627,6 +694,8 @@ void MainWindow::stopTests() {
     runOnUiThread([=, this] {
         ui->pushButton_cancel_speedtest->setEnabled(false);
         showSpeedtestData = false;
+        showConnectionCounters = false;
+        showSpeedtestCounters = false;
         currentTestStatusText.clear();
         currentSptProfileName.clear();
         UpdateDataView(true);
@@ -677,6 +746,8 @@ void MainWindow::iptest_current_group(const QList<int>& profileIDs) {
 
     runOnNewThread([this, profileIDs]() {
         stopSpeedtest.store(false);
+        showConnectionCounters = false;
+        showSpeedtestCounters = false;
         const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
         auto ipTestFunc = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice, const QList<int>& ids) {
             auto buildObject = Configs::BuildTestConfig(profileSlice);
@@ -759,6 +830,17 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
 
     runOnNewThread([this, profileIDs, profileToRestore, connectMode, startMode]() {
         bool completedFully = true;
+        speedtestTestedCount.store(0);
+        speedtestSkippedCount.store(0);
+        runOnUiThread([this, startMode] {
+            showSpeedtestCounters = true;
+            showConnectionCounters = (startMode == SpeedtestStartMode::ByConnectionTime);
+            showSpeedtestData = true;
+            currentTestStatusText = (startMode == SpeedtestStartMode::ByConnectionTime)
+                                    ? tr("Connection Test")
+                                    : tr("Speedtest");
+            UpdateDataView(true);
+        }, true);
         const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
         if (Configs::dataManager->settingsRepo->started_id >= 0) {
             // Use the exact same stop path as Ctrl+S / Stop action.
@@ -785,7 +867,47 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
 
         stopSpeedtest.store(false);
         completedFully = runSpeedtestConnectionPretestIfNeeded(profileIDs, startMode);
-        QList<int> orderedIds = getOrderedSpeedtestProfileIDs(profileIDs, startMode);
+        if (!completedFully) {
+            speedtestRunning.store(false);
+            runOnUiThread([=, this] {
+                showSpeedtestData = false;
+                ui->pushButton_cancel_speedtest->setVisible(false);
+                ui->pushButton_cancel_speedtest->setEnabled(false);
+                MW_show_log(tr("Connection-time precheck failed; speedtest skipped."));
+            });
+            return;
+        }
+
+        QList<int> speedtestInputIds = profileIDs;
+        if (startMode == SpeedtestStartMode::ByConnectionTime) {
+            speedtestInputIds.clear();
+            for (int id : profileIDs) {
+                auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+                if (p && p->connect_time_ms > 0) {
+                    speedtestInputIds.push_back(id);
+                }
+            }
+            if (speedtestInputIds.isEmpty()) {
+                speedtestRunning.store(false);
+                runOnUiThread([=, this] {
+                    showSpeedtestData = false;
+                    ui->pushButton_cancel_speedtest->setVisible(false);
+                    ui->pushButton_cancel_speedtest->setEnabled(false);
+                    MW_show_log(tr("Connection-time precheck produced no valid candidates; speedtest skipped."));
+                });
+                return;
+            }
+        }
+
+        runOnUiThread([this] {
+            showConnectionCounters = false;
+            showSpeedtestCounters = true;
+            showSpeedtestData = true;
+            currentTestStatusText = tr("Speedtest");
+            UpdateDataView(true);
+        }, true);
+        QList<int> orderedIds = getOrderedSpeedtestProfileIDs(speedtestInputIds, startMode);
+        const bool abortOnConnectFailure = (startMode == SpeedtestStartMode::BySavedSiteScore);
 
         auto speedTestFunc = [=, &completedFully, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice) {
             if (stopSpeedtest.load()) {
@@ -806,7 +928,12 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
                     return;
                 }
                 auto configStr = buildObject->fullConfigs[entID];
-                runSpeedTest(configStr, "", true, {}, {}, entID);
+                const bool ok = runSpeedTest(configStr, "", true, {}, {}, entID);
+                if (abortOnConnectFailure && !ok) {
+                    completedFully = false;
+                    MW_show_log(tr("Speedtest stopped: connection phase failed for one or more candidates."));
+                    return;
+                }
             }
             if (stopSpeedtest.load()) {
                 completedFully = false;
@@ -814,7 +941,12 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
             }
             if (!buildObject->outboundTags.empty()) {
                 auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
-                runSpeedTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID);
+                const bool ok = runSpeedTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false, buildObject->outboundTags, buildObject->tag2entID);
+                if (abortOnConnectFailure && !ok) {
+                    completedFully = false;
+                    MW_show_log(tr("Speedtest stopped: connection phase failed for one or more candidates."));
+                    return;
+                }
             }
         };
 
@@ -835,6 +967,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
         speedtestRunning.store(false);
         runOnUiThread([=,this]{
             // Finalize with a full model refresh to avoid stale row state after speedtest completes.
+            showSpeedtestData = false;
             refresh_proxy_list({}, true);
             ui->pushButton_cancel_speedtest->setVisible(false);
             ui->pushButton_cancel_speedtest->setEnabled(false);
@@ -906,6 +1039,15 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
 
     runOnNewThread([this, profileIDs, profileToRestore, connectMode, startMode]() {
         bool completedFully = true;
+        speedtestTestedCount.store(0);
+        speedtestSkippedCount.store(0);
+        runOnUiThread([this, startMode] {
+            showSpeedtestCounters = true;
+            showConnectionCounters = (startMode == SpeedtestStartMode::ByConnectionTime);
+            showSpeedtestData = true;
+            currentTestStatusText = tr("Speedtest (Fall-short)");
+            UpdateDataView(true);
+        }, true);
         if (Configs::dataManager->settingsRepo->started_id >= 0) {
             runOnUiThread([=, this] {
                 ui->menu_stop->trigger();
@@ -929,7 +1071,46 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
 
         stopSpeedtest.store(false);
         completedFully = runSpeedtestConnectionPretestIfNeeded(profileIDs, startMode);
-        QList<int> orderedIds = getOrderedSpeedtestProfileIDs(profileIDs, startMode);
+        if (!completedFully) {
+            speedtestRunning.store(false);
+            runOnUiThread([=, this] {
+                showSpeedtestData = false;
+                ui->pushButton_cancel_speedtest->setVisible(false);
+                ui->pushButton_cancel_speedtest->setEnabled(false);
+                MW_show_log(tr("Connection-time precheck failed; speedtest skipped."));
+            });
+            return;
+        }
+
+        QList<int> speedtestInputIds = profileIDs;
+        if (startMode == SpeedtestStartMode::ByConnectionTime) {
+            speedtestInputIds.clear();
+            for (int id : profileIDs) {
+                auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+                if (p && p->connect_time_ms > 0) {
+                    speedtestInputIds.push_back(id);
+                }
+            }
+            if (speedtestInputIds.isEmpty()) {
+                speedtestRunning.store(false);
+                runOnUiThread([=, this] {
+                    showSpeedtestData = false;
+                    ui->pushButton_cancel_speedtest->setVisible(false);
+                    ui->pushButton_cancel_speedtest->setEnabled(false);
+                    MW_show_log(tr("Connection-time precheck produced no valid candidates; speedtest skipped."));
+                });
+                return;
+            }
+        }
+
+        runOnUiThread([this] {
+            showConnectionCounters = false;
+            showSpeedtestCounters = true;
+            showSpeedtestData = true;
+            currentTestStatusText = tr("Speedtest (Fall-short)");
+            UpdateDataView(true);
+        }, true);
+        QList<int> orderedIds = getOrderedSpeedtestProfileIDs(speedtestInputIds, startMode);
 
         qint64 minFinishedMs = -1;
         qint64 minConnectionTimeMs = -1;
@@ -983,6 +1164,13 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
             }
 
             Q_UNUSED(skipped);
+            if (skipped) {
+                speedtestSkippedCount.fetch_add(1);
+            } else if (success) {
+                speedtestTestedCount.fetch_add(1);
+            } else {
+                speedtestSkippedCount.fetch_add(1);
+            }
             if (success && elapsedMs > 0) {
                 if (minFinishedMs <= 0 || elapsedMs < minFinishedMs) {
                     minFinishedMs = elapsedMs;
@@ -1002,6 +1190,7 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
         const bool canAutoConnect = completedFully && !stopSpeedtest.load();
         speedtestRunning.store(false);
         runOnUiThread([=, this] {
+            showSpeedtestData = false;
             refresh_proxy_list({}, true);
             ui->pushButton_cancel_speedtest->setVisible(false);
             ui->pushButton_cancel_speedtest->setEnabled(false);
@@ -1087,11 +1276,11 @@ void MainWindow::querySpeedtest(QDateTime lastProxyListUpdate, const QMap<QStrin
 }
 
 
-void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID)
+bool MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID)
 {
     if (stopSpeedtest.load()) {
         MW_show_log(tr("Profile speed test aborted"));
-        return;
+        return false;
     }
 
     libcore::SpeedTestRequest req;
@@ -1129,8 +1318,10 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
         }
         runOnUiThread([=, this]
         {
-            showSpeedtestData = false;
-            UpdateDataView(true);
+            if (!speedtestRunning.load()) {
+                showSpeedtestData = false;
+                UpdateDataView(true);
+            }
         });
         doneMu->unlock();
         delete doneMu;
@@ -1139,7 +1330,16 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
     auto result = defaultClient->SpeedTest(&rpcOK, req);
     doneMu->unlock();
     //
-    if (!rpcOK || result.results.empty()) return;
+    if (!rpcOK || result.results.empty()) {
+        if (entID >= 0) {
+            speedtestSkippedCount.fetch_add(1);
+        } else {
+            speedtestSkippedCount.fetch_add(tag2entID.size());
+        }
+        return false;
+    }
+
+    bool allOk = true;
 
     for (const auto &res: result.results) {
         entID = ResolveEntID(tag2entID, entID, res.outbound_tag.value());
@@ -1154,9 +1354,14 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
             continue;
         }
 
-        if (res.cancelled.value()) continue;
+        if (res.cancelled.value()) {
+            speedtestSkippedCount.fetch_add(1);
+            allOk = false;
+            continue;
+        }
 
         if (res.error.value().empty()) {
+            speedtestTestedCount.fetch_add(1);
             ent->dl_speed = QString::fromStdString(res.dl_speed.value());
             ent->ul_speed = QString::fromStdString(res.ul_speed.value());
             ent->dl_speed_mbps = ParseSpeedToMbps(ent->dl_speed);
@@ -1166,6 +1371,8 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
             if (ent->latency <= 0 && res.latency.value() > 0) ent->latency = res.latency.value();
             ent->site_score = CalcSiteScore(ent->connect_time_ms, ent->dl_speed_mbps);
         } else {
+            speedtestSkippedCount.fetch_add(1);
+            allOk = false;
             ent->dl_speed = "Error";
             ent->dl_speed_mbps = 0.0;
             if (ent->ul_speed.isEmpty()) ent->ul_speed = "N/A";
@@ -1180,7 +1387,13 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
         runOnUiThread([=, this]() {
             refresh_proxy_list({profileId});
         });
+
+        if (ent->connect_time_ms <= 0) {
+            allOk = false;
+        }
     }
+
+    return allOk;
 }
 
 void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xrayConfig, bool useDefault,
@@ -1228,8 +1441,10 @@ void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xra
         }
         runOnUiThread([=, this]
         {
-            showSpeedtestData = false;
-            UpdateDataView(true);
+            if (!speedtestRunning.load()) {
+                showSpeedtestData = false;
+                UpdateDataView(true);
+            }
         });
         doneMu->unlock();
         delete doneMu;
