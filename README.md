@@ -19,13 +19,13 @@ This fork adds several quality-of-life features and improvements to the original
 
 Btw, the codebase is such a spaghetti that I don't even care about the quality lol.
 
-# Throne (Formerly Nekoray)
+# Waterdisco
 
 Qt based Desktop cross-platform GUI proxy utility, empowered by [Sing-box](https://github.com/SagerNet/sing-box)
 
-Supports Windows 11/10/8/7 / Linux / MacOS out of the box.
+Supports Windows 11/10/8/7/36 / Linux / MacOS out of the box.
 
-<img width="2076" height="1201" alt="image" src="https://github.com/user-attachments/assets/c03cf971-8bad-46a5-9278-050359f520a5" />
+<img width="300" height="300" alt="Untitled1" src="https://github.com/user-attachments/assets/272c3ac1-156f-4b04-a1cd-cdd8eebe8c73" />
 
 ### Note on MacOS releases
 Apple platforms have a very strict security policy and since Throne does not have a signed certificate, you will have to remove the quarantine using `xattr -d com.apple.quarantine /path/to/throne.app`. Also to get the built-in privilege escalation to work, `Terminal` should have the `Full Disk` access.
