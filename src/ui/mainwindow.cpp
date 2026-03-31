@@ -1349,37 +1349,27 @@ void MainWindow::dialog_message_impl(const QString &sender, const QString &info)
 
             const auto startupIdsStr = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
             const auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
-            if (Configs::dataManager->settingsRepo->auto_connect_best_site_score) {
-                auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-                if (group != nullptr) {
-                    auto ids = group->Profiles();
-                    ids.erase(std::remove_if(ids.begin(), ids.end(), [&](int id) {
-                        return disabledIds.contains(QString::number(id));
-                    }), ids.end());
-                    if (!ids.isEmpty()) {
-                        setTimeout([=, this]() {
-                            speedtest_current_group(ids, SpeedtestConnectMode::BestSiteScore);
-                        }, this, 1500);
-                        return;
-                    }
-                }
-            }
+
+            QList<int> startupIds;
             if (!startupIdsStr.isEmpty()) {
-                QList<int> startupIds;
                 for (const auto &idStr : startupIdsStr) {
                     bool ok = false;
                     const int id = idStr.toInt(&ok);
                     if (ok && !disabledIds.contains(idStr) && Configs::dataManager->profilesRepo->GetProfile(id) != nullptr) startupIds.append(id);
                 }
-                if (!startupIds.isEmpty()) {
-                    if (autoStartId >= 0) {
-                        deferred_profile_start_after_speedtest.store(autoStartId);
-                    }
-                    setTimeout([=, this]() {
-                        speedtest_current_group(startupIds);
-                    }, this, 1500);
-                    return;
+            }
+
+            if (!startupIds.isEmpty()) {
+                if (autoStartId >= 0) {
+                    deferred_profile_start_after_speedtest.store(autoStartId);
                 }
+                const auto connectMode = Configs::dataManager->settingsRepo->auto_connect_best_site_score
+                    ? SpeedtestConnectMode::BestSiteScore
+                    : SpeedtestConnectMode::None;
+                setTimeout([=, this]() {
+                    speedtest_current_group(startupIds, connectMode);
+                }, this, 1500);
+                return;
             }
 
             if (autoStartId >= 0)
