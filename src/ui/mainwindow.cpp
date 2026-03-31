@@ -438,74 +438,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         Configs::dataManager->groupsRepo->Save(group);
     };
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionClicked, this, [=, this](int logicalIndex) {
-        if (logicalIndex == 0) {
-            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
-            if (currGroup == nullptr) return;
-
-            auto startupIds = Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids;
-            const auto &profileIds = currGroup->profiles;
-            if (profileIds.isEmpty()) return;
-
-            bool allEnabled = true;
-            for (int profileId : profileIds) {
-                if (!startupIds.contains(QString::number(profileId))) {
-                    allEnabled = false;
-                    break;
-                }
-            }
-
-            // Toggle all: if all enabled, disable all; otherwise enable all.
-            if (allEnabled) {
-                for (int profileId : profileIds) {
-                    startupIds.removeAll(QString::number(profileId));
-                }
-            } else {
-                for (int profileId : profileIds) {
-                    const QString idStr = QString::number(profileId);
-                    if (!startupIds.contains(idStr)) startupIds.append(idStr);
-                }
-            }
-
-            Configs::dataManager->settingsRepo->speedtest_on_startup_profile_ids = startupIds;
-            Configs::dataManager->settingsRepo->Save();
-            refresh_proxy_list({}, true);
-            return;
-        }
-
-        if (logicalIndex == 1) {
-            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
-            if (currGroup == nullptr) return;
-
-            auto disabledIds = Configs::dataManager->settingsRepo->disabled_profile_ids;
-            const auto &profileIds = currGroup->profiles;
-            if (profileIds.isEmpty()) return;
-
-            bool allOff = true;
-            for (int profileId : profileIds) {
-                if (!disabledIds.contains(QString::number(profileId))) {
-                    allOff = false;
-                    break;
-                }
-            }
-
-            // Toggle all: if all are Off, enable all; otherwise disable all.
-            if (allOff) {
-                for (int profileId : profileIds) {
-                    disabledIds.removeAll(QString::number(profileId));
-                }
-            } else {
-                for (int profileId : profileIds) {
-                    const QString idStr = QString::number(profileId);
-                    if (!disabledIds.contains(idStr)) disabledIds.append(idStr);
-                }
-            }
-
-            Configs::dataManager->settingsRepo->disabled_profile_ids = disabledIds;
-            Configs::dataManager->settingsRepo->Save();
-            refresh_proxy_list({}, true);
-            return;
-        }
-
         GroupSortAction action;
         const bool defaultDescending = (logicalIndex == 8); // Site Score: higher is better.
         if (proxy_last_order == logicalIndex) {
@@ -1781,6 +1713,29 @@ void MainWindow::setupConnectionList()
 
 void MainWindow::UpdateConnectionList(const QMap<QString, Stats::ConnectionMetadata>& toUpdate, const QMap<QString, Stats::ConnectionMetadata>& toAdd)
 {
+    auto updateConnectionRow = [this](int row, const Stats::ConnectionMetadata& conn) {
+        ui->connections->item(row, 0)->setText(DisplayDest(conn.dest, conn.domain));
+        ui->connections->item(row, 1)->setText(conn.process);
+
+        auto prot = conn.network;
+        if (!conn.protocol.isEmpty()) prot += " ("+conn.protocol+")";
+        ui->connections->item(row, 2)->setText(prot);
+
+        ui->connections->item(row, 3)->setText(conn.outbound);
+        ui->connections->item(row, 4)->setText(ReadableSize(conn.upload) + "↑" + " " + ReadableSize(conn.download) + "↓");
+    };
+
+    auto addConnectionRow = [this, &updateConnectionRow](int row, const Stats::ConnectionMetadata& conn) {
+        ui->connections->insertRow(row);
+        auto f0 = std::make_unique<QTableWidgetItem>();
+        f0->setData(Stats::IDKEY, conn.id);
+
+        for (int col = 0; col < 5; col++) {
+            ui->connections->setItem(row, col, f0->clone());
+        }
+        updateConnectionRow(row, conn);
+    };
+
     connectionListMu.lock();
     ui->connections->setUpdatesEnabled(false);
     for (int row=0;row<ui->connections->rowCount();row++)
@@ -1794,57 +1749,12 @@ void MainWindow::UpdateConnectionList(const QMap<QString, Stats::ConnectionMetad
         }
 
         auto conn = toUpdate[key];
-        // C0: Dest (Domain)
-        ui->connections->item(row, 0)->setText(DisplayDest(conn.dest, conn.domain));
-
-        // C1: Process
-        ui->connections->item(row, 1)->setText(conn.process);
-
-        // C2: Protocol
-        auto prot = conn.network;
-        if (!conn.protocol.isEmpty()) prot += " ("+conn.protocol+")";
-        ui->connections->item(row, 2)->setText(prot);
-
-        // C3: Outbound
-        ui->connections->item(row, 3)->setText(conn.outbound);
-
-        // C4: Traffic
-        ui->connections->item(row, 4)->setText(ReadableSize(conn.upload) + "↑" + " " + ReadableSize(conn.download) + "↓");
+        updateConnectionRow(row, conn);
     }
     int row = ui->connections->rowCount();
     for (const auto& conn : toAdd)
     {
-        ui->connections->insertRow(row);
-        auto f0 = std::make_unique<QTableWidgetItem>();
-        f0->setData(Stats::IDKEY, conn.id);
-
-        // C0: Dest (Domain)
-        auto f = f0->clone();
-        f->setText(DisplayDest(conn.dest, conn.domain));
-        ui->connections->setItem(row, 0, f);
-
-        // C1: Process
-        f = f0->clone();
-        f->setText(conn.process);
-        ui->connections->setItem(row, 1, f);
-
-        // C2: Protocol
-        f = f0->clone();
-        auto prot = conn.network;
-        if (!conn.protocol.isEmpty()) prot += " ("+conn.protocol+")";
-        f->setText(prot);
-        ui->connections->setItem(row, 2, f);
-
-        // C3: Outbound
-        f = f0->clone();
-        f->setText(conn.outbound);
-        ui->connections->setItem(row, 3, f);
-
-        // C4: Traffic
-        f = f0->clone();
-        f->setText(ReadableSize(conn.upload) + "↑" + " " + ReadableSize(conn.download) + "↓");
-        ui->connections->setItem(row, 4, f);
-
+        addConnectionRow(row, conn);
         row++;
     }
     ui->connections->setUpdatesEnabled(true);
@@ -1853,43 +1763,36 @@ void MainWindow::UpdateConnectionList(const QMap<QString, Stats::ConnectionMetad
 
 void MainWindow::UpdateConnectionListWithRecreate(const QList<Stats::ConnectionMetadata>& connections)
 {
+    auto addConnectionRow = [this](int row, const Stats::ConnectionMetadata& conn) {
+        ui->connections->insertRow(row);
+        auto f0 = std::make_unique<QTableWidgetItem>();
+        f0->setData(Stats::IDKEY, conn.id);
+
+        auto prot = conn.network;
+        if (!conn.protocol.isEmpty()) prot += " ("+conn.protocol+")";
+
+        const QStringList cells = {
+            DisplayDest(conn.dest, conn.domain),
+            conn.process,
+            prot,
+            conn.outbound,
+            ReadableSize(conn.upload) + "↑" + " " + ReadableSize(conn.download) + "↓"
+        };
+
+        for (int col = 0; col < cells.size(); col++) {
+            auto f = f0->clone();
+            f->setText(cells[col]);
+            ui->connections->setItem(row, col, f);
+        }
+    };
+
     connectionListMu.lock();
     ui->connections->setUpdatesEnabled(false);
     ui->connections->setRowCount(0);
     int row=0;
     for (const auto& conn : connections)
     {
-        ui->connections->insertRow(row);
-        auto f0 = std::make_unique<QTableWidgetItem>();
-        f0->setData(Stats::IDKEY, conn.id);
-
-        // C0: Dest (Domain)
-        auto f = f0->clone();
-        f->setText(DisplayDest(conn.dest, conn.domain));
-        ui->connections->setItem(row, 0, f);
-
-        // C1: Process
-        f = f0->clone();
-        f->setText(conn.process);
-        ui->connections->setItem(row, 1, f);
-
-        // C2: Protocol
-        f = f0->clone();
-        auto prot = conn.network;
-        if (!conn.protocol.isEmpty()) prot += " ("+conn.protocol+")";
-        f->setText(prot);
-        ui->connections->setItem(row, 2, f);
-
-        // C3: Outbound
-        f = f0->clone();
-        f->setText(conn.outbound);
-        ui->connections->setItem(row, 3, f);
-
-        // C4: Traffic
-        f = f0->clone();
-        f->setText(ReadableSize(conn.upload) + "↑" + " " + ReadableSize(conn.download) + "↓");
-        ui->connections->setItem(row, 4, f);
-
+        addConnectionRow(row, conn);
         row++;
     }
     ui->connections->setUpdatesEnabled(true);

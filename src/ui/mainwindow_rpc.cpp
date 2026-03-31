@@ -69,6 +69,11 @@ int CalcSiteScore(int connectMs, double rxMbps) {
     const double rxScore = clamp01(rxMbps * 0.92);
     return static_cast<int>(std::round(connectScore * 0.25 + rxScore * 0.75));
 }
+
+int ResolveEntID(const QMap<QString, int>& tag2entID, int fallbackEntID, const std::string& outboundTag) {
+    if (tag2entID.empty()) return fallbackEntID;
+    return tag2entID.value(QString::fromStdString(outboundTag), -1);
+}
 }
 
 void MainWindow::setup_rpc() {
@@ -122,10 +127,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
             QList<int> profileIDs;
             for (const auto& res : resp.results)
             {
-                int entid = -1;
-                if (!tag2entID.empty()) {
-                    entid = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
-                }
+                int entid = ResolveEntID(tag2entID, -1, res.outbound_tag.value());
                 if (entid == -1) {
                     continue;
                 }
@@ -211,9 +213,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
     }
 
     for (const auto &res: result.results) {
-        if (!tag2entID.empty()) {
-            entID = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
-        }
+        entID = ResolveEntID(tag2entID, entID, res.outbound_tag.value());
         if (entID == -1) {
             MW_show_log(tr("Something is very wrong, the subject ent cannot be found!"));
             continue;
@@ -280,10 +280,7 @@ void MainWindow::runIPTest(const QString& config, const QString& xrayConfig, boo
             QList<int> profileIDs;
             for (const auto& res : resp.results)
             {
-                int entid = -1;
-                if (!tag2entID.empty()) {
-                    entid = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
-                }
+                int entid = ResolveEntID(tag2entID, -1, res.outbound_tag.value());
                 if (entid == -1) {
                     continue;
                 }
@@ -336,9 +333,7 @@ void MainWindow::runIPTest(const QString& config, const QString& xrayConfig, boo
     if (!rpcOK || result.results.empty()) return;
 
     for (const auto &res: result.results) {
-        if (!tag2entID.empty()) {
-            entID = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
-        }
+        entID = ResolveEntID(tag2entID, entID, res.outbound_tag.value());
         if (entID == -1) {
             MW_show_log(tr("Something is very wrong, the subject ent cannot be found!"));
             continue;
@@ -946,9 +941,7 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
     if (!rpcOK || result.results.empty()) return;
 
     for (const auto &res: result.results) {
-        if (!tag2entID.empty()) {
-            entID = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
-        }
+        entID = ResolveEntID(tag2entID, entID, res.outbound_tag.value());
         if (entID == -1) {
             MW_show_log(tr("Something is very wrong, the subject ent cannot be found!"));
             continue;
@@ -1078,9 +1071,7 @@ void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xra
 
     bool hasSuccess = false;
     for (const auto &res: result.results) {
-        if (!tag2entID.empty()) {
-            entID = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
-        }
+        entID = ResolveEntID(tag2entID, entID, res.outbound_tag.value());
         if (entID == -1) {
             MW_show_log(tr("Something is very wrong, the subject ent cannot be found!"));
             continue;
