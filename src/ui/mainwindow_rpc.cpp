@@ -90,7 +90,7 @@ void MainWindow::setup_rpc() {
 }
 
 void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID,
-                            const QString& testUrl, bool saveConnectTime) {
+                            const QString& testUrl, bool saveConnectTime, int timeoutMsOverride) {
     if (stopSpeedtest.load()) {
         MW_show_log(tr("Profile test aborted"));
         return;
@@ -104,7 +104,7 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
     req.url = (testUrl.isEmpty() ? Configs::dataManager->settingsRepo->simple_dl_url : testUrl).toStdString();
     req.use_default_outbound = useDefault;
     req.max_concurrency = Configs::dataManager->settingsRepo->test_concurrent;
-    req.test_timeout_ms = Configs::dataManager->settingsRepo->url_test_timeout_ms;
+    req.test_timeout_ms = timeoutMsOverride > 0 ? timeoutMsOverride : Configs::dataManager->settingsRepo->url_test_timeout_ms;
     req.xray_config = xrayConfig.toStdString();
     req.need_xray = !xrayConfig.isEmpty();
 
@@ -430,6 +430,67 @@ QList<int> MainWindow::getOrderedSpeedtestProfileIDs(const QList<int>& profileID
 bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter) {
     if (profileIDs.isEmpty()) return true;
     const int chunkSize = qMax(1, parallelCoreCallPool->maxThreadCount());
+    const bool fallShortEnabled = Configs::dataManager->settingsRepo->speed_test_fall_short;
+
+    if (fallShortEnabled) {
+        qint64 minConnectionTimeMs = -1;
+        bool completed = true;
+
+        for (int entID : profileIDs) {
+            if (stopSpeedtest.load()) {
+                completed = false;
+                break;
+            }
+
+            auto ent = Configs::dataManager->profilesRepo->GetProfile(entID);
+            if (!ent) continue;
+
+            auto buildObject = Configs::BuildTestConfig({ent});
+            if (!buildObject->error.isEmpty()) {
+                MW_show_log(tr("Failed to build test config for profile %1: ").arg(ent->outbound->DisplayTypeAndName()) + buildObject->error);
+                continue;
+            }
+
+            int timeoutMs = Configs::dataManager->settingsRepo->url_test_timeout_ms;
+            if (minConnectionTimeMs > 0) {
+                const qint64 threshold = std::max<qint64>(1, minConnectionTimeMs * 3);
+                timeoutMs = std::min<qint64>(timeoutMs, threshold);
+            }
+
+            if (buildObject->fullConfigs.contains(entID)) {
+                runURLTest(buildObject->fullConfigs[entID], "", true, {}, {}, entID,
+                           Configs::dataManager->settingsRepo->simple_dl_url, true, timeoutMs);
+            } else {
+                auto xrayConf = buildObject->isXrayNeeded ? QJsonObject2QString(buildObject->xrayConfig, false) : "";
+                runURLTest(QJsonObject2QString(buildObject->coreConfig, false), xrayConf, false,
+                           buildObject->outboundTags, buildObject->tag2entID, -1,
+                           Configs::dataManager->settingsRepo->simple_dl_url, true, timeoutMs);
+            }
+
+            auto updated = Configs::dataManager->profilesRepo->GetProfile(entID);
+            if (!updated || updated->connect_time_ms <= 0) {
+                MW_show_log(tr("[%1] connection test skipped by fall-short threshold (%2 ms)")
+                                .arg(ent->outbound->DisplayTypeAndName())
+                                .arg(timeoutMs));
+                continue;
+            }
+
+            if (minConnectionTimeMs <= 0 || updated->connect_time_ms < minConnectionTimeMs) {
+                minConnectionTimeMs = updated->connect_time_ms;
+                MW_show_log(tr("Connection test baseline updated: %1 ms").arg(minConnectionTimeMs));
+            }
+        }
+
+        if (completed && clearUnavailableAfter) {
+            auto first = Configs::dataManager->profilesRepo->GetProfile(profileIDs.first());
+            auto currentGroup = first ? Configs::dataManager->groupsRepo->GetGroup(first->gid) : nullptr;
+            if (currentGroup && currentGroup->auto_clear_unavailable) {
+                MW_show_log("Connection-time test finished, clearing unavailable profiles...");
+                runOnUiThread([=, this] { clearUnavailableProfiles(false, profileIDs); });
+            }
+        }
+        return completed;
+    }
 
     auto runSlice = [=, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice, const QList<int>& ids) {
         auto buildObject = Configs::BuildTestConfig(profileSlice);
@@ -488,6 +549,14 @@ bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs,
         runOnUiThread([=, this] { clearUnavailableProfiles(false, profileIDs); });
     }
     return completed;
+}
+
+bool MainWindow::runSpeedtestConnectionPretestIfNeeded(const QList<int>& profileIDs, SpeedtestStartMode startMode) {
+    if (startMode != SpeedtestStartMode::ByConnectionTime) {
+        return true;
+    }
+    // Reuse the exact standalone connection-time test pipeline.
+    return runConnectionTimeTestsForProfiles(profileIDs, false);
 }
 
 void MainWindow::stopTests() {
@@ -656,9 +725,7 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
         }
 
         stopSpeedtest.store(false);
-        if (startMode == SpeedtestStartMode::ByConnectionTime) {
-            completedFully = runConnectionTimeTestsForProfiles(profileIDs, false);
-        }
+        completedFully = runSpeedtestConnectionPretestIfNeeded(profileIDs, startMode);
         QList<int> orderedIds = getOrderedSpeedtestProfileIDs(profileIDs, startMode);
 
         auto speedTestFunc = [=, &completedFully, this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice) {
@@ -802,9 +869,7 @@ void MainWindow::speedtest_current_group_fall_short(const QList<int>& profileIDs
         }
 
         stopSpeedtest.store(false);
-        if (startMode == SpeedtestStartMode::ByConnectionTime) {
-            completedFully = runConnectionTimeTestsForProfiles(profileIDs, false);
-        }
+        completedFully = runSpeedtestConnectionPretestIfNeeded(profileIDs, startMode);
         QList<int> orderedIds = getOrderedSpeedtestProfileIDs(profileIDs, startMode);
 
         qint64 minFinishedMs = -1;

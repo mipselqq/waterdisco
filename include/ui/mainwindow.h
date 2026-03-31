@@ -316,7 +316,7 @@ private:
     void stopTests();
 
     void runURLTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1,
-                    const QString& testUrl = {}, bool saveConnectTime = false);
+                    const QString& testUrl = {}, bool saveConnectTime = false, int timeoutMsOverride = -1);
 
     void runIPTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
 
@@ -331,6 +331,7 @@ private:
                                             SpeedtestStartMode startMode = SpeedtestStartMode::AsIs);
     QList<int> getOrderedSpeedtestProfileIDs(const QList<int>& profileIDs, SpeedtestStartMode startMode) const;
     bool runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter = true);
+    bool runSpeedtestConnectionPretestIfNeeded(const QList<int>& profileIDs, SpeedtestStartMode startMode);
 
     void runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
 
