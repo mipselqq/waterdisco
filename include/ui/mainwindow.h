@@ -55,6 +55,12 @@ public:
         BestSiteScore
     };
 
+    enum class SpeedtestStartMode {
+        AsIs = 0,
+        ByConnectionTime,
+        BySavedSiteScore
+    };
+
     explicit MainWindow(QWidget *parent = nullptr);
 
     ~MainWindow() override;
@@ -312,9 +318,15 @@ private:
 
     void url_test_current();
 
-    void speedtest_current_group(const QList<int>& profileIDs, SpeedtestConnectMode connectMode = SpeedtestConnectMode::None);
+    void speedtest_current_group(const QList<int>& profileIDs,
+                                 SpeedtestConnectMode connectMode = SpeedtestConnectMode::None,
+                                 SpeedtestStartMode startMode = SpeedtestStartMode::AsIs);
 
-    void speedtest_current_group_fall_short(const QList<int>& profileIDs, SpeedtestConnectMode connectMode = SpeedtestConnectMode::None);
+    void speedtest_current_group_fall_short(const QList<int>& profileIDs,
+                                            SpeedtestConnectMode connectMode = SpeedtestConnectMode::None,
+                                            SpeedtestStartMode startMode = SpeedtestStartMode::AsIs);
+    QList<int> getOrderedSpeedtestProfileIDs(const QList<int>& profileIDs, SpeedtestStartMode startMode) const;
+    bool runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter = true);
 
     void runSpeedTest(const QString& config, const QString& xrayConfig, bool useDefault, const QStringList& outboundTags, const QMap<QString, int>& tag2entID, int entID = -1);
 
@@ -360,8 +372,8 @@ public:
 public Q_SLOTS:
     inline QDBusPendingReply<> Close()
     {
-        QList<QVariant> argumentList;
-        return asyncCallWithArgumentList(QStringLiteral("Close"), argumentList);
+    QList<QVariant> argumentList;
+    return asyncCallWithArgumentList(QStringLiteral("Close"), argumentList);
     }
 
 Q_SIGNALS: // SIGNALS

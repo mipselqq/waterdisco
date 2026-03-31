@@ -778,8 +778,32 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     if (Configs::dataManager->settingsRepo->show_system_dns) ui->system_dns->show();
     else ui->system_dns->hide();
 
+    auto startSelectedSpeedtest = [=, this](MainWindow::SpeedtestStartMode startMode) {
+        auto selected = get_now_selected_list();
+        if (selected.isEmpty()) return;
+        speedtest_current_group(selected, SpeedtestConnectMode::None, startMode);
+    };
+
     auto *detailsMenu = new QMenu(tr("Details"), ui->menu_server);
     ui->menu_server->insertMenu(ui->actionSpeedtest_Selected, detailsMenu);
+
+    auto *actionSpeedtestByConnTime = new QAction(tr("Speedtest by connection time"), ui->menu_server);
+    auto *actionSpeedtestBySavedSiteScore = new QAction(tr("Speedtest by saved site score"), ui->menu_server);
+    auto *actionSpeedtestAsIs = new QAction(tr("Speedtest as is"), ui->menu_server);
+    ui->menu_server->insertAction(ui->actionSpeedtest_Selected, actionSpeedtestAsIs);
+    ui->menu_server->insertAction(actionSpeedtestAsIs, actionSpeedtestBySavedSiteScore);
+    ui->menu_server->insertAction(actionSpeedtestBySavedSiteScore, actionSpeedtestByConnTime);
+    ui->actionSpeedtest_Selected->setVisible(false);
+
+    connect(actionSpeedtestByConnTime, &QAction::triggered, this, [=, this]() {
+        startSelectedSpeedtest(MainWindow::SpeedtestStartMode::ByConnectionTime);
+    });
+    connect(actionSpeedtestBySavedSiteScore, &QAction::triggered, this, [=, this]() {
+        startSelectedSpeedtest(MainWindow::SpeedtestStartMode::BySavedSiteScore);
+    });
+    connect(actionSpeedtestAsIs, &QAction::triggered, this, [=, this]() {
+        startSelectedSpeedtest(MainWindow::SpeedtestStartMode::AsIs);
+    });
 
     connect(ui->menu_server, &QMenu::aboutToShow, this, [=,this](){
         auto selected = get_now_selected_list();
@@ -812,13 +836,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
         if (selected.empty())
         {
-            ui->actionSpeedtest_Selected->setEnabled(false);
+            actionSpeedtestByConnTime->setEnabled(false);
+            actionSpeedtestBySavedSiteScore->setEnabled(false);
+            actionSpeedtestAsIs->setEnabled(false);
             ui->actionUrl_Test_Selected->setEnabled(false);
             ui->menu_resolve_selected->setEnabled(false);
             ui->actionResolve_Selected_Out_IP->setEnabled(false);
         } else
         {
-            ui->actionSpeedtest_Selected->setEnabled(true);
+            actionSpeedtestByConnTime->setEnabled(true);
+            actionSpeedtestBySavedSiteScore->setEnabled(true);
+            actionSpeedtestAsIs->setEnabled(true);
             ui->actionUrl_Test_Selected->setEnabled(true);
             ui->menu_resolve_selected->setEnabled(true);
             ui->actionResolve_Selected_Out_IP->setEnabled(true);
@@ -951,9 +979,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->actionUrl_Test_Group, &QAction::triggered, this, [=,this]() {
         urltest_current_group(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles(), true);
     });
-    connect(ui->actionSpeedtest_Selected, &QAction::triggered, this, [=,this]()
-    {
-        speedtest_current_group(get_now_selected_list());
+    connect(ui->actionSpeedtest_Selected, &QAction::triggered, this, [=, this]() {
+        startSelectedSpeedtest(MainWindow::SpeedtestStartMode::AsIs);
     });
     connect(ui->actionSpeed_test_fall_short, &QAction::toggled, this, [=, this](bool checked) {
         Configs::dataManager->settingsRepo->speed_test_fall_short = checked;
