@@ -68,12 +68,6 @@ QMimeData* ProfilesTableModel::mimeData(const QModelIndexList &indexes) const {
 
 void ProfilesTableModel::ensureCached(int profileId) const {
     if (m_cache.contains(profileId)) {
-        for (int i = 0; i < m_lruOrder.size(); ++i) {
-            if (m_lruOrder[i] == profileId) {
-                m_lruOrder.move(i, m_lruOrder.size() - 1);
-                break;
-            }
-        }
         return;
     }
 
@@ -88,9 +82,12 @@ void ProfilesTableModel::ensureCached(int profileId) const {
 }
 
 void ProfilesTableModel::evictOne() const {
-    if (m_lruOrder.isEmpty()) return;
-    int id = m_lruOrder.takeFirst();
-    m_cache.remove(id);
+    while (!m_lruOrder.isEmpty()) {
+        int id = m_lruOrder.takeFirst();
+        if (m_cache.remove(id) > 0) {
+            return;
+        }
+    }
 }
 
 QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
@@ -270,6 +267,9 @@ QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation
 void ProfilesTableModel::setProfileIds(const QList<int> &ids) {
     beginResetModel();
     m_profileIds = ids;
+    // Larger lists need a larger cache to avoid repeated DB loads while scrolling.
+    const int profileCount = static_cast<int>(ids.size());
+    m_cacheSize = std::max(200, std::min(profileCount, 2000));
     id2row.clear();
     int idx=0;
     for (const auto &id : ids) {
@@ -337,12 +337,6 @@ bool ProfilesTableModel::moveProfileRow(int fromRow, int toRow) {
 void ProfilesTableModel::refreshProfileId(int profileId) {
     if (!id2row.contains(profileId)) return;
     m_cache.remove(profileId);
-    for (int i = 0; i < m_lruOrder.size(); ++i) {
-        if (m_lruOrder[i] == profileId) {
-            m_lruOrder.removeAt(i);
-            break;
-        }
-    }
     auto r = id2row.value(profileId);
     QModelIndex top = index(r, 0);
     QModelIndex bottom = index(r, columnCount() - 1);

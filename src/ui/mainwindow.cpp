@@ -2025,7 +2025,7 @@ void MainWindow::refresh_proxy_list_column_size() {
     auto *hHeader = dynamic_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
     if (!hHeader) return;
     QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
-        auto maxRowTextWidth = [=](int column) {
+        auto maxRowTextWidth = [this](int column) {
             if (!profilesTableModel) return 0;
             const QFontMetrics cellFm(ui->profilesTableView->font());
             const int rowCount = profilesTableModel->rowCount();
@@ -2037,7 +2037,7 @@ void MainWindow::refresh_proxy_list_column_size() {
             return maxWidth + 18;
         };
 
-        auto measuredWidthForColumn = [=](int column) {
+        auto measuredWidthForColumn = [this, hHeader, maxRowTextWidth](int column) {
             const int headerViewportWidth = std::max(0, hHeader->viewport()->width());
             const QFontMetrics headerFm(hHeader->font());
             const QString headerText = profilesTableModel ? profilesTableModel->headerData(column, Qt::Horizontal).toString() : QString();
@@ -2268,8 +2268,10 @@ void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedRese
     }
     // refresh data
     refresh_proxy_list_impl_refresh_data(ids, mayNeedReset);
-    // now refresh column sizes
-    refresh_proxy_list_column_size();
+    // Column width recomputation is expensive and unnecessary for row-only updates.
+    if (mayNeedReset || ids.isEmpty()) {
+        refresh_proxy_list_column_size();
+    }
 }
 
 void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
