@@ -42,7 +42,7 @@ namespace Configs {
                 gid INTEGER NOT NULL DEFAULT 0,
                 latency INTEGER NOT NULL DEFAULT 0,
                 connect_time_ms INTEGER NOT NULL DEFAULT 0,
-                site_score INTEGER NOT NULL DEFAULT 0,
+                site_score INTEGER NOT NULL DEFAULT -3,
                 dl_speed TEXT,
                 ul_speed TEXT,
                 test_country TEXT,
@@ -71,8 +71,19 @@ namespace Configs {
             db.exec("ALTER TABLE profiles ADD COLUMN connect_time_ms INTEGER NOT NULL DEFAULT 0");
         }
         if (!hasColumn("site_score")) {
-            db.exec("ALTER TABLE profiles ADD COLUMN site_score INTEGER NOT NULL DEFAULT 0");
+            db.exec("ALTER TABLE profiles ADD COLUMN site_score INTEGER NOT NULL DEFAULT -3");
         }
+
+        // Legacy normalization: old builds used 0 for "never tested".
+        // Keep real measured zero scores intact (they have connect_time_ms > 0 or speed text).
+        db.exec(R"(
+            UPDATE profiles
+            SET site_score = -3
+            WHERE site_score = 0
+              AND connect_time_ms = 0
+              AND (dl_speed IS NULL OR TRIM(dl_speed) = '')
+              AND (ul_speed IS NULL OR TRIM(ul_speed) = '')
+        )");
 
         db.exec("CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name)");
     }
@@ -114,7 +125,7 @@ namespace Configs {
         profile->gid = json["gid"].toInt();
         profile->latency = json["latency"].toInt();
         profile->connect_time_ms = json.contains("connect_time_ms") ? json["connect_time_ms"].toInt() : 0;
-        profile->site_score = json.contains("site_score") ? json["site_score"].toInt() : 0;
+        profile->site_score = json.contains("site_score") ? json["site_score"].toInt() : -3;
         profile->dl_speed = json["dl_speed"].toString();
         profile->ul_speed = json["ul_speed"].toString();
         profile->dl_speed_mbps = parseSpeedToMbps(profile->dl_speed);

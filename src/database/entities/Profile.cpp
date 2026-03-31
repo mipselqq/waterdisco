@@ -19,7 +19,7 @@ namespace Configs
         ip_out.clear();
         latency = 0;
         connect_time_ms = 0;
-        site_score = 0;
+        site_score = -3;
         dl_speed.clear();
         ul_speed.clear();
         dl_speed_mbps = 0.0;
@@ -47,6 +47,7 @@ namespace Configs
     }
 
     QString Profile::DisplaySiteScore() const {
+        if (site_score == -3) return "";
         if (site_score > 0) return QString::number(site_score);
 
         const QString speed = dl_speed.trimmed();

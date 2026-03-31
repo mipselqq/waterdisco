@@ -18,7 +18,7 @@ namespace Configs {
         int gid;
         int latency;
         int connect_time_ms = 0;
-        int site_score = 0;
+        int site_score = -3;
         std::string dl_speed;
         std::string ul_speed;
         std::string test_country;

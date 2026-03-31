@@ -33,7 +33,7 @@ namespace Configs {
         int gid = 0;
         int latency = 0;
         int connect_time_ms = 0;
-        int site_score = 0;
+        int site_score = -3;
         QString dl_speed;
         QString ul_speed;
         double dl_speed_mbps = 0.0;
