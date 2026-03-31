@@ -114,8 +114,58 @@ namespace Subscription {
         return DecodeB64IfValid(normalized);
     }
 
-    void RawUpdater::update(const QString &str, bool needParse = true) {
+    void RawUpdater::update(const QString &str, bool needParse) {
         const QString line = str.trimmed();
+
+        // Multi line
+        if (line.count("\n") > 0 && needParse) {
+            auto list = Disect(line);
+            const int total = list.size();
+            if (total == 0) return;
+
+            // Large plain-link subscriptions (e.g. many vless:// lines) are CPU-bound on parsing.
+            // Parse chunks in parallel and merge in original chunk order.
+            if (total >= 300) {
+                const int workers = subParseWorkerCount(total);
+                const int chunkSize = (total + workers - 1) / workers;
+                std::vector<std::future<QList<std::shared_ptr<Configs::Profile>>>> futures;
+                futures.reserve(workers);
+
+                for (int w = 0; w < workers; ++w) {
+                    const int begin = w * chunkSize;
+                    if (begin >= total) break;
+                    const int end = std::min(total, begin + chunkSize);
+
+                    futures.emplace_back(std::async(std::launch::async, [begin, end, &list]() {
+                        RawUpdater localUpdater;
+                        std::shared_ptr<QList<std::shared_ptr<Configs::Profile>>> parsed = std::make_shared<QList<std::shared_ptr<Configs::Profile>>>();
+                        parsed->reserve(end - begin);
+
+                        for (int i = begin; i < end; ++i) {
+                            localUpdater.update(list.at(i).trimmed(), false);
+                            if (!localUpdater.updated_order.isEmpty()) {
+                                parsed->append(localUpdater.updated_order);
+                                localUpdater.updated_order.clear();
+                            }
+                        }
+                        return *parsed;
+                    }));
+                }
+
+                for (auto &future : futures) {
+                    auto parsed = future.get();
+                    if (!parsed.isEmpty()) {
+                        updated_order.append(parsed);
+                    }
+                }
+                return;
+            }
+
+            for (const auto &str2: list) {
+                update(str2.trimmed(), false);
+            }
+            return;
+        }
 
         // is comment or too short
         if (line.startsWith("//") || line.startsWith("#") || line.length() < 2) {
@@ -252,56 +302,6 @@ namespace Subscription {
         if (line.contains("[Interface]") && line.contains("[Peer]"))
         {
             updateWireguardFileConfig(line);
-            return;
-        }
-
-        // Multi line
-        if (line.count("\n") > 0 && needParse) {
-            auto list = Disect(line);
-            const int total = list.size();
-            if (total == 0) return;
-
-            // Large plain-link subscriptions (e.g. many vless:// lines) are CPU-bound on parsing.
-            // Parse chunks in parallel and merge in original chunk order.
-            if (total >= 300) {
-                const int workers = subParseWorkerCount(total);
-                const int chunkSize = (total + workers - 1) / workers;
-                std::vector<std::future<QList<std::shared_ptr<Configs::Profile>>>> futures;
-                futures.reserve(workers);
-
-                for (int w = 0; w < workers; ++w) {
-                    const int begin = w * chunkSize;
-                    if (begin >= total) break;
-                    const int end = std::min(total, begin + chunkSize);
-
-                    futures.emplace_back(std::async(std::launch::async, [begin, end, &list]() {
-                        RawUpdater localUpdater;
-                        QList<std::shared_ptr<Configs::Profile>> parsed;
-                        parsed.reserve(end - begin);
-
-                        for (int i = begin; i < end; ++i) {
-                            localUpdater.update(list.at(i).trimmed(), false);
-                            if (!localUpdater.updated_order.isEmpty()) {
-                                parsed.append(localUpdater.updated_order);
-                                localUpdater.updated_order.clear();
-                            }
-                        }
-                        return parsed;
-                    }));
-                }
-
-                for (auto &future : futures) {
-                    auto parsed = future.get();
-                    if (!parsed.isEmpty()) {
-                        updated_order.append(parsed);
-                    }
-                }
-                return;
-            }
-
-            for (const auto &str2: list) {
-                update(str2.trimmed(), false);
-            }
             return;
         }
 
