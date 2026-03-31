@@ -511,6 +511,14 @@ static QList<int> getConnectionPrecheckProfileIDs(const QList<int>& profileIDs) 
 
 bool MainWindow::runConnectionTimeTestsForProfiles(const QList<int>& profileIDs, bool clearUnavailableAfter) {
     if (profileIDs.isEmpty()) return true;
+    // Clear previous test results for these profiles so the table shows fresh values
+    for (int id : profileIDs) {
+        auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+        if (!p) continue;
+        p->ClearTestResults();
+        Configs::dataManager->profilesRepo->Save(p);
+    }
+    runOnUiThread([this] { refresh_proxy_list({}, true); });
     const QList<int> orderedProfileIDs = getConnectionPrecheckProfileIDs(profileIDs);
     const int configuredConcurrency = Configs::dataManager->settingsRepo->test_concurrent;
     const int chunkSize = qMax(1, configuredConcurrency > 0 ? configuredConcurrency : 200);
@@ -832,6 +840,14 @@ void MainWindow::speedtest_current_group(const QList<int>& profileIDs, Speedtest
         bool completedFully = true;
         speedtestTestedCount.store(0);
         speedtestSkippedCount.store(0);
+        // Clear previous test results for these profiles so the table shows fresh values
+        for (int id : profileIDs) {
+            auto p = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (!p) continue;
+            p->ClearTestResults();
+            Configs::dataManager->profilesRepo->Save(p);
+        }
+        runOnUiThread([this] { refresh_proxy_list({}, true); });
         runOnUiThread([this, startMode] {
             showSpeedtestCounters = true;
             showConnectionCounters = (startMode == SpeedtestStartMode::ByConnectionTime);
