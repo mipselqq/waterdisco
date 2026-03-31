@@ -8,6 +8,9 @@
 #include <QUrlQuery>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QThread>
+
+#include <future>
 
 #include "include/configs/common/utils.h"
 #include "include/database/GroupsRepo.h"
@@ -50,6 +53,14 @@ namespace Subscription {
             idx = nlineIdx+1;
         }
         return res;
+    }
+
+    int subParseWorkerCount(int itemCount) {
+        if (itemCount <= 0) return 1;
+        int workers = QThread::idealThreadCount();
+        if (workers <= 0) workers = 4;
+        workers = std::clamp(workers, 2, 8);
+        return std::min(workers, itemCount);
     }
 
     SingBoxSubType getSingBoxSubType(const QJsonDocument &doc) {
@@ -104,8 +115,96 @@ namespace Subscription {
     }
 
     void RawUpdater::update(const QString &str, bool needParse = true) {
+        const QString line = str.trimmed();
+
+        // is comment or too short
+        if (line.startsWith("//") || line.startsWith("#") || line.length() < 2) {
+            return;
+        }
+
         // Base64 encoded subscription
-        if (auto str2 = decodeSubscriptionPayload(str); !str2.isEmpty()) {
+        auto parseDirectLinkFast = [&](const QString& s) -> bool {
+            std::shared_ptr<Configs::Profile> fastEnt;
+
+            if (s.startsWith("json://")) {
+                auto link = QUrl(s);
+                if (!link.isValid()) return true;
+                auto dataBytes = DecodeB64IfValid(link.fragment().toUtf8(), QByteArray::Base64UrlEncoding);
+                if (dataBytes.isEmpty()) return true;
+                auto data = QJsonDocument::fromJson(dataBytes).object();
+                if (data.isEmpty()) return true;
+                if (data.contains("protocol")) {
+                    fastEnt = Configs::ProfilesRepo::NewProfile("xray" + data["protocol"].toString());
+                } else {
+                    fastEnt = data["type"].toString() == "hysteria2" ? Configs::ProfilesRepo::NewProfile("hysteria") : Configs::ProfilesRepo::NewProfile(data["type"].toString());
+                }
+                if (fastEnt->outbound->invalid) return true;
+                fastEnt->outbound->ParseFromJson(data);
+            } else if (s.startsWith("socks5://") || s.startsWith("socks4://") ||
+                       s.startsWith("socks4a://") || s.startsWith("socks://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("socks");
+                if (!fastEnt->Socks()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("http://") || s.startsWith("https://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("http");
+                if (!fastEnt->Http()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("ss://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("shadowsocks");
+                if (!fastEnt->ShadowSocks()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("vmess://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("vmess");
+                if (!fastEnt->VMess()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("vless://")) {
+                if (Configs::useXrayVless(s)) {
+                    fastEnt = Configs::ProfilesRepo::NewProfile("xrayvless");
+                    if (!fastEnt->XrayVLESS()->ParseFromLink(s)) return true;
+                } else {
+                    fastEnt = Configs::ProfilesRepo::NewProfile("vless");
+                    if (!fastEnt->VLESS()->ParseFromLink(s)) return true;
+                }
+            } else if (s.startsWith("trojan://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("trojan");
+                if (!fastEnt->Trojan()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("anytls://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("anytls");
+                if (!fastEnt->AnyTLS()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("hysteria://") || s.startsWith("hysteria2://") || s.startsWith("hy2://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("hysteria");
+                if (!fastEnt->Hysteria()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("tuic://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("tuic");
+                if (!fastEnt->TUIC()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("juicity://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("juicity");
+                if (!fastEnt->Juicity()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("tt://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("trusttunnel");
+                if (!fastEnt->TrustTunnel()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("shadowtls://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("shadowtls");
+                if (!fastEnt->ShadowTLS()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("wg://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("wireguard");
+                if (!fastEnt->Wireguard()->ParseFromLink(s)) return true;
+            } else if (s.startsWith("ssh://")) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("ssh");
+                if (!fastEnt->SSH()->ParseFromLink(s)) return true;
+            } else if (Configs::HasNaive() && (s.startsWith("naive+https://") || s.startsWith("naive+quic://"))) {
+                fastEnt = Configs::ProfilesRepo::NewProfile("naive");
+                if (!fastEnt->Naive()->ParseFromLink(s)) return true;
+            } else {
+                return false;
+            }
+
+            if (fastEnt != nullptr) updated_order += fastEnt;
+            return true;
+        };
+
+        // Fast path for direct links in line-by-line mode (hot path for large plain subscriptions).
+        if (!needParse && parseDirectLinkFast(line)) {
+            return;
+        }
+
+        if (auto str2 = decodeSubscriptionPayload(line); !str2.isEmpty()) {
             update(str2);
             return;
         }
@@ -114,19 +213,19 @@ namespace Subscription {
 
         // Json
         QJsonParseError error;
-        auto doc = QJsonDocument::fromJson(str.toUtf8(), &error);
+        auto doc = QJsonDocument::fromJson(line.toUtf8(), &error);
         if (error.error == QJsonParseError::NoError) {
             // SingBox
             auto subType = getSingBoxSubType(doc);
             if (subType == SingBoxSubType::fullConfig) {
                 ent = Configs::ProfilesRepo::NewProfile("custom");
                 ent->Custom()->type = "fullconfig";
-                ent->Custom()->config = str;
+                ent->Custom()->config = line;
                 updated_order += ent;
             } else if (subType == SingBoxSubType::outboundObject) {
                 ent = Configs::ProfilesRepo::NewProfile("custom");
                 ent->Custom()->type = "outbound";
-                ent->Custom()->config = str;
+                ent->Custom()->config = line;
                 updated_order += ent;
             } else if (subType == SingBoxSubType::outboundInJson || subType == SingBoxSubType::outboundJsonArray) {
                 updateSingBox(doc, subType);
@@ -134,9 +233,9 @@ namespace Subscription {
             }
 
             // SIP008
-            if (str.contains("version") && str.contains("servers"))
+            if (line.contains("version") && line.contains("servers"))
             {
-                updateSIP008(str);
+                updateSIP008(line);
                 return;
             }
 
@@ -144,35 +243,71 @@ namespace Subscription {
         }
 
         // Clash
-        if (str.contains("proxies:")) {
-            updateClash(str);
+        if (line.contains("proxies:")) {
+            updateClash(line);
             return;
         }
 
         // Wireguard Config
-        if (str.contains("[Interface]") && str.contains("[Peer]"))
+        if (line.contains("[Interface]") && line.contains("[Peer]"))
         {
-            updateWireguardFileConfig(str);
+            updateWireguardFileConfig(line);
             return;
         }
 
         // Multi line
-        if (str.count("\n") > 0 && needParse) {
-            auto list = Disect(str);
+        if (line.count("\n") > 0 && needParse) {
+            auto list = Disect(line);
+            const int total = list.size();
+            if (total == 0) return;
+
+            // Large plain-link subscriptions (e.g. many vless:// lines) are CPU-bound on parsing.
+            // Parse chunks in parallel and merge in original chunk order.
+            if (total >= 300) {
+                const int workers = subParseWorkerCount(total);
+                const int chunkSize = (total + workers - 1) / workers;
+                std::vector<std::future<QList<std::shared_ptr<Configs::Profile>>>> futures;
+                futures.reserve(workers);
+
+                for (int w = 0; w < workers; ++w) {
+                    const int begin = w * chunkSize;
+                    if (begin >= total) break;
+                    const int end = std::min(total, begin + chunkSize);
+
+                    futures.emplace_back(std::async(std::launch::async, [begin, end, &list]() {
+                        RawUpdater localUpdater;
+                        QList<std::shared_ptr<Configs::Profile>> parsed;
+                        parsed.reserve(end - begin);
+
+                        for (int i = begin; i < end; ++i) {
+                            localUpdater.update(list.at(i).trimmed(), false);
+                            if (!localUpdater.updated_order.isEmpty()) {
+                                parsed.append(localUpdater.updated_order);
+                                localUpdater.updated_order.clear();
+                            }
+                        }
+                        return parsed;
+                    }));
+                }
+
+                for (auto &future : futures) {
+                    auto parsed = future.get();
+                    if (!parsed.isEmpty()) {
+                        updated_order.append(parsed);
+                    }
+                }
+                return;
+            }
+
             for (const auto &str2: list) {
                 update(str2.trimmed(), false);
             }
             return;
         }
 
-        // is comment or too short
-        if (str.startsWith("//") || str.startsWith("#") || str.length() < 2) {
-            return;
-        }
-
         // Json base64 link format
-        if (str.startsWith("json://")) {
-            auto link = QUrl(str);
+        if (line.startsWith("json://")) {
+            auto link = QUrl(line);
             if (!link.isValid()) return;
             auto dataBytes = DecodeB64IfValid(link.fragment().toUtf8(), QByteArray::Base64UrlEncoding);
             if (dataBytes.isEmpty()) return;
@@ -188,130 +323,130 @@ namespace Subscription {
         }
 
         // Json
-        if (str.startsWith('{')) {
+        if (line.startsWith('{')) {
             ent = Configs::ProfilesRepo::NewProfile("custom");
             auto custom = ent->Custom();
-            auto obj = QString2QJsonObject(str);
+            auto obj = QString2QJsonObject(line);
             if (obj.contains("outbounds")) {
                 custom->type = "fullconfig";
-                custom->config = str;
+                custom->config = line;
             } else if (obj.contains("server")) {
                 custom->type = "outbound";
-                custom->config = str;
+                custom->config = line;
             } else {
                 return;
             }
         }
 
         // SOCKS
-        if (str.startsWith("socks5://") || str.startsWith("socks4://") ||
-            str.startsWith("socks4a://") || str.startsWith("socks://")) {
+        if (line.startsWith("socks5://") || line.startsWith("socks4://") ||
+            line.startsWith("socks4a://") || line.startsWith("socks://")) {
             ent = Configs::ProfilesRepo::NewProfile("socks");
-            auto ok = ent->Socks()->ParseFromLink(str);
+            auto ok = ent->Socks()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // HTTP
-        if (str.startsWith("http://") || str.startsWith("https://")) {
+        if (line.startsWith("http://") || line.startsWith("https://")) {
             ent = Configs::ProfilesRepo::NewProfile("http");
-            auto ok = ent->Http()->ParseFromLink(str);
+            auto ok = ent->Http()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // ShadowSocks
-        if (str.startsWith("ss://")) {
+        if (line.startsWith("ss://")) {
             ent = Configs::ProfilesRepo::NewProfile("shadowsocks");
-            auto ok = ent->ShadowSocks()->ParseFromLink(str);
+            auto ok = ent->ShadowSocks()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // VMess
-        if (str.startsWith("vmess://")) {
+        if (line.startsWith("vmess://")) {
             ent = Configs::ProfilesRepo::NewProfile("vmess");
-            auto ok = ent->VMess()->ParseFromLink(str);
+            auto ok = ent->VMess()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // VLESS
-        if (str.startsWith("vless://")) {
-            if (Configs::useXrayVless(str)) {
+        if (line.startsWith("vless://")) {
+            if (Configs::useXrayVless(line)) {
                 ent = Configs::ProfilesRepo::NewProfile("xrayvless");
-                auto ok = ent->XrayVLESS()->ParseFromLink(str);
+                auto ok = ent->XrayVLESS()->ParseFromLink(line);
                 if (!ok) return;
             } else {
                 ent = Configs::ProfilesRepo::NewProfile("vless");
-                auto ok = ent->VLESS()->ParseFromLink(str);
+                auto ok = ent->VLESS()->ParseFromLink(line);
                 if (!ok) return;
             }
         }
 
         // Trojan
-        if (str.startsWith("trojan://")) {
+        if (line.startsWith("trojan://")) {
             ent = Configs::ProfilesRepo::NewProfile("trojan");
-            auto ok = ent->Trojan()->ParseFromLink(str);
+            auto ok = ent->Trojan()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // AnyTLS
-        if (str.startsWith("anytls://")) {
+        if (line.startsWith("anytls://")) {
             ent = Configs::ProfilesRepo::NewProfile("anytls");
-            auto ok = ent->AnyTLS()->ParseFromLink(str);
+            auto ok = ent->AnyTLS()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // Hysteria
-        if (str.startsWith("hysteria://") || str.startsWith("hysteria2://") || str.startsWith("hy2://")) {
+        if (line.startsWith("hysteria://") || line.startsWith("hysteria2://") || line.startsWith("hy2://")) {
             ent = Configs::ProfilesRepo::NewProfile("hysteria");
-            auto ok = ent->Hysteria()->ParseFromLink(str);
+            auto ok = ent->Hysteria()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // TUIC
-        if (str.startsWith("tuic://")) {
+        if (line.startsWith("tuic://")) {
             ent = Configs::ProfilesRepo::NewProfile("tuic");
-            auto ok = ent->TUIC()->ParseFromLink(str);
+            auto ok = ent->TUIC()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // Juicity
-        if (str.startsWith("juicity://")) {
+        if (line.startsWith("juicity://")) {
             ent = Configs::ProfilesRepo::NewProfile("juicity");
-            auto ok = ent->Juicity()->ParseFromLink(str);
+            auto ok = ent->Juicity()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // TrustTunnel
-        if (str.startsWith("tt://")) {
+        if (line.startsWith("tt://")) {
             ent = Configs::ProfilesRepo::NewProfile("trusttunnel");
-            auto ok = ent->TrustTunnel()->ParseFromLink(str);
+            auto ok = ent->TrustTunnel()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // ShadowTLS
-        if (str.startsWith("shadowtls://")) {
+        if (line.startsWith("shadowtls://")) {
             ent = Configs::ProfilesRepo::NewProfile("shadowtls");
-            auto ok = ent->ShadowTLS()->ParseFromLink(str);
+            auto ok = ent->ShadowTLS()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // Wireguard
-        if (str.startsWith("wg://")) {
+        if (line.startsWith("wg://")) {
             ent = Configs::ProfilesRepo::NewProfile("wireguard");
-            auto ok = ent->Wireguard()->ParseFromLink(str);
+            auto ok = ent->Wireguard()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // SSH
-        if (str.startsWith("ssh://")) {
+        if (line.startsWith("ssh://")) {
             ent = Configs::ProfilesRepo::NewProfile("ssh");
-            auto ok = ent->SSH()->ParseFromLink(str);
+            auto ok = ent->SSH()->ParseFromLink(line);
             if (!ok) return;
         }
 
         // Naive
-        if (Configs::HasNaive() && (str.startsWith("naive+https://") || str.startsWith("naive+quic://"))) {
+        if (Configs::HasNaive() && (line.startsWith("naive+https://") || line.startsWith("naive+quic://"))) {
             ent = Configs::ProfilesRepo::NewProfile("naive");
-            auto ok = ent->Naive()->ParseFromLink(str);
+            auto ok = ent->Naive()->ParseFromLink(line);
             if (!ok) return;
         }
 
