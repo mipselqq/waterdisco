@@ -181,7 +181,34 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, bo
     auto result = defaultClient->Test(&rpcOK, req);
     done->unlock();
     //
-    if (!rpcOK || result.results.empty()) return;
+    if (!rpcOK || result.results.empty()) {
+        QList<int> idsToFail;
+        if (entID >= 0) {
+            idsToFail << entID;
+        } else {
+            for (auto it = tag2entID.constBegin(); it != tag2entID.constEnd(); ++it) {
+                idsToFail << it.value();
+            }
+        }
+        for (int id : idsToFail) {
+            auto ent = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (!ent) continue;
+            ent->dl_speed = "Error";
+            ent->dl_speed_mbps = 0.0;
+            if (ent->ul_speed.isEmpty()) ent->ul_speed = "N/A";
+            if (ent->ul_speed_mbps < 0.0) ent->ul_speed_mbps = 0.0;
+            if (ent->connect_time_ms <= 0) ent->connect_time_ms = -1;
+            if (ent->latency <= 0) ent->latency = -1;
+            ent->site_score = -2;
+            Configs::dataManager->profilesRepo->Save(ent);
+            int profileId = ent->id;
+            runOnUiThread([=, this]() {
+                refresh_proxy_list({profileId});
+            });
+            MW_show_log(tr("[%1] speed test error: rpc failed or empty result").arg(ent->outbound->DisplayTypeAndName()));
+        }
+        return;
+    }
 
     for (const auto &res: result.results) {
         if (!tag2entID.empty()) {
@@ -945,15 +972,13 @@ void MainWindow::runSpeedTest(const QString& config, const QString& xrayConfig, 
             if (ent->latency <= 0 && res.latency.value() > 0) ent->latency = res.latency.value();
             ent->site_score = CalcSiteScore(ent->connect_time_ms, ent->dl_speed_mbps);
         } else {
-            // Do not clobber previous successful metrics with a later failed pass.
-            // This keeps post-speedtest sorting consistent for all profiles.
-            if (ent->dl_speed.isEmpty()) ent->dl_speed = "N/A";
+            ent->dl_speed = "Error";
+            ent->dl_speed_mbps = 0.0;
             if (ent->ul_speed.isEmpty()) ent->ul_speed = "N/A";
-            if (ent->dl_speed_mbps <= 0.0 && ent->ul_speed_mbps <= 0.0 && ent->connect_time_ms <= 0) {
-                ent->connect_time_ms = -1;
-                if (ent->latency <= 0) ent->latency = -1;
-                ent->site_score = 0;
-            }
+            if (ent->ul_speed_mbps < 0.0) ent->ul_speed_mbps = 0.0;
+            if (ent->connect_time_ms <= 0) ent->connect_time_ms = -1;
+            if (ent->latency <= 0) ent->latency = -1;
+            ent->site_score = -2;
             MW_show_log(tr("[%1] speed test error: %2").arg(ent->outbound->DisplayTypeAndName(), QString::fromStdString(res.error.value())));
         }
         Configs::dataManager->profilesRepo->Save(ent);
@@ -1092,13 +1117,13 @@ void MainWindow::runSpeedTestFallShort(const QString& config, const QString& xra
                 if (skippedOut) *skippedOut = true;
                 MW_show_log(tr("[%1] fall-short: skipped by timeout threshold (%2 ms)").arg(ent->outbound->DisplayTypeAndName()).arg(timeoutMs));
             } else {
-                if (ent->dl_speed.isEmpty()) ent->dl_speed = "N/A";
+                ent->dl_speed = "Error";
+                ent->dl_speed_mbps = 0.0;
                 if (ent->ul_speed.isEmpty()) ent->ul_speed = "N/A";
-                if (ent->dl_speed_mbps <= 0.0 && ent->ul_speed_mbps <= 0.0 && ent->connect_time_ms <= 0) {
-                    ent->connect_time_ms = -1;
-                    if (ent->latency <= 0) ent->latency = -1;
-                    ent->site_score = 0;
-                }
+                if (ent->ul_speed_mbps < 0.0) ent->ul_speed_mbps = 0.0;
+                if (ent->connect_time_ms <= 0) ent->connect_time_ms = -1;
+                if (ent->latency <= 0) ent->latency = -1;
+                ent->site_score = -2;
                 MW_show_log(tr("[%1] speed test error: %2").arg(ent->outbound->DisplayTypeAndName(), err));
             }
         }

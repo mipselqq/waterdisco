@@ -167,6 +167,9 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         }
         if (index.column() == 6) {
             const auto rxText = profile->DisplayRxSpeed().trimmed();
+            if (rxText.compare("Error", Qt::CaseInsensitive) == 0) {
+                return QColor(Qt::red);
+            }
             if (rxText.compare("N/A", Qt::CaseInsensitive) == 0 ||
                 rxText.compare("Unavailable", Qt::CaseInsensitive) == 0) {
                 return QColor(Qt::darkGray);
