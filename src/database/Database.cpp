@@ -1,5 +1,6 @@
 #include "include/database/Database.h"
 #include <3rdparty/SQLiteCpp/include/Backup.h>
+#include <3rdparty/SQLiteCpp/include/sqlite3.h>
 #include <algorithm>
 #include <set>
 
@@ -22,6 +23,22 @@ namespace Configs {
     void Database::RunMaintenance() {
         checkpointWal();
         maybeVacuum();
+    }
+
+    bool Database::SnapshotTo(const std::string& path, std::string* error) {
+        try {
+            SQLite::Database destination(path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE,
+                                         BUSY_TIMEOUT_MS);
+            SQLite::Backup backup(destination, db);
+            if (backup.executeStep(-1) != SQLITE_DONE) {
+                if (error) *error = "SQLite database was busy while creating a snapshot";
+                return false;
+            }
+            return true;
+        } catch (const std::exception& e) {
+            if (error) *error = e.what();
+            return false;
+        }
     }
 
     void Database::maybeVacuum() {

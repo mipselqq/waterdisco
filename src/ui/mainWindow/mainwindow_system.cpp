@@ -2,15 +2,20 @@
 #include "NkrVersion.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMessageBox>
+#include <QTemporaryDir>
 
 #include "3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.hpp"
 #include "include/global/HTTPRequestHelper.hpp"
+#include "include/global/AppStateArchive.hpp"
 #include "include/global/Logger.hpp"
 #include "include/sys/Process.hpp"
 #include "include/ui/mainWindow/MainWindowInternal.h"
@@ -108,6 +113,59 @@ void MainWindow::on_commitDataRequest() {
 
     settings->Save();
     qDebug() << "End of data save";
+}
+
+void MainWindow::on_menu_export_application_state_triggered() {
+    on_commitDataRequest();
+
+    QString archivePath = QFileDialog::getSaveFileName(
+        this, tr("Export application state"),
+        QDir::home().absoluteFilePath(
+            "waterdisco-state-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") + ".thronestate"),
+        tr("Waterdisco state archive (*.thronestate *.thrbackup);;All files (*)"));
+    if (archivePath.isEmpty()) return;
+    if (!archivePath.endsWith(".thronestate", Qt::CaseInsensitive)
+        && !archivePath.endsWith(".thrbackup", Qt::CaseInsensitive)) {
+        archivePath += ".thronestate";
+    }
+
+    QTemporaryDir snapshots;
+    if (!snapshots.isValid()) {
+        MessageBoxWarning(tr("Export failed"), tr("Cannot create a temporary snapshot directory."));
+        return;
+    }
+    QString error;
+    if (!Configs::dataManager->SnapshotDatabases(snapshots.path(), &error)
+        || !AppStateArchive::CreateArchive(QDir::currentPath(), archivePath, snapshots.path(), &error)) {
+        MessageBoxWarning(tr("Export failed"), tr("Failed to export application state:\n%1").arg(error));
+        return;
+    }
+    MessageBoxInfo(tr("Export completed"), tr("Application state exported to:\n%1").arg(archivePath));
+}
+
+void MainWindow::on_menu_import_application_state_triggered() {
+    const QString archivePath = QFileDialog::getOpenFileName(
+        this, tr("Import application state"), QDir::homePath(),
+        tr("Waterdisco state archive (*.thronestate *.thrbackup);;All files (*)"));
+    if (archivePath.isEmpty()) return;
+    if (!QFileInfo::exists(archivePath)) {
+        MessageBoxWarning(tr("Import failed"), tr("File does not exist:\n%1").arg(archivePath));
+        return;
+    }
+    if (QMessageBox::question(this, tr("Import application state"),
+                              tr("Import will fully replace current application state and restart the app. Continue?"))
+        != QMessageBox::Yes) {
+        return;
+    }
+
+    const QDir workingDir = QFileInfo(QDir::currentPath()).dir();
+    QString error;
+    if (!AppStateArchive::StageImport(archivePath, workingDir, &error)) {
+        MessageBoxWarning(tr("Import failed"), tr("Failed to validate and stage application state:\n%1").arg(error));
+        return;
+    }
+    exit_reason = ExitReason::Restart;
+    on_menu_exit_triggered();
 }
 
 void MainWindow::prepare_exit()

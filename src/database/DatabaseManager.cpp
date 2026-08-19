@@ -73,6 +73,21 @@ namespace Configs {
         });
     }
 
+    bool DatabaseManager::SnapshotDatabases(const QString& directory, QString* error) {
+        if (!QDir().mkpath(directory)) {
+            if (error) *error = QObject::tr("Cannot create database snapshot directory");
+            return false;
+        }
+
+        std::string snapshotError;
+        if (!db.SnapshotTo(QDir(directory).absoluteFilePath("throne.db").toStdString(), &snapshotError)
+            || !statsDb.SnapshotTo(QDir(directory).absoluteFilePath("throne_stats.db").toStdString(), &snapshotError)) {
+            if (error) *error = QString::fromStdString(snapshotError);
+            return false;
+        }
+        return true;
+    }
+
     void DatabaseManager::initializeRepos() {
         profilesRepo = std::make_unique<ProfilesRepo>(db);
         groupsRepo = std::make_unique<GroupsRepo>(db);

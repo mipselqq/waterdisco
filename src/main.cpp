@@ -19,6 +19,7 @@
 
 
 #include "include/global/Configs.hpp"
+#include "include/global/AppStateArchive.hpp"
 #include "include/global/Logger.hpp"
 
 #include "include/ui/mainwindow_interface.h"
@@ -296,6 +297,10 @@ int main(int argc, char* argv[]) {
     }
     if (!wd.exists()) wd.mkpath(wd.absolutePath());
     if (!wd.exists("config")) wd.mkdir("config");
+    QString importError;
+    if (!AppStateArchive::ApplyPendingImport(wd, &importError)) {
+        qWarning() << "Pending Waterdisco import was not applied:" << importError;
+    }
     const QString configDir = wd.absoluteFilePath("config");
     QDir::setCurrent(configDir);
     QDir("temp").removeRecursively();

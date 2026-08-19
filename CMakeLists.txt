@@ -88,6 +88,8 @@ set(PROJECT_SOURCES
         src/global/Utils.cpp
         include/global/Logger.hpp
         src/global/Logger.cpp
+        include/global/AppStateArchive.hpp
+        src/global/AppStateArchive.cpp
         include/global/PeriodicRunner.hpp
         src/global/PeriodicRunner.cpp
         src/global/HTTPRequestHelper.cpp
@@ -508,6 +510,13 @@ if (BUILD_TESTING)
     target_include_directories(profile_metrics_test PRIVATE ${CMAKE_SOURCE_DIR})
     target_link_libraries(profile_metrics_test PRIVATE Qt6::Core)
     add_test(NAME profile_metrics COMMAND profile_metrics_test)
+
+    add_executable(app_state_archive_test
+            tests/app_state_archive_test.cpp
+            src/global/AppStateArchive.cpp)
+    target_include_directories(app_state_archive_test PRIVATE ${CMAKE_SOURCE_DIR})
+    target_link_libraries(app_state_archive_test PRIVATE Qt6::Core)
+    add_test(NAME app_state_archive COMMAND app_state_archive_test)
 endif ()
 
 # Verified to link. OMIT_VIRTUALTABLE/VIEW/ANALYZE/CTE/WINDOWFUNC/DECLTYPE all break this build.

@@ -773,6 +773,9 @@ QTabBar::tab:selected {
     <addaction name="actionRoute_requests_via_connected_profile"/>
     <addaction name="actionAllow_LAN"/>
     <addaction name="separator"/>
+    <addaction name="actionExport_application_state"/>
+    <addaction name="actionImport_application_state"/>
+    <addaction name="separator"/>
     <addaction name="actionRestart_Proxy"/>
     <addaction name="actionRestart_Program"/>
     <addaction name="menu_exit"/>
@@ -900,6 +903,16 @@ QTabBar::tab:selected {
   <action name="menu_exit">
    <property name="text">
     <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionExport_application_state">
+   <property name="text">
+    <string>Export application state</string>
+   </property>
+  </action>
+  <action name="actionImport_application_state">
+   <property name="text">
+    <string>Import application state</string>
    </property>
   </action>
   <action name="actionShow_window">

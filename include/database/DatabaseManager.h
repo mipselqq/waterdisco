@@ -5,6 +5,8 @@
 #include <string>
 #include <memory>
 
+class QString;
+
 namespace Configs {
     class RoutesRepo;
     class GroupsRepo;
@@ -40,6 +42,9 @@ namespace Configs {
 
         // Call once, after the UI is up.
         void RunDeferredMaintenance();
+
+        // Snapshot both persistent databases for a full-state export.
+        bool SnapshotDatabases(const QString& directory, QString* error = nullptr);
         
         // Non-copyable
         DatabaseManager(const DatabaseManager&) = delete;

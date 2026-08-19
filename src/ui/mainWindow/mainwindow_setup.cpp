@@ -940,6 +940,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         }, DS_cores);
     });
     connect(ui->actionRestart_Program, &QAction::triggered, this, [=,this] { MW_dialog_message(MwMessage::RestartProgram, {}); });
+    connect(ui->actionExport_application_state, &QAction::triggered,
+            this, &MainWindow::on_menu_export_application_state_triggered);
+    connect(ui->actionImport_application_state, &QAction::triggered,
+            this, &MainWindow::on_menu_import_application_state_triggered);
     connect(ui->actionShow_window, &QAction::triggered, this, [=,this] { ActivateWindow(this); });
     connect(ui->actionRemember_last_proxy, &QAction::triggered, this, [=,this](bool checked) {
         Configs::dataManager->settingsRepo->remember_enable = checked;
