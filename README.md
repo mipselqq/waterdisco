@@ -1,89 +1,38 @@
-# Throne (Formerly Nekoray)
+# Waterdisco
 
-Qt based Desktop cross-platform GUI proxy utility, empowered by [Sing-box](https://github.com/SagerNet/sing-box)
+<img width="128" alt="Waterdisco icon" src="res/public/Throne.png" />
 
-Supports Windows 11/10/8/7 / Linux / MacOS out of the box.
+Cross-platform Qt proxy client powered by [sing-box](https://github.com/SagerNet/sing-box). Waterdisco is a fork of Throne; legacy internal names such as `Throne`, `ThroneCore`, `throne.db` and `throne://` are intentionally retained for compatibility.
 
-<img width="1002" height="789" alt="image" src="https://github.com/user-attachments/assets/af4a8e32-7e55-430c-9402-ec2d665cf71a" />
+## Fork Changes
 
-### Note on MacOS releases
-Apple platforms have a very strict security policy and since Throne does not have a signed certificate, you will have to remove the quarantine using `xattr -d com.apple.quarantine /path/to/throne.app`. Move `Throne.app` to `/Applications` before the first launch — the built-in privilege escalation opens `Terminal` to make the core setuid-root, and that step can fail while the app is still inside `~/Downloads`.
+- Profile startup and disable controls with persistent performance metrics.
+- Ranked connection/download speed tests with Site Score, cancellation and recovery.
+- Remember-last-profile startup, subscription request routing and configurable request identity.
+- Parallel fast path for large line-based subscriptions.
+- Full application-state export/import, routing-profile tray selection and Improve mood player.
 
-### GitHub Releases (Portable ZIP)
+## Installation
 
-[![GitHub All Releases](https://img.shields.io/github/downloads/throneproj/Throne/total?label=downloads-total&logo=github&style=flat-square)](https://github.com/throneproj/Throne/releases)
+Download the matching release artifact from CI.
 
-# Linux CLI installer
-```bash
-curl -fsSL https://raw.githubusercontent.com/throneproj/Throne/dev/script/install_linux.py | sudo python3
-```
+- Windows: `Waterdisco-<version>-windows-universal-installer.exe`; portable archives are `Waterdisco-<version>-windows64.zip`, `Waterdisco-<version>-windows-arm64.zip`, `Waterdisco-<version>-windows32.zip` and `Waterdisco-<version>-windowslegacy64.zip`.
+- Debian, Ubuntu and derivatives: install `Waterdisco-<version>-debian-amd64.deb` (or arm64). Use `Waterdisco-<version>-debian-*-system-qt.deb` only when the system Qt is compatible.
+- CachyOS, Arch and other Linux distributions: unpack `Waterdisco-<version>-linux-amd64.zip` or `Waterdisco-<version>-linux-arm64.zip`, then run `./Throne -appdata` inside the unpacked directory.
+- macOS: unpack `Waterdisco-<version>-macos-arm64.zip`, `Waterdisco-<version>-macos-amd64.zip` or `Waterdisco-<version>-macoslegacy-amd64.zip`, move `Waterdisco.app` to `/Applications`, then run `xattr -dr com.apple.quarantine /Applications/Waterdisco.app` if macOS blocks it.
 
-### RPM repository
-[Throne RPM repository](https://parhelia512.github.io/) for Fedora/RHEL and openSUSE/SLE.
+The binary remains named `Throne` inside portable archives for compatibility.
 
 ## Supported protocols
 
-- SOCKS
-- HTTP(S)
-- Shadowsocks
-- Trojan
-- VMess
-- VLESS
-- TUIC
-- Hysteria
-- Hysteria2
-- AnyTLS
-- Mieru
-- NaïveProxy
-- Juicity
-- TrustTunnel
-- ShadowTLS
-- Wireguard
-- AmneziaWG
-- SSH
-- Xray VLESS
-- Custom Outbound (Both Sing-box and Xray)
-- Custom Config (Both Sing-box and Xray)
-- Chaining outbounds
-- Extra Core
+- SOCKS, HTTP(S), Shadowsocks, Trojan, VMess, VLESS, TUIC, Hysteria, Hysteria2, AnyTLS, Mieru, NaïveProxy, Juicity, TrustTunnel, ShadowTLS, WireGuard, AmneziaWG and SSH.
+- Xray VLESS, custom sing-box/Xray outbounds and configs, chaining and extra cores.
 
-## Subscription Formats
+## Subscription formats
 
-Various formats are supported, including share links, various JSON representation of Sing-box configs, and v2rayN link format as well as limited support for Shadowsocks and Clash formats.
-
-Deeplinks are also supported, read the [documentation](https://throneproj.github.io/advanced/deeplinks/) for more information.
+Share links, sing-box JSON, v2rayN links, limited Shadowsocks and Clash formats, plus legacy `throne://` deeplinks.
 
 ## Credits
 
-- [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
-- [XTLS/Xray-core](https://github.com/xtls/xray-core)
-- [Qv2ray](https://github.com/Qv2ray/Qv2ray)
-- [Qt](https://www.qt.io/)
-- [simple-protobuf](https://github.com/tonda-kriz/simple-protobuf)
-- [fkYAML](https://github.com/fktn-k/fkYAML)
-- [quirc](https://github.com/dlbeer/quirc)
-- [QHotkey](https://github.com/Skycoder42/QHotkey)
-- [srombauts/sqlitecpp](https://github.com/srombauts/sqlitecpp)
-
-## FAQ
-**How does this project differ from the original Nekoray?** <br/>
-Nekoray's developer partially abandoned the project on December of 2023, some minor updates were done recently but the project is now officially archived. This project was meant to continue the way of the original project, with lots of improvements, tons of new features and also, removal of obsolete features and simplifications.
-
-**Why does my Anti-Virus detect Throne and/or its Core as malware?** <br/>
-Throne's built-in update functionallity downloads the new release, removes the old files and replaces them with the new ones, which is quite simliar to what malwares do, remove your files and replace them with an encrypted version of your files.
-Also the `System DNS` feature will change your system's DNS settings, which is also considered a dangerous action by some Anti-Virus applications.
-
-**Is setting the `SUID` bit really needed on Linux?** <br/>
-To create and manage a system TUN interface, root access is required, without it, you will have to grant the Core some `Cap_xxx_admin` and still, need to enter your password 3 to 4 times per TUN activation. You can also opt to disable the automatic privilege escalation in `Basic Settings`->`Security`, but note that features that require root access will stop working unless you manually grant the needed permissions.
-
-**Why does my internet stop working after I force quit Throne?** <br/>
-If Throne is force-quit while `System proxy` is enabled, the process ends immediately and Throne cannot reset the proxy. <br/>
-Solution:
-- Always close Throne normally.
-- If you force quit by accident, open Throne again, enable `System proxy`, then disable it- this will reset the settings.
-
-**Where are the downloadable route profiles/rulesets coming from?**<br/>
-They are located at the [routeprofiles](https://github.com/throneproj/routeprofiles) repository.
-
-**How does "Throne-\<version\>-debian-system-qt-x64.deb" differ from "Throne-\<version\>-debian-x64.deb" and why is the latter 3 times heavier then the former?**<br/>
-The first one does not pack the Qt libraries and relies on those installed on the host. The second one packs everything needed with itself, thus being heavier. The reason the first one exists is that on legacy systems provided Qt libraries use unsupported system features. If a graphical interface fails to load for your system, you may try to download the system-qt version and install fitting Qt libraries from your package manager or compile them from source.
+- [Throne](https://github.com/throneproj/Throne) upstream
+- [sing-box](https://github.com/SagerNet/sing-box), [Xray-core](https://github.com/xtls/xray-core), [Qv2ray](https://github.com/Qv2ray/Qv2ray), Qt, simple-protobuf, fkYAML, quirc, QHotkey and SQLiteCpp.
