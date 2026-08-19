@@ -11,7 +11,9 @@
 #include <QThread>
 
 #include <algorithm>
+#include <atomic>
 #include <future>
+#include <memory>
 
 #include "include/configs/common/utils.h"
 #include "include/database/GroupsRepo.h"
@@ -1138,46 +1140,63 @@ namespace Subscription {
     }
 } // namespace Subscription
 
-bool UI_update_all_groups_Updating = false;
+std::atomic_bool UI_update_all_groups_Updating = false;
 
 #define should_skip_group(g) (g == nullptr || g->url.isEmpty() || g->archive || (onlyAllowed && g->skip_auto_update))
 
-void serialUpdateSubscription(const QList<int> &groupsTabOrder, int _order, bool onlyAllowed) {
-    if (_order >= groupsTabOrder.size()) {
-        UI_update_all_groups_Updating = false;
-        return;
-    }
+namespace {
+struct SubscriptionUpdateBatch {
+    explicit SubscriptionUpdateBatch(QList<int> ids)
+        : groupIds(std::move(ids)), remaining(groupIds.size()) {}
 
-    // calculate this group
-    auto group = Configs::dataManager->groupsRepo->GetGroup(groupsTabOrder[_order]);
-    if (group == nullptr || should_skip_group(group)) {
-        serialUpdateSubscription(groupsTabOrder, _order + 1, onlyAllowed);
-        return;
-    }
-
-    int nextOrder = _order + 1;
-    while (nextOrder < groupsTabOrder.size()) {
-        auto nextGid = groupsTabOrder[nextOrder];
-        auto nextGroup = Configs::dataManager->groupsRepo->GetGroup(nextGid);
-        if (!should_skip_group(nextGroup)) {
-            break;
-        }
-        nextOrder += 1;
-    }
-
-    // Async update current group
-    UI_update_all_groups_Updating = true;
-    Subscription::groupUpdater->AsyncUpdate(group->url, group->id, [=] {
-        serialUpdateSubscription(groupsTabOrder, nextOrder, onlyAllowed);
-    });
+    QList<int> groupIds;
+    std::atomic_int next{0};
+    std::atomic_int remaining{0};
+};
 }
 
 void UI_update_all_groups(bool onlyAllowed) {
-    if (UI_update_all_groups_Updating) {
+    bool expected = false;
+    if (!UI_update_all_groups_Updating.compare_exchange_strong(expected, true)) {
         MW_show_log("The last subscription update has not exited.");
         return;
     }
 
-    auto groupsTabOrder = Configs::dataManager->groupsRepo->GetGroupsTabOrder();
-    serialUpdateSubscription(groupsTabOrder, 0, onlyAllowed);
+    QList<int> eligibleGroups;
+    for (int groupId : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(groupId);
+        if (!should_skip_group(group)) eligibleGroups.append(groupId);
+    }
+    if (eligibleGroups.isEmpty()) {
+        UI_update_all_groups_Updating.store(false);
+        return;
+    }
+
+    auto batch = std::make_shared<SubscriptionUpdateBatch>(std::move(eligibleGroups));
+    auto startNext = std::make_shared<std::function<void()>>();
+    *startNext = [batch, startNext] {
+        const int index = batch->next.fetch_add(1);
+        if (index >= batch->groupIds.size()) return;
+
+        const int groupId = batch->groupIds.at(index);
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(groupId);
+        if (!group) {
+            if (batch->remaining.fetch_sub(1) == 1) UI_update_all_groups_Updating.store(false);
+            else (*startNext)();
+            return;
+        }
+        Subscription::groupUpdater->AsyncUpdate(group->url, groupId, [batch, startNext] {
+            if (batch->remaining.fetch_sub(1) == 1) {
+                UI_update_all_groups_Updating.store(false);
+                return;
+            }
+            (*startNext)();
+        });
+    };
+
+    int workers = QThread::idealThreadCount();
+    if (workers <= 0) workers = 4;
+    workers = std::clamp(workers, 1, 4);
+    workers = std::min(workers, static_cast<int>(batch->groupIds.size()));
+    for (int i = 0; i < workers; ++i) (*startNext)();
 }

@@ -401,6 +401,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     auto *profileLayout = new QVBoxLayout(profilePane);
     profileLayout->setContentsMargins({1, 0, 1, 0});
     profileLayout->setSpacing(0);
+    auto *updateAllButton = new QToolButton(profilePane);
+    updateAllButton->setText(tr("Update"));
+    updateAllButton->setToolTip(tr("Update all subscriptions"));
+    connect(updateAllButton, &QToolButton::clicked,
+            ui->actionUpdate_All_Subscriptions, &QAction::trigger);
+    profileLayout->addWidget(updateAllButton, 0, Qt::AlignLeft);
     ui->profilesTableView->setParent(profilePane);
     profileLayout->addWidget(ui->profilesTableView);
     ui->tabWidget->setParent(nullptr);
