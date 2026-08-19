@@ -15,7 +15,16 @@ namespace Configs {
 class ProfilesTableModel : public QAbstractTableModel {
     Q_OBJECT
 public:
-    enum { ProfileIdRole = Qt::UserRole };
+    enum {
+        ProfileIdRole = Qt::UserRole,
+        GroupIdRole,
+        GroupHeaderRole,
+    };
+
+    struct GroupSection {
+        int groupId = -1;
+        QList<int> profileIds;
+    };
 
     // Column order of the proxy table. Everything that indexes the table by
     // column (sorting, header menus, saved widths, the filter header) refers to
@@ -58,7 +67,13 @@ public:
                  int role = Qt::EditRole) override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
-    // Set the list of profile IDs, in the group's own order.
+    // Rebuild the flat table as named group separators plus the profiles under
+    // each group. The view still sees one continuous model, which lets Qt keep
+    // normal Ctrl/Shift selection semantics across group boundaries.
+    void setGroupSections(const QList<GroupSection> &sections);
+
+    // Legacy single-section refresh kept for callers that only change one
+    // group. New main-window code uses setGroupSections().
     void refreshTable(const QList<int> &ids = {}, bool mayNeedReset = false);
 
     // Invalidate one row so the view repaints (e.g. after latency/traffic update).
@@ -72,6 +87,10 @@ public:
 
     int indexOfProfile(int id);
 
+    bool isGroupHeader(int row) const;
+    int groupIdAt(int row) const;
+    QList<int> profileIdsForGroup(int groupId) const;
+
     // Vertical header label: "✓" for the running profile, else displayRow + 1.
     // A filter makes the two rows disagree, hence both arguments.
     QString rowLabel(int sourceRow, int displayRow) const;
@@ -80,16 +99,24 @@ public:
     const FilterKey *filterKeyAt(int row) const;
 
 private:
+    struct Row {
+        int profileId = -1;
+        int groupId = -1;
+        int profileCount = 0;
+    };
     void ensureCached(int profileId) const;
     void evictOne() const;
     void setProfileIds(const QList<int> &ids);
     void ensureFilterIndex() const;
 
     QList<int> m_profileIds;
+    QList<Row> m_rows;
     mutable QHash<int, int> id2row;
     mutable QHash<int, std::shared_ptr<Configs::Profile>> m_cache;
     mutable QList<int> m_lruOrder;
-    int m_cacheSize = 100;
+    // Enough for several screens while keeping thousands of subscriptions
+    // virtual: rapid scrolling does not immediately evict rows just painted.
+    int m_cacheSize = 512;
 
     mutable QHash<int, FilterKey> m_filterKeys;
     mutable bool m_filterIndexBuilt = false;

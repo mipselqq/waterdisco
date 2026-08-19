@@ -14,7 +14,7 @@ ProfilesTableModel::ProfilesTableModel(QObject *parent)
 
 int ProfilesTableModel::rowCount(const QModelIndex &parent) const {
     if (parent.isValid()) return 0;
-    return m_profileIds.size();
+    return m_rows.size();
 }
 
 int ProfilesTableModel::columnCount(const QModelIndex &parent) const {
@@ -25,7 +25,8 @@ int ProfilesTableModel::columnCount(const QModelIndex &parent) const {
 Qt::ItemFlags ProfilesTableModel::flags(const QModelIndex &index) const {
     Qt::ItemFlags defaultFlags = QAbstractTableModel::flags(index);
     if (index.isValid()) {
-        const int profileId = m_profileIds.value(index.row(), -1);
+        if (isGroupHeader(index.row())) return Qt::ItemIsEnabled;
+        const int profileId = m_rows.value(index.row()).profileId;
         const bool disabled = profileId >= 0
             && Configs::dataManager->settingsRepo->IsProfileDisabled(profileId);
         if (index.column() == ColStartup || index.column() == ColDisabled) {
@@ -92,11 +93,28 @@ void ProfilesTableModel::evictOne() const {
 }
 
 QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
-    if (!index.isValid() || index.row() < 0 || index.row() >= m_profileIds.size()
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_rows.size()
         || index.column() < 0 || index.column() >= ColumnCount) {
         return {};
     }
-    const int profileId = m_profileIds[index.row()];
+    const Row &row = m_rows[index.row()];
+    if (role == GroupIdRole) return row.groupId;
+    if (role == GroupHeaderRole) return row.profileId < 0;
+    if (row.profileId < 0) {
+        if (role == Qt::DisplayRole && index.column() == ColStartup) {
+            const auto group = Configs::dataManager->groupsRepo->GetGroup(row.groupId);
+            const QString name = group ? group->name : tr("Unknown group");
+            return tr("%1 (%2)").arg(name).arg(row.profileCount);
+        }
+        if (role == Qt::BackgroundRole) return QApplication::palette().color(QPalette::Button);
+        if (role == Qt::FontRole) {
+            QFont font = QApplication::font();
+            font.setBold(true);
+            return font;
+        }
+        return {};
+    }
+    const int profileId = row.profileId;
     if (role == ProfileIdRole) {
         return profileId;
     }
@@ -201,11 +219,11 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
 
 bool ProfilesTableModel::setData(const QModelIndex &index, const QVariant &value, int role) {
     if (!index.isValid() || role != Qt::CheckStateRole
-        || index.row() < 0 || index.row() >= m_profileIds.size()) {
+        || index.row() < 0 || index.row() >= m_rows.size() || isGroupHeader(index.row())) {
         return false;
     }
 
-    const int profileId = m_profileIds[index.row()];
+    const int profileId = m_rows[index.row()].profileId;
     const bool checked = value.toInt() == Qt::Checked;
     auto *settings = Configs::dataManager->settingsRepo.get();
     if (index.column() == ColStartup) {
@@ -251,10 +269,33 @@ QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation
 void ProfilesTableModel::setProfileIds(const QList<int> &ids) {
     beginResetModel();
     m_profileIds = ids;
+    m_rows.clear();
+    m_rows.reserve(ids.size());
     id2row.clear();
     int idx=0;
     for (const auto &id : ids) {
+        m_rows.append({id, -1, 0});
         id2row.insert(id, idx++);
+    }
+    m_cache.clear();
+    m_lruOrder.clear();
+    m_filterKeys.clear();
+    m_filterIndexBuilt = false;
+    endResetModel();
+}
+
+void ProfilesTableModel::setGroupSections(const QList<GroupSection> &sections) {
+    beginResetModel();
+    m_profileIds.clear();
+    m_rows.clear();
+    id2row.clear();
+    for (const GroupSection &section : sections) {
+        m_rows.append({-1, section.groupId, static_cast<int>(section.profileIds.size())});
+        for (int id : section.profileIds) {
+            id2row.insert(id, m_rows.size());
+            m_profileIds.append(id);
+            m_rows.append({id, section.groupId, 0});
+        }
     }
     m_cache.clear();
     m_lruOrder.clear();
@@ -288,9 +329,9 @@ void ProfilesTableModel::ensureFilterIndex() const {
 }
 
 const ProfilesTableModel::FilterKey *ProfilesTableModel::filterKeyAt(int row) const {
-    if (row < 0 || row >= m_profileIds.size()) return nullptr;
+    if (row < 0 || row >= m_rows.size() || isGroupHeader(row)) return nullptr;
     ensureFilterIndex();
-    auto it = m_filterKeys.constFind(m_profileIds[row]);
+    auto it = m_filterKeys.constFind(m_rows[row].profileId);
     return it == m_filterKeys.constEnd() ? nullptr : &it.value();
 }
 
@@ -314,10 +355,9 @@ void ProfilesTableModel::refreshTable(const QList<int> &ids, bool mayNeedReset) 
         m_filterKeys.clear();
         m_filterIndexBuilt = false;
 
-        QModelIndex topLeft = index(0, 0);
-        QModelIndex bottomRight = index(m_profileIds.count() - 1, columnCount() - 1);
-
-        emit dataChanged(topLeft, bottomRight);
+        if (!m_rows.isEmpty()) {
+            emit dataChanged(index(0, 0), index(m_rows.count() - 1, columnCount() - 1));
+        }
     }
 }
 
@@ -336,30 +376,46 @@ void ProfilesTableModel::refreshProfileId(int profileId) {
 }
 
 void ProfilesTableModel::emplaceProfiles(int row1, int row2) {
-    if (m_profileIds.size() <= row1 || m_profileIds.size() <= row2) return;
-    m_profileIds.insert(row2+1, m_profileIds[row1]);
-    if (row1 < row2) m_profileIds.remove(row1);
-    else m_profileIds.remove(row1+1);
+    if (m_rows.size() <= row1 || m_rows.size() <= row2
+        || isGroupHeader(row1) || isGroupHeader(row2)
+        || m_rows[row1].groupId != m_rows[row2].groupId) return;
+    const Row moved = m_rows.takeAt(row1);
+    const int insertAt = row1 < row2 ? row2 : row2 + 1;
+    m_rows.insert(insertAt, moved);
+
+    m_profileIds.clear();
+    for (const Row &row : m_rows) if (row.profileId >= 0) m_profileIds.append(row.profileId);
 
     // Every row between the two shifted by one; id2row has to follow.
-    const int from = std::max(std::min(row1, row2), 0);
-    const int to = std::min(std::max(row1, row2), static_cast<int>(m_profileIds.size()) - 1);
-    for (int i = from; i <= to; ++i) id2row[m_profileIds[i]] = i;
-    for (int i = from; i <= to; ++i) refreshProfileId(m_profileIds[i]);
+    id2row.clear();
+    for (int i = 0; i < m_rows.size(); ++i) {
+        if (m_rows[i].profileId >= 0) id2row[m_rows[i].profileId] = i;
+    }
+    emit dataChanged(index(0, 0), index(m_rows.size() - 1, columnCount() - 1));
 }
 
 void ProfilesTableModel::reorderProfiles(const QList<int> &ids) {
-    if (ids.size() != m_profileIds.size()) return;
-    for (int targetRow = 0; targetRow < ids.size(); ++targetRow) {
-        const int sourceRow = m_profileIds.indexOf(ids[targetRow], targetRow);
-        if (sourceRow < 0 || sourceRow == targetRow) continue;
-        const int destinationChild = sourceRow < targetRow ? targetRow + 1 : targetRow;
-        beginMoveRows({}, sourceRow, sourceRow, {}, destinationChild);
-        m_profileIds.move(sourceRow, targetRow);
-        endMoveRows();
+    if (ids.isEmpty()) return;
+    const int groupId = groupIdAt(indexOfProfile(ids.first()));
+    QList<int> current = profileIdsForGroup(groupId);
+    if (current.size() != ids.size()) return;
+    for (int target = 0; target < ids.size(); ++target) {
+        const int currentRow = indexOfProfile(ids[target]);
+        const int targetRow = indexOfProfile(current[target]);
+        if (currentRow < 0 || targetRow < 0 || currentRow == targetRow) continue;
+        const Row moved = m_rows.takeAt(currentRow);
+        m_rows.insert(currentRow < targetRow ? targetRow : targetRow + 1, moved);
+        current = profileIdsForGroup(groupId);
     }
     id2row.clear();
-    for (int row = 0; row < m_profileIds.size(); ++row) id2row.insert(m_profileIds[row], row);
+    m_profileIds.clear();
+    for (int row = 0; row < m_rows.size(); ++row) {
+        if (m_rows[row].profileId >= 0) {
+            id2row.insert(m_rows[row].profileId, row);
+            m_profileIds.append(m_rows[row].profileId);
+        }
+    }
+    emit layoutChanged();
 }
 
 int ProfilesTableModel::indexOfProfile(int id) {
@@ -368,10 +424,29 @@ int ProfilesTableModel::indexOfProfile(int id) {
 }
 
 QString ProfilesTableModel::rowLabel(int sourceRow, int displayRow) const {
-    if (sourceRow < 0 || sourceRow >= m_profileIds.size()) return {};
-    int id = m_profileIds[sourceRow];
+    if (sourceRow < 0 || sourceRow >= m_rows.size() || isGroupHeader(sourceRow)) return {};
+    int id = m_rows[sourceRow].profileId;
     if (Configs::dataManager->settingsRepo->started_id == id) {
         return QStringLiteral("✓");
     }
-    return QString::number(displayRow + 1) + QStringLiteral("  ");
+    int profileNumber = 0;
+    for (int row = 0; row <= sourceRow; ++row) if (!isGroupHeader(row)) ++profileNumber;
+    Q_UNUSED(displayRow)
+    return QString::number(profileNumber) + QStringLiteral("  ");
+}
+
+bool ProfilesTableModel::isGroupHeader(int row) const {
+    return row >= 0 && row < m_rows.size() && m_rows[row].profileId < 0;
+}
+
+int ProfilesTableModel::groupIdAt(int row) const {
+    return row >= 0 && row < m_rows.size() ? m_rows[row].groupId : -1;
+}
+
+QList<int> ProfilesTableModel::profileIdsForGroup(int groupId) const {
+    QList<int> ids;
+    for (const Row &row : m_rows) {
+        if (row.groupId == groupId && row.profileId >= 0) ids.append(row.profileId);
+    }
+    return ids;
 }

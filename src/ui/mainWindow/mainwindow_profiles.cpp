@@ -55,6 +55,7 @@ namespace {
 void MainWindow::on_profilesTableView_doubleClicked(const QModelIndex &index) {
     if (!index.isValid() || !profilesTableModel) return;
     int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
+    if (id < 0) return;
     if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) return;
     if (select_mode) {
         emit profile_selected(id);
@@ -377,16 +378,33 @@ void MainWindow::on_menu_select_all_triggered() {
         ui->masterLogBrowser->selectAll();
         return;
     }
+    selectAllProfiles();
+}
+
+void MainWindow::selectAllProfiles() {
     if (!profilesFilterModel || !ui->profilesTableView->selectionModel()) return;
-    ui->profilesTableView->clearSelection();
+
+    const auto selected = ui->profilesTableView->selectionModel()->selectedRows(0);
+    int selectedGroup = -1;
+    if (!selected.isEmpty()) selectedGroup = selected.first().data(ProfilesTableModel::GroupIdRole).toInt();
+
+    QList<int> rows;
+    const bool selectOneGroup = !selectAllIsGlobal
+        && selectedGroup >= 0 && selectAllGroupId != selectedGroup;
     for (int row = 0; row < profilesFilterModel->rowCount(); ++row) {
         const QModelIndex index = profilesFilterModel->index(row, ProfilesTableModel::ColStartup);
         const int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
-        if (!Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
-            ui->profilesTableView->selectionModel()->select(
-                index, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        if (id < 0 || Configs::dataManager->settingsRepo->IsProfileDisabled(id)) continue;
+        if (!selectOneGroup || index.data(ProfilesTableModel::GroupIdRole).toInt() == selectedGroup) {
+            rows.append(row);
         }
     }
+    if (rows.isEmpty()) return;
+    handlingSelectAll = true;
+    selectProfileRows(rows);
+    handlingSelectAll = false;
+    selectAllGroupId = selectOneGroup ? selectedGroup : -1;
+    selectAllIsGlobal = !selectOneGroup;
 }
 
 void MainWindow::on_menu_update_subscription_triggered() {
@@ -538,7 +556,7 @@ void MainWindow::on_profilesTableView_customContextMenuRequested(const QPoint &p
     const QModelIndex index = ui->profilesTableView->indexAt(pos);
     if (index.isValid()) {
         const int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
-        if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+        if (id < 0 || Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
             ui->profilesTableView->clearSelection();
         }
     }
@@ -551,7 +569,7 @@ QList<int> MainWindow::get_now_selected_list() {
     QModelIndexList indices = ui->profilesTableView->selectionModel()->selectedRows(0);
     for (const QModelIndex &idx : indices) {
         const int id = idx.data(ProfilesTableModel::ProfileIdRole).toInt();
-        if (!Configs::dataManager->settingsRepo->IsProfileDisabled(id)) list << id;
+        if (id >= 0 && !Configs::dataManager->settingsRepo->IsProfileDisabled(id)) list << id;
     }
     return list;
 }
@@ -575,9 +593,6 @@ QList<int> MainWindow::get_selected_or_group() {
 }
 
 void MainWindow::saveProfileFocusState() {
-    auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-    if (group == nullptr) return;
-
     if (!profilesTableModel) return;
 
     // hasFocus() is false when the header's filter fields hold the caret, which is
@@ -585,26 +600,19 @@ void MainWindow::saveProfileFocusState() {
     m_profilesTableHadFocus = ui->profilesTableView->hasFocus();
     m_profilesScrollValue = ui->profilesTableView->verticalScrollBar()->value();
 
-    QModelIndexList indices = ui->profilesTableView->selectionModel()->selectedRows(0);
-    group->selectedProfilesIdIdxPairs.clear();
-
-    for (const QModelIndex &idx : indices) {
-        group->selectedProfilesIdIdxPairs << std::make_pair(idx.data(ProfilesTableModel::ProfileIdRole).toInt(), idx.row());
-    }
+    m_selectedProfileIds = get_now_selected_list();
 }
 
 void MainWindow::restoreProfileFocusState(RefreshAnchor anchor) {
-    auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-    if (group == nullptr || !profilesTableModel) return;
+    if (!profilesTableModel) return;
 
     auto *view = ui->profilesTableView;
-    // show_group() skips the save and restores scroll itself from scroll_last_profile.
-    const bool restoreViewport = !Configs::dataManager->settingsRepo->refreshing_group;
+    const bool restoreViewport = true;
 
     if (restoreViewport && m_profilesTableHadFocus) view->setFocus();
 
     QList<int> newIndexes;
-    for (auto &id: group->selectedProfilesIdIdxPairs | std::views::keys) {
+    for (int id : m_selectedProfileIds) {
         if (auto sourceRow = profilesTableModel->indexOfProfile(id); sourceRow != -1) {
             if (auto newIdx = profilesFilterModel->toProxyRow(sourceRow); newIdx != -1) newIndexes << newIdx;
         }
@@ -612,10 +620,8 @@ void MainWindow::restoreProfileFocusState(RefreshAnchor anchor) {
 
     if (!newIndexes.isEmpty()) {
         selectProfileRows(newIndexes);
-    } else if (anchor == RefreshAnchor::Removal && !group->selectedProfilesIdIdxPairs.isEmpty()) {
-        // Rows arrive in selection order, so the topmost one is the smallest, not the first.
-        int desiredIndex = std::ranges::min(group->selectedProfilesIdIdxPairs | std::views::values);
-        desiredIndex = std::min(desiredIndex, profilesFilterModel->rowCount() - 1);
+    } else if (anchor == RefreshAnchor::Removal && !m_selectedProfileIds.isEmpty()) {
+        const int desiredIndex = qMin(0, profilesFilterModel->rowCount() - 1);
         if (desiredIndex >= 0) selectProfileRows({desiredIndex});
     }
 
@@ -646,7 +652,15 @@ void MainWindow::focusProfilesTable(bool selectFirst) {
     auto *view = ui->profilesTableView;
     view->setFocus();
     if (!selectFirst || !profilesFilterModel || profilesFilterModel->rowCount() == 0) return;
-    selectProfileRows({0});
+    int firstProfile = -1;
+    for (int row = 0; row < profilesFilterModel->rowCount(); ++row) {
+        if (profilesFilterModel->index(row, 0).data(ProfilesTableModel::ProfileIdRole).toInt() >= 0) {
+            firstProfile = row;
+            break;
+        }
+    }
+    if (firstProfile < 0) return;
+    selectProfileRows({firstProfile});
     // selectProfileRows() suppresses auto-scroll; here the move is deliberate.
     view->scrollToTop();
 }

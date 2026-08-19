@@ -51,10 +51,28 @@ bool ProfilesFilterProxyModel::portMatches(int port) const {
 }
 
 bool ProfilesFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &) const {
-    if (!hasActiveFilter()) return true;
-
     auto *model = profilesModel();
     if (!model) return true;
+
+    if (model->isGroupHeader(sourceRow)) {
+        return !hasActiveFilter() || groupHasMatchingProfile(sourceRow);
+    }
+    return !hasActiveFilter() || profileMatches(sourceRow);
+}
+
+bool ProfilesFilterProxyModel::groupHasMatchingProfile(int headerRow) const {
+    auto *model = profilesModel();
+    if (!model) return false;
+    for (int row = headerRow + 1; row < model->rowCount(); ++row) {
+        if (model->isGroupHeader(row)) break;
+        if (profileMatches(row)) return true;
+    }
+    return false;
+}
+
+bool ProfilesFilterProxyModel::profileMatches(int sourceRow) const {
+    auto *model = profilesModel();
+    if (!model || model->isGroupHeader(sourceRow)) return false;
 
     // A profile that failed to load stays visible rather than becoming unreachable.
     const auto *key = model->filterKeyAt(sourceRow);

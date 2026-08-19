@@ -11,6 +11,7 @@ public:
 
     // Drop-to-reorder: (from, to) as source-model rows, not view rows.
     std::function<void(int row1, int row2)> rowsSwapped;
+    std::function<void()> selectAllRequested;
 
     void setModel(QAbstractItemModel *model) override;
 

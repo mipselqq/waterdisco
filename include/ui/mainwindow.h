@@ -55,6 +55,8 @@ class QAudioOutput;
 class QLabel;
 class QMediaPlayer;
 class QVideoSink;
+class QListWidget;
+class QSplitter;
 
 namespace Qv2ray::ui { class SyntaxHighlighter; }
 
@@ -209,16 +211,18 @@ private slots:
 
     void on_profilesTableView_customContextMenuRequested(const QPoint &pos);
 
-    void on_tabWidget_currentChanged(int index);
-
-    void on_tabWidget_customContextMenuRequested(const QPoint& p);
-
 private:
     Ui::MainWindow *ui;
     QElapsedTimer sinceWindowDeactivated;
     ProfilesTableModel *profilesTableModel = nullptr;
 
     ProfilesFilterProxyModel *profilesFilterModel = nullptr;
+    QListWidget *groupSidebar = nullptr;
+    QSplitter *mainContentSplitter = nullptr;
+    bool refreshingGroupSidebar = false;
+    bool handlingSelectAll = false;
+    int selectAllGroupId = -1;
+    bool selectAllIsGlobal = false;
     QSystemTrayIcon *tray;
     QMenu *trayMenu = nullptr;    // tray context menu
     QPointer<QMediaPlayer> moodPlayer;
@@ -293,6 +297,7 @@ private:
 
     bool m_profilesTableHadFocus = false;
     int m_profilesScrollValue = 0;
+    QList<int> m_selectedProfileIds;
 
     // log
     QStringList includeKeywords;
@@ -369,6 +374,11 @@ private:
     void refresh_proxy_list_impl(const QList<int> &ids = {}, bool mayNeedReset = false);
 
     void refresh_proxy_list_impl_refresh_data(const QList<int>& ids = {}, bool mayNeedReset = false);
+
+    void rebuildGroupSidebar();
+    void scrollToGroup(int groupId);
+    void applyGroupSectionSpans();
+    void selectAllProfiles();
 
     void parseQrImage(const QPixmap *image);
 

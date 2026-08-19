@@ -29,6 +29,8 @@ protected:
 
 private:
     bool portMatches(int port) const;
+    bool profileMatches(int sourceRow) const;
+    bool groupHasMatchingProfile(int headerRow) const;
 
     QString m_type;
     QString m_address;

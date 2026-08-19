@@ -198,13 +198,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             ui->toolButton_startstop->setFixedSize(h, h);
         }
     }
-    if (type == QEvent::MouseButtonPress) {
-        auto mouseEvent = dynamic_cast<QMouseEvent *>(event);
-        if (obj == ui->tabWidget && mouseEvent->button() == Qt::RightButton) {
-            on_tabWidget_customContextMenuRequested(mouseEvent->position().toPoint());
-            return true;
-        }
-    } else if (type == QEvent::MouseButtonDblClick) {
+    if (type == QEvent::MouseButtonDblClick) {
         if (obj == ui->splitter) {
             const auto size = ui->splitter->size();
             ui->splitter->setSizes({size.height() / 2, size.height() / 2});

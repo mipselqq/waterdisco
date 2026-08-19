@@ -73,6 +73,8 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QApplication>
+#include <QListWidget>
+#include <QSplitter>
 #include <include/global/HTTPRequestHelper.hpp>
 #include "include/global/DeviceDetailsHelper.hpp"
 
@@ -94,6 +96,7 @@ protected:
     void initStyleOption(QStyleOptionViewItem *option,
                          const QModelIndex &index) const override {
         QStyledItemDelegate::initStyleOption(option, index);
+        if (index.data(ProfilesTableModel::GroupHeaderRole).toBool()) return;
         option->features &= ~QStyleOptionViewItem::HasCheckIndicator;
         option->features &= ~QStyleOptionViewItem::HasDisplay;
         option->text.clear();
@@ -359,17 +362,45 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         if (running != nullptr) profile_stop(false, false, true);
         else profile_start();
     });
-    connect(ui->tabWidget->tabBar(), &QTabBar::tabMoved, this, [=,this](int from, int to) {
-        // use tabData to track tab & gid
-        QList<int> tabOrder;
-        for (int i = 0; i < ui->tabWidget->tabBar()->count(); i++) {
-            tabOrder += ui->tabWidget->tabBar()->tabData(i).toInt();
-        }
-        Configs::dataManager->groupsRepo->SetGroupsTabOrder(tabOrder);
-        on_tabWidget_currentChanged(ui->tabWidget->tabBar()->currentIndex());
-    });
+    // The sidebar owns group navigation. Keep the original vertical splitter
+    // intact inside a horizontal splitter so the lower tools begin exactly at
+    // the table edge instead of underneath the sidebar.
+    mainContentSplitter = new QSplitter(Qt::Horizontal, ui->centralwidget);
+    mainContentSplitter->setChildrenCollapsible(false);
+    groupSidebar = new QListWidget(mainContentSplitter);
+    groupSidebar->setSelectionMode(QAbstractItemView::SingleSelection);
+    groupSidebar->setDragDropMode(QAbstractItemView::InternalMove);
+    groupSidebar->setDefaultDropAction(Qt::MoveAction);
+    groupSidebar->setDragEnabled(true);
+    groupSidebar->setAcceptDrops(true);
+    groupSidebar->setDropIndicatorShown(true);
+    groupSidebar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    groupSidebar->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    groupSidebar->setFrameShape(QFrame::NoFrame);
+    groupSidebar->setSpacing(1);
+    groupSidebar->setToolTip(tr("Drag groups to reorder"));
+    groupSidebar->setMinimumWidth(150);
+
+    auto *rootLayout = qobject_cast<QVBoxLayout *>(ui->centralwidget->layout());
+    const int splitterIndex = rootLayout->indexOf(ui->splitter);
+    rootLayout->removeWidget(ui->splitter);
+    mainContentSplitter->addWidget(groupSidebar);
+    mainContentSplitter->addWidget(ui->splitter);
+    rootLayout->insertWidget(splitterIndex, mainContentSplitter, 1);
+    mainContentSplitter->setStretchFactor(0, 0);
+    mainContentSplitter->setStretchFactor(1, 1);
+
+    auto *profilePane = new QWidget(ui->splitter);
+    auto *profileLayout = new QVBoxLayout(profilePane);
+    profileLayout->setContentsMargins({1, 0, 1, 0});
+    profileLayout->setSpacing(0);
+    ui->profilesTableView->setParent(profilePane);
+    profileLayout->addWidget(ui->profilesTableView);
+    ui->tabWidget->setParent(nullptr);
+    ui->tabWidget->deleteLater();
+    ui->splitter->insertWidget(0, profilePane);
+
     ui->splitter->installEventFilter(this);
-    ui->tabWidget->installEventFilter(this);
     //
     auto btnFilter = new QToolButton(this);
     btnFilter->setIcon(QIcon(":/icon/filter.png"));
@@ -379,7 +410,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(btnFilter, &QToolButton::toggled, static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::setFiltersVisible);
     connect(static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader()), &ProfilesTableFilterHeader::closeRequested,
             btnFilter, [btnFilter] { btnFilter->setChecked(false); });
-    ui->tabWidget->setCornerWidget(btnFilter, Qt::TopRightCorner);
+    ui->horizontalLayout_2->addWidget(btnFilter, 0, Qt::AlignRight | Qt::AlignVCenter);
     //
     RegisterHotkey(false);
     //
@@ -490,6 +521,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     profilesFilterModel = new ProfilesFilterProxyModel(this);
     profilesFilterModel->setSourceModel(profilesTableModel);
     ui->profilesTableView->setModel(profilesFilterModel);
+    ui->profilesTableView->selectAllRequested = [this] { selectAllProfiles(); };
+    connect(profilesFilterModel, &QAbstractItemModel::modelReset, this,
+            [this] { QTimer::singleShot(0, this, [this] { applyGroupSectionSpans(); }); });
+    connect(groupSidebar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
+        if (refreshingGroupSidebar || !item) return;
+        show_group(item->data(Qt::UserRole).toInt());
+    });
+    connect(groupSidebar->model(), &QAbstractItemModel::rowsMoved, this, [this] {
+        if (refreshingGroupSidebar) return;
+        QList<int> order;
+        for (int row = 0; row < groupSidebar->count(); ++row) {
+            order.append(groupSidebar->item(row)->data(Qt::UserRole).toInt());
+        }
+        Configs::dataManager->groupsRepo->SetGroupsTabOrder(order);
+        refresh_proxy_list({}, true);
+    });
     ui->profilesTableView->setItemDelegateForColumn(
         ProfilesTableModel::ColStartup,
         new CenteredCheckBoxDelegate(ui->profilesTableView));
@@ -507,8 +554,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             return;
         }
         // Defer the reset until the checkbox editor has returned from setData.
-        QTimer::singleShot(0, this, [this] {
-            auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+        const int groupId = topLeft.data(ProfilesTableModel::GroupIdRole).toInt();
+        QTimer::singleShot(0, this, [this, groupId] {
+            auto group = Configs::dataManager->groupsRepo->GetGroup(groupId);
             if (!group) return;
             GroupSortAction action;
             action.method = GroupSortMethod::Raw;
@@ -529,30 +577,46 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     });
     // Keep the start/stop button's enabled/disabled state in sync with selection.
     connect(ui->profilesTableView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
-            [this] { refresh_startstop_button(); });
+            [this] {
+                if (!handlingSelectAll) {
+                    selectAllGroupId = -1;
+                    selectAllIsGlobal = false;
+                }
+                refresh_startstop_button();
+            });
     ui->profilesTableView->rowsSwapped = [this](int row1, int row2)
     {
-        // A drop position in a filtered list says nothing about the group's real order.
+        // A drop position in a filtered list says nothing about the persisted
+        // order. Nor may a profile cross a section divider by drag-and-drop.
         if (profilesFilterModel->hasActiveFilter()) return;
         if (row1 == row2) return;
+        if (profilesTableModel->isGroupHeader(row1) || profilesTableModel->isGroupHeader(row2)) return;
+        const int groupId = profilesTableModel->groupIdAt(row1);
+        if (groupId < 0 || groupId != profilesTableModel->groupIdAt(row2)) return;
         const int movedId = profilesTableModel->data(
             profilesTableModel->index(row1, ProfilesTableModel::ColStartup),
             ProfilesTableModel::ProfileIdRole).toInt();
         if (Configs::dataManager->settingsRepo->IsProfileDisabled(movedId)) return;
 
-        int firstDisabledRow = profilesTableModel->rowCount();
-        for (int row = 0; row < profilesTableModel->rowCount(); ++row) {
-            const int id = profilesTableModel->data(
-                profilesTableModel->index(row, ProfilesTableModel::ColStartup),
-                ProfilesTableModel::ProfileIdRole).toInt();
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(groupId);
+        if (!group) return;
+        QList<int> ordered = group->Profiles();
+        int from = ordered.indexOf(movedId);
+        const int targetId = profilesTableModel->data(
+            profilesTableModel->index(row2, ProfilesTableModel::ColStartup),
+            ProfilesTableModel::ProfileIdRole).toInt();
+        int to = ordered.indexOf(targetId);
+        if (from < 0 || to < 0) return;
+        int firstDisabledRow = ordered.size();
+        for (int row = 0; row < ordered.size(); ++row) {
+            const int id = ordered[row];
             if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
                 firstDisabledRow = row;
                 break;
             }
         }
-        if (firstDisabledRow > 0) row2 = std::min(row2, firstDisabledRow - 1);
-        auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-        group->EmplaceProfile(row1, row2);
+        if (firstDisabledRow > 0) to = std::min(to, firstDisabledRow - 1);
+        group->EmplaceProfile(from, to);
         profilesTableModel->emplaceProfiles(row1, row2);
         Configs::dataManager->groupsRepo->Save(group);
     };
@@ -654,13 +718,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     });
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionResized, this, [=, this](int, int, int) {
         updateImproveMoodGeometry();
-        auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-        if (Configs::dataManager->settingsRepo->refreshing_group || group == nullptr) return;
-        group->column_width.clear();
-        for (int i = 0; i < ui->profilesTableView->horizontalHeader()->count(); i++) {
-            group->column_width.push_back(ui->profilesTableView->horizontalHeader()->sectionSize(i));
+        if (Configs::dataManager->settingsRepo->refreshing_group) return;
+        QList<int> widths;
+        for (int i = 0; i < ui->profilesTableView->horizontalHeader()->count(); i++)
+            widths.push_back(ui->profilesTableView->horizontalHeader()->sectionSize(i));
+        // There is one shared header now, so keep its dimensions identical for
+        // every group instead of making a sidebar click unexpectedly reshape it.
+        for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+            auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+            if (!group) continue;
+            group->column_width = widths;
+            Configs::dataManager->groupsRepo->Save(group);
         }
-        Configs::dataManager->groupsRepo->Save(group);
     });
     ui->profilesTableView->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->profilesTableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {

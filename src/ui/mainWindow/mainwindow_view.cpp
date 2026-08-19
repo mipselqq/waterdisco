@@ -208,6 +208,7 @@ void MainWindow::applyProfileFilters()
 {
     if (!profilesFilterModel) return;
     profilesFilterModel->setFilters(typeFilterString, addressFilterString, nameFilterString, countryFilterString);
+    QTimer::singleShot(0, this, [this] { applyGroupSectionSpans(); });
     refresh_proxy_list_column_size();
 }
 
@@ -446,12 +447,6 @@ void MainWindow::refresh_proxy_list(const QList<int>& ids, bool mayNeedReset, Re
 }
 
 void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedReset) {
-    const auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
-    if (currentGroup == nullptr)
-    {
-        MW_show_log("Could not find current group!");
-        return;
-    }
     // refresh data
     refresh_proxy_list_impl_refresh_data(ids, mayNeedReset);
     // now refresh column sizes
@@ -459,35 +454,16 @@ void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedRese
 }
 
 void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
-    const auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
-    if (currentGroup == nullptr) return;
-    // The model holds the group in full; the proxy decides what is on screen.
     if (!ids.isEmpty()) {
         for (auto id:ids) profilesTableModel->refreshProfileId(id);
-        GroupSortAction action;
-        action.descending = live_sort_descending;
-        if (live_sort_column == ProfilesTableModel::ColType) {
-            action.method = (Configs::dataManager->settingsRepo->show_config_security
-                             && currentGroup->type_sort_by == Configs::typeBy::bySecurity)
-                ? GroupSortMethod::BySecurity : GroupSortMethod::ByType;
-        } else if (live_sort_column == ProfilesTableModel::ColAddress) {
-            action.method = GroupSortMethod::ByAddress;
-        } else if (live_sort_column == ProfilesTableModel::ColName) {
-            action.method = GroupSortMethod::ByName;
-        } else if (live_sort_column >= ProfilesTableModel::ColLatency
-                   && live_sort_column <= ProfilesTableModel::ColSiteScore) {
-            action.method = GroupSortMethod::ByTestResult;
-        } else if (live_sort_column == ProfilesTableModel::ColRxTraffic
-                   || live_sort_column == ProfilesTableModel::ColTxTraffic) {
-            action.method = GroupSortMethod::ByTraffic;
-        } else {
-            return;
-        }
-        if (currentGroup->SortProfiles(action)) {
-            profilesTableModel->reorderProfiles(currentGroup->Profiles());
-        }
     } else {
-        profilesTableModel->refreshTable(currentGroup->profiles, mayNeedReset);
+        QList<ProfilesTableModel::GroupSection> sections;
+        for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+            const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+            if (group) sections.append({gid, group->Profiles()});
+        }
+        profilesTableModel->setGroupSections(sections);
+        QTimer::singleShot(0, this, [this] { applyGroupSectionSpans(); });
     }
 }
 
