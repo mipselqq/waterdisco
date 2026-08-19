@@ -354,7 +354,11 @@ void MainWindow::profile_start(int _id) {
             // This test builds a one-profile test core, so its result is the
             // profile's real egress IP even when the application's split route
             // would send a normal HTTP lookup directly.
-            testRunner->runIpTests({ent->id});
+            // A previous manual test may be completing while the profile is
+            // brought up. Its session is unrelated to a successful connect,
+            // so do not show the misleading "last test did not exit" warning;
+            // the periodic Info probe will retry on its next tick.
+            if (!testRunner->isRunning()) testRunner->runIpTests({ent->id});
             // Reveals the Tools entry and seeds the data-view panel before the
             // first poll lands, so a selector never starts up invisibly.
             refresh_auto_selector_view();
