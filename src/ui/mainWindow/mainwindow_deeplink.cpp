@@ -13,10 +13,12 @@
 #include "include/configs/sub/GroupUpdater.hpp"
 #include "include/configs/sub/RouteUpdater.hpp"
 #include "include/database/GroupsRepo.h"
+#include "include/database/ProfilesRepo.h"
 #include "include/database/RoutesRepo.h"
 #include "include/global/PeriodicRunner.hpp"
 #include "include/sys/AutoRun.hpp"
 #include "include/ui/mainWindow/MainWindowInternal.h"
+#include "include/ui/mainWindow/TestRunner.h"
 #include "include/ui/utils/ProfilesTableModel.h"
 
 namespace {
@@ -48,6 +50,61 @@ bool decodeImportedText(const QByteArray &bytes, QString &out) {
 }
 
 } // namespace
+
+void MainWindow::startAfterCoreReady(int requestedProfileId) {
+    auto* const settings = Configs::dataManager->settingsRepo.get();
+    const auto isAvailable = [](int id) {
+        if (id < 0 || Configs::dataManager->settingsRepo->IsProfileDisabled(id)) return false;
+        const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+        if (!profile) return false;
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(profile->gid);
+        return group && !group->archive;
+    };
+
+    // A profile explicitly requested while the core was restarting is an
+    // in-progress user action.  It must not be replaced by boot automation.
+    if (isAvailable(requestedProfileId)) {
+        profile_start(requestedProfileId);
+        return;
+    }
+
+    if (settings->remember_enable) {
+        if (isAvailable(settings->remember_id)) {
+            // Remembering wins over any startup checkboxes: this is the same
+            // profile the user deliberately left connected last time.
+            profile_start(settings->remember_id);
+            return;
+        }
+        if (settings->remember_id != Configs::NoProfileId) {
+            settings->remember_id = Configs::NoProfileId;
+            settings->Save();
+        }
+    }
+
+    QList<int> startupIDs;
+    QStringList normalizedIDs;
+    for (const QString& savedID : settings->speedtest_on_startup_profile_ids) {
+        bool validNumber = false;
+        const int id = savedID.toInt(&validNumber);
+        if (!validNumber || !isAvailable(id)) continue;
+        if (!startupIDs.contains(id)) {
+            startupIDs << id;
+            normalizedIDs << QString::number(id);
+        }
+    }
+    if (normalizedIDs != settings->speedtest_on_startup_profile_ids) {
+        settings->speedtest_on_startup_profile_ids = normalizedIDs;
+        settings->Save();
+    }
+    if (startupIDs.isEmpty()) return;
+
+    // The runner starts only after setup_rpc accepted the core connection; no
+    // timer is needed to paper over an IPC race.  It also applies the normal
+    // auto-connect policy after a completely successful startup sweep.
+    testRunner->runRankedSpeedTests(startupIDs, TestRunner::RankedStartMode::AsIs,
+                                    settings->auto_connect_best_site_score,
+                                    settings->speed_test_fall_short);
+}
 
 void MainWindow::importFromFiles(const QStringList &paths)
 {
@@ -361,7 +418,7 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
     case MwMessage::CoreCrashed:
         profile_stop();
         break;
-    case MwMessage::CoreStarted:
+    case MwMessage::CoreStarted: {
         Configs::IsAdmin(true);
         if (settings->remember_enable && settings->remember_system_proxy) {
             set_spmode_system_proxy(true, false);
@@ -373,14 +430,15 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
         if (settings->flag_dns_set) {
             set_system_dns(true);
         }
-        if (auto id = args.value(0).toInt(); id >= 0) {
-            profile_start(id);
-        }
+        bool requestedIDIsValid = false;
+        const int requestedID = args.value(0).toInt(&requestedIDIsValid);
+        startAfterCoreReady(requestedIDIsValid ? requestedID : Configs::NoProfileId);
         if (settings->system_dns_set) {
             set_system_dns(true);
             ui->system_dns->setChecked(true);
         }
         refresh_status();
         break;
+    }
     }
 }

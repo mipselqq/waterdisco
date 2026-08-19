@@ -423,6 +423,10 @@ private:
 
     void setupConnectionSortMenu();
 
+    // Called only after the RPC socket is accepted.  Keeping all automatic
+    // start decisions here avoids racing core readiness with startup timers.
+    void startAfterCoreReady(int requestedProfileId);
+
     friend class TestRunner;
 
 protected:
