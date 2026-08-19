@@ -285,7 +285,7 @@ void MainWindow::refresh_status(const QString &traffic_update) {
 
 void MainWindow::refreshInfoPanel() {
     const bool trulyConnected = running && !running->ip_out.trimmed().isEmpty();
-    ui->proxy_connected_value->setText(trulyConnected ? tr("Yes") : tr("No"));
+    ui->proxy_connected_value->setText(trulyConnected ? tr("Success") : tr("Fail"));
     ui->proxy_connected_value->setStyleSheet(
         trulyConnected ? "color: #2eaf57; font-weight: 600;" : "color: #d9534f; font-weight: 600;");
     ui->proxy_ip_value->setText(trulyConnected ? running->ip_out : QStringLiteral("—"));

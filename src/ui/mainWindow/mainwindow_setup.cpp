@@ -630,9 +630,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionClicked, this, [=, this](int logicalIndex) {
         if (logicalIndex == ProfilesTableModel::ColStartup
             || logicalIndex == ProfilesTableModel::ColDisabled) {
-            auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-            if (!group) return;
-            const QList<int> ids = group->Profiles();
+            const QList<int> ids = profilesTableModel->allProfileIds();
+            if (ids.isEmpty()) return;
             auto *settings = Configs::dataManager->settingsRepo.get();
             if (logicalIndex == ProfilesTableModel::ColStartup) {
                 QList<int> enabled;
@@ -653,10 +652,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 for (int id : ids) settings->SetProfileDisabled(id, !allChecked);
             }
             settings->Save();
+            // Disabled entries must remain at the bottom of every section even
+            // though the header now controls the one unified table.
             GroupSortAction action;
             action.method = GroupSortMethod::Raw;
-            if (group->SortProfiles(action)) {
-                Configs::dataManager->groupsRepo->Save(group);
+            for (int groupId : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+                const auto group = Configs::dataManager->groupsRepo->GetGroup(groupId);
+                if (group && group->SortProfiles(action)) {
+                    Configs::dataManager->groupsRepo->Save(group);
+                }
             }
             refresh_proxy_list({}, true);
             ui->profilesTableView->clearSelection();
@@ -1012,7 +1016,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->actionStart_with_system->setChecked(AutoRun_IsEnabled());
     ui->actionAllow_LAN->setChecked(QStringList{"::", "0.0.0.0"}.contains(Configs::dataManager->settingsRepo->inbound_address));
 
-    connect(ui->actionHide_window, &QAction::triggered, this, [=, this](){ HideWindow(this); });
     connect(ui->menu_open_config_folder, &QAction::triggered, this, [=,this] { QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::currentPath())); });
     connect(ui->actionRestart_Proxy, &QAction::triggered, this, [=,this] {
         runOnThread([=, this] {

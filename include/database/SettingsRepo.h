@@ -162,7 +162,7 @@ namespace Configs {
         int remember_id = NoProfileId;
         bool remember_enable = false;
         bool auto_connect_best_site_score = false;
-        bool speed_test_fall_short = false;
+        bool speed_test_fall_short = true;
         bool windows_set_admin = false;
         QMap<QString, QKeySequence> shortcuts;
         QStringList speedtest_on_startup_profile_ids = {};
@@ -197,7 +197,7 @@ namespace Configs {
 
         // Socks & HTTP Inbound
         bool disable_mixed_inbound = false;
-        QString inbound_address = "127.0.0.1";
+        QString inbound_address = "0.0.0.0";
         int inbound_socks_port = 2080; // Mixed, actually
         bool random_inbound_port = false;
         QString custom_inbound = "{\"inbounds\": []}";

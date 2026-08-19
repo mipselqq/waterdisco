@@ -87,6 +87,9 @@ public:
 
     int indexOfProfile(int id);
 
+    // IDs of every profile represented in the unified table, in display order.
+    QList<int> allProfileIds() const { return m_profileIds; }
+
     bool isGroupHeader(int row) const;
     int groupIdAt(int row) const;
     QList<int> profileIdsForGroup(int groupId) const;

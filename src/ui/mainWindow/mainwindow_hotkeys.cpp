@@ -112,7 +112,6 @@ void MainWindow::setActionsData()
     ui->actionSpeedtest_Selected->setData(QString("m20"));
     ui->actionUrl_Test_Group->setData(QString("m21"));
     ui->actionUrl_Test_Selected->setData(QString("m22"));
-    ui->actionHide_window->setData(QString("m23"));
     ui->actionAdd_profile_from_File->setData(QString("m24"));
     ui->actionRefresh_Column_Widths->setData(QString("m25"));
     ui->actionResolve_Out_IP->setData(QString("m26"));
