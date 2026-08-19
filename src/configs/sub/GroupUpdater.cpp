@@ -8,6 +8,10 @@
 #include <QUrlQuery>
 #include <QJsonDocument>
 #include <QHash>
+#include <QThread>
+
+#include <algorithm>
+#include <future>
 
 #include "include/configs/common/utils.h"
 #include "include/database/GroupsRepo.h"
@@ -50,6 +54,13 @@ namespace Subscription {
             idx = nlineIdx+1;
         }
         return res;
+    }
+
+    int subscriptionParseWorkerCount(int itemCount) {
+        int workers = QThread::idealThreadCount();
+        if (workers <= 0) workers = 4;
+        workers = std::clamp(workers, 2, 8);
+        return std::min(workers, itemCount);
     }
 
     SingBoxSubType getSingBoxSubType(const QJsonDocument &doc) {
@@ -233,6 +244,37 @@ namespace Subscription {
         // Multi line
         if (str.count("\n") > 0 && needParse) {
             auto list = Disect(str);
+            // Keep the upstream parser as the single parser of a line.  Only
+            // a large, line-oriented list gets parallelised; JSON/Clash/etc.
+            // have already taken their normal paths above.  Chunks are merged
+            // in source order, so import order remains deterministic.
+            constexpr int kParallelSubscriptionThreshold = 300;
+            if (list.size() >= kParallelSubscriptionThreshold) {
+                const int total = static_cast<int>(list.size());
+                const int workers = subscriptionParseWorkerCount(total);
+                const int chunkSize = (total + workers - 1) / workers;
+                std::vector<std::future<QList<std::shared_ptr<Configs::Profile>>>> futures;
+                futures.reserve(workers);
+
+                for (int worker = 0; worker < workers; ++worker) {
+                    const int begin = worker * chunkSize;
+                    if (begin >= total) break;
+                    const int end = std::min(total, begin + chunkSize);
+                    futures.emplace_back(std::async(std::launch::async, [begin, end, &list] {
+                        RawUpdater local;
+                        for (int index = begin; index < end; ++index) {
+                            // Exact stock parsing path, including all formats
+                            // added by newer upstream releases.
+                            local.update(list.at(index).trimmed(), false);
+                        }
+                        return std::move(local.updated_order);
+                    }));
+                }
+                for (auto& future : futures) {
+                    updated_order.append(future.get());
+                }
+                return;
+            }
             for (const auto &str2: list) {
                 update(str2.trimmed(), false);
             }
