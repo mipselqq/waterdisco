@@ -20,7 +20,11 @@ type IPInfo struct {
 var IPReporter resultBuffer[IPTestResult]
 
 const IPTestTimeout = 3 * time.Second
-const ipInfoAPI = "https://api.ip2location.io/"
+var ipInfoAPIs = []string{
+	"https://api.ipify.org?format=json",
+	"https://api.ip.sb/geoip",
+	"https://api.ip2location.io/",
+}
 
 type IPTestResult struct {
 	Result IPInfo
@@ -50,22 +54,33 @@ func BatchIPTest(ctx context.Context, i *boxbox.Box, outboundTags []string, maxC
 
 func ipTest(ctx context.Context, client *http.Client) (IPInfo, error) {
 	var res IPInfo
-	req, err := http.NewRequestWithContext(ctx, "GET", ipInfoAPI, nil)
-	if err != nil {
-		return res, err
+	var lastErr error
+	for _, endpoint := range ipInfoAPIs {
+		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		data, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		var candidate IPInfo
+		if err := json.Unmarshal(data, &candidate); err != nil {
+			lastErr = err
+			continue
+		}
+		if candidate.IP != "" {
+			return candidate, nil
+		}
+		lastErr = io.EOF
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return res, err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return res, err
-	}
-	err = json.Unmarshal(data, &res)
-	if err != nil {
-		return res, err
-	}
-	return res, nil
+	return res, lastErr
 }

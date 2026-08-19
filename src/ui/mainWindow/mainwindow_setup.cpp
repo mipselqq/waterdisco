@@ -351,6 +351,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     parallelCoreCallPool->setMaxThreadCount(10); // constant value
     testRunner = std::make_unique<TestRunner>(this);
+    // A profile can stay up for hours while its egress changes or disappears.
+    // Re-test the real one-profile egress regularly; never interrupt a manual
+    // test session just to refresh the Info panel.
+    auto *connectionProbeTimer = new QTimer(this);
+    connectionProbeTimer->setInterval(10'000);
+    connect(connectionProbeTimer, &QTimer::timeout, this, [this] {
+        if (running != nullptr && !testRunner->isRunning()) {
+            testRunner->runIpTests({running->id});
+        }
+    });
+    connectionProbeTimer->start();
     //
     // The .ui carries Return; numpad Enter is the same gesture.
     ui->menu_start->setShortcuts({QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)});
