@@ -765,8 +765,10 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
                     runSpeedProbe(target);
                 }
             };
-            // A speed test saturates the link, so only country probes batch.
-            const int stepSize = Configs::dataManager->settingsRepo->speed_test_mode == Configs::TestConfig::COUNTRY ? kTestBatchSize : 1;
+            // The core enforces test_concurrent per batch. Keeping profiles
+            // together restores the parallel throughput sweep while avoiding
+            // unbounded RPCs for very large subscriptions.
+            const int stepSize = kTestBatchSize;
             for (int i = 0; i < profileIDs.length(); i += stepSize) {
                 if (stopRequested_.load()) break;
                 const auto profileIDsSlice = profileIDs.mid(i, stepSize);

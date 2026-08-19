@@ -81,17 +81,14 @@ func countryTest(ctx context.Context, dialer func(ctx context.Context, network s
 	return nil
 }
 
-func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, testDl, testUl bool, simpleDL bool, simpleAddress string, timeout time.Duration, countryOnly bool, countryConcurrency int32) []*SpeedTestResult {
+func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, testDl, testUl bool, simpleDL bool, simpleAddress string, timeout time.Duration, countryOnly bool, concurrency int32) []*SpeedTestResult {
 	outbounds := service.FromContext[adapter.OutboundManager](i.Context())
 	results := make([]*SpeedTestResult, 0, len(outboundTags))
-	var queuer chan struct{}
-	wg := &sync.WaitGroup{}
-	if countryOnly {
-		if countryConcurrency <= 0 {
-			countryConcurrency = 5
-		}
-		queuer = make(chan struct{}, countryConcurrency)
+	if concurrency <= 0 {
+		concurrency = 5
 	}
+	queuer := make(chan struct{}, concurrency)
+	wg := &sync.WaitGroup{}
 
 	for _, tag := range outboundTags {
 		// A plain `break` here would leave the select, not the loop.
@@ -113,37 +110,37 @@ func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, t
 			continue
 		}
 
-		var err error
-		if countryOnly {
-			queuer <- struct{}{}
-			wg.Add(1)
-			go func(res *SpeedTestResult, outbound adapter.Outbound) {
-				defer func() { <-queuer }()
-				defer wg.Done()
+		queuer <- struct{}{}
+		wg.Add(1)
+		go func(res *SpeedTestResult, outbound adapter.Outbound) {
+			defer func() { <-queuer }()
+			defer wg.Done()
+			if countryOnly {
 				err := countryTest(ctx, getNetDialer(outbound.DialContext), res)
 				if err != nil && !errors.Is(err, context.Canceled) {
 					res.Error = err
 					fmt.Println("Failed to countryTest with err:", err)
 				}
 				CountryResults.AddResult(res)
-			}(res, outbound)
-			continue
-		}
-		if simpleDL {
-			err = simpleDownloadTest(ctx, getNetDialer(outbound.DialContext), res, simpleAddress, timeout)
-		} else {
-			err = speedTestWithDialer(ctx, getNetDialer(outbound.DialContext), res, testDl, testUl, timeout)
-		}
-		if err != nil && !errors.Is(err, context.Canceled) {
-			res.Error = err
-			fmt.Println("Failed to speedtest with err:", err)
-		}
-		if !testDl && !simpleDL {
-			res.DlSpeed = ""
-		}
-		if !testUl {
-			res.UlSpeed = ""
-		}
+				return
+			}
+			var err error
+			if simpleDL {
+				err = simpleDownloadTest(ctx, getNetDialer(outbound.DialContext), res, simpleAddress, timeout)
+			} else {
+				err = speedTestWithDialer(ctx, getNetDialer(outbound.DialContext), res, testDl, testUl, timeout)
+			}
+			if err != nil && !errors.Is(err, context.Canceled) {
+				res.Error = err
+				fmt.Println("Failed to speedtest with err:", err)
+			}
+			if !testDl && !simpleDL {
+				res.DlSpeed = ""
+			}
+			if !testUl {
+				res.UlSpeed = ""
+			}
+		}(res, outbound)
 	}
 	wg.Wait()
 	CountryResults.Reclaim(results)
