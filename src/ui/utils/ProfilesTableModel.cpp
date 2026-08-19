@@ -25,6 +25,18 @@ int ProfilesTableModel::columnCount(const QModelIndex &parent) const {
 Qt::ItemFlags ProfilesTableModel::flags(const QModelIndex &index) const {
     Qt::ItemFlags defaultFlags = QAbstractTableModel::flags(index);
     if (index.isValid()) {
+        const int profileId = m_profileIds.value(index.row(), -1);
+        const bool disabled = profileId >= 0
+            && Configs::dataManager->settingsRepo->IsProfileDisabled(profileId);
+        if (index.column() == ColStartup || index.column() == ColDisabled) {
+            Qt::ItemFlags flags = Qt::ItemIsEnabled;
+            if (!disabled || index.column() == ColDisabled) {
+                flags |= Qt::ItemIsUserCheckable | Qt::ItemIsSelectable;
+            }
+            if (!disabled) flags |= Qt::ItemIsDragEnabled;
+            return flags;
+        }
+        if (disabled) return Qt::ItemIsEnabled;
         return Qt::ItemIsDragEnabled | defaultFlags;
     }
     return Qt::ItemIsDropEnabled | defaultFlags;
@@ -88,6 +100,16 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
     if (role == ProfileIdRole) {
         return profileId;
     }
+    if (role == Qt::CheckStateRole) {
+        if (index.column() == ColStartup) {
+            return Configs::dataManager->settingsRepo->IsStartupProfile(profileId)
+                ? Qt::Checked : Qt::Unchecked;
+        }
+        if (index.column() == ColDisabled) {
+            return Configs::dataManager->settingsRepo->IsProfileDisabled(profileId)
+                ? Qt::Checked : Qt::Unchecked;
+        }
+    }
     ensureCached(profileId);
     auto it = m_cache.constFind(profileId);
     if (it == m_cache.constEnd()) return {};
@@ -100,6 +122,8 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
 
     if (role == Qt::DisplayRole) {
         switch (index.column()) {
+        case ColStartup:
+        case ColDisabled: return QString();
         case ColType: {
             if (!profile->outbound) return QString();
             auto type = profile->outbound->DisplayType();
@@ -124,6 +148,9 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         return {};
     }
     if (role == Qt::ForegroundRole) {
+        if (Configs::dataManager->settingsRepo->IsProfileDisabled(profileId)) {
+            return QApplication::palette().color(QPalette::Disabled, QPalette::Text);
+        }
         if (index.column() == ColTestResult) {
             QColor latencyColor = profile->DisplayLatencyColor();
             if (latencyColor.isValid()) return latencyColor;
@@ -134,10 +161,40 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
     return {};
 }
 
+bool ProfilesTableModel::setData(const QModelIndex &index, const QVariant &value, int role) {
+    if (!index.isValid() || role != Qt::CheckStateRole
+        || index.row() < 0 || index.row() >= m_profileIds.size()) {
+        return false;
+    }
+
+    const int profileId = m_profileIds[index.row()];
+    const bool checked = value.toInt() == Qt::Checked;
+    auto *settings = Configs::dataManager->settingsRepo.get();
+    if (index.column() == ColStartup) {
+        settings->SetStartupProfile(profileId, checked);
+    } else if (index.column() == ColDisabled) {
+        settings->SetProfileDisabled(profileId, checked);
+    } else {
+        return false;
+    }
+    settings->Save();
+    const int lastChangedColumn = index.column() == ColDisabled
+        ? ColumnCount - 1 : ColStartup;
+    emit dataChanged(this->index(index.row(), ColStartup),
+                     this->index(index.row(), lastChangedColumn),
+                     {Qt::DisplayRole, Qt::CheckStateRole, Qt::ForegroundRole});
+    return true;
+}
+
 QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation, int role) const {
+    if (orientation == Qt::Horizontal && role == Qt::TextAlignmentRole) {
+        return static_cast<int>(Qt::AlignCenter);
+    }
     if (role != Qt::DisplayRole) return {};
     if (orientation == Qt::Horizontal) {
         switch (section) {
+        case ColStartup: return tr("Speedtest\non startup");
+        case ColDisabled: return tr("Off");
         case ColType: return tr("Type");
         case ColAddress: return tr("Address");
         case ColName: return tr("Name");

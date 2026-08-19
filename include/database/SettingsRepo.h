@@ -157,6 +157,13 @@ namespace Configs {
         bool remember_enable = false;
         bool windows_set_admin = false;
         QMap<QString, QKeySequence> shortcuts;
+        QStringList speedtest_on_startup_profile_ids = {};
+        QStringList disabled_profile_ids = {};
+
+        [[nodiscard]] bool IsStartupProfile(int id) const;
+        [[nodiscard]] bool IsProfileDisabled(int id) const;
+        void SetStartupProfile(int id, bool enabled);
+        void SetProfileDisabled(int id, bool disabled);
 
         // Routing
         int current_route_id = 1;

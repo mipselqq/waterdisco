@@ -39,11 +39,23 @@
 namespace {
     // How many profile names a removal confirmation lists before eliding.
     constexpr int removeListPreviewLimit = 20;
+
+    QList<int> enabledProfiles(const QList<int> &ids) {
+        QList<int> enabled;
+        enabled.reserve(ids.size());
+        for (int id : ids) {
+            if (!Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+                enabled.append(id);
+            }
+        }
+        return enabled;
+    }
 }
 
 void MainWindow::on_profilesTableView_doubleClicked(const QModelIndex &index) {
     if (!index.isValid() || !profilesTableModel) return;
     int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
+    if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) return;
     if (select_mode) {
         emit profile_selected(id);
         select_mode = false;
@@ -363,7 +375,16 @@ void MainWindow::on_menu_select_all_triggered() {
         ui->masterLogBrowser->selectAll();
         return;
     }
-    ui->profilesTableView->selectAll();
+    if (!profilesFilterModel || !ui->profilesTableView->selectionModel()) return;
+    ui->profilesTableView->clearSelection();
+    for (int row = 0; row < profilesFilterModel->rowCount(); ++row) {
+        const QModelIndex index = profilesFilterModel->index(row, ProfilesTableModel::ColStartup);
+        const int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
+        if (!Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+            ui->profilesTableView->selectionModel()->select(
+                index, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        }
+    }
 }
 
 void MainWindow::on_menu_update_subscription_triggered() {
@@ -512,6 +533,13 @@ void MainWindow::on_menu_resolve_domain_triggered() {
 }
 
 void MainWindow::on_profilesTableView_customContextMenuRequested(const QPoint &pos) {
+    const QModelIndex index = ui->profilesTableView->indexAt(pos);
+    if (index.isValid()) {
+        const int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
+        if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+            ui->profilesTableView->clearSelection();
+        }
+    }
     ui->menu_server->popup(ui->profilesTableView->viewport()->mapToGlobal(pos));
 }
 
@@ -520,7 +548,8 @@ QList<int> MainWindow::get_now_selected_list() {
     if (!profilesTableModel) return list;
     QModelIndexList indices = ui->profilesTableView->selectionModel()->selectedRows(0);
     for (const QModelIndex &idx : indices) {
-        list << idx.data(ProfilesTableModel::ProfileIdRole).toInt();
+        const int id = idx.data(ProfilesTableModel::ProfileIdRole).toInt();
+        if (!Configs::dataManager->settingsRepo->IsProfileDisabled(id)) list << id;
     }
     return list;
 }
@@ -530,9 +559,15 @@ QList<int> MainWindow::get_selected_or_group() {
     QList<int> profileIDs;
     if (selected_or_group > 0) {
         profileIDs = get_now_selected_list();
-        if (profileIDs.isEmpty() && selected_or_group == 2) profileIDs = Configs::dataManager->groupsRepo->CurrentGroup()->Profiles();
+        if (profileIDs.isEmpty() && selected_or_group == 2) {
+            if (const auto group = Configs::dataManager->groupsRepo->CurrentGroup()) {
+                profileIDs = enabledProfiles(group->Profiles());
+            }
+        }
     } else {
-        profileIDs = Configs::dataManager->groupsRepo->CurrentGroup()->Profiles();
+        if (const auto group = Configs::dataManager->groupsRepo->CurrentGroup()) {
+            profileIDs = enabledProfiles(group->Profiles());
+        }
     }
     return profileIDs;
 }

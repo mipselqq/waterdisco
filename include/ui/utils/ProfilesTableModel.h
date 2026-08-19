@@ -21,7 +21,9 @@ public:
     // column (sorting, header menus, saved widths, the filter header) refers to
     // these instead of raw numbers.
     enum Column {
-        ColType = 0,
+        ColStartup = 0,
+        ColDisabled,
+        ColType,
         ColAddress,
         ColName,
         ColTestResult,
@@ -48,6 +50,8 @@ public:
     QStringList mimeTypes() const override;
     QMimeData *mimeData(const QModelIndexList &indexes) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    bool setData(const QModelIndex &index, const QVariant &value,
+                 int role = Qt::EditRole) override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
     // Set the list of profile IDs, in the group's own order.

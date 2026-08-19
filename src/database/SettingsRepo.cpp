@@ -171,6 +171,8 @@ namespace Configs {
             {"dial_inet4_bind_history",  &dial_inet4_bind_address_history},
             {"dial_inet6_bind_history",  &dial_inet6_bind_address_history},
             {"warp_reserved", &warp_reserved},
+            {"speedtest_on_startup_profile_ids", &speedtest_on_startup_profile_ids},
+            {"disabled_profile_ids", &disabled_profile_ids},
         };
     }
 
@@ -296,6 +298,37 @@ namespace Configs {
     bool SettingsRepo::Save() {
         saveAllSettings();
         return true;
+    }
+
+    bool SettingsRepo::IsStartupProfile(int id) const {
+        return speedtest_on_startup_profile_ids.contains(QString::number(id));
+    }
+
+    bool SettingsRepo::IsProfileDisabled(int id) const {
+        return disabled_profile_ids.contains(QString::number(id));
+    }
+
+    void SettingsRepo::SetStartupProfile(int id, bool enabled) {
+        const QString value = QString::number(id);
+        if (enabled && !IsProfileDisabled(id)) {
+            if (!speedtest_on_startup_profile_ids.contains(value)) {
+                speedtest_on_startup_profile_ids.append(value);
+            }
+        } else {
+            speedtest_on_startup_profile_ids.removeAll(value);
+        }
+    }
+
+    void SettingsRepo::SetProfileDisabled(int id, bool disabled) {
+        const QString value = QString::number(id);
+        if (disabled) {
+            if (!disabled_profile_ids.contains(value)) {
+                disabled_profile_ids.append(value);
+            }
+            speedtest_on_startup_profile_ids.removeAll(value);
+        } else {
+            disabled_profile_ids.removeAll(value);
+        }
     }
 
     QStringList SettingsRepo::GetExtraCorePaths() const {

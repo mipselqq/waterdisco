@@ -22,6 +22,17 @@ namespace {
     constexpr int kLatencyPollIntervalMs = 200;
     constexpr int kSpeedPollIntervalMs = 100;
 
+    QList<int> withoutDisabled(const QList<int>& profileIDs) {
+        QList<int> filtered;
+        filtered.reserve(profileIDs.size());
+        for (int id : profileIDs) {
+            if (!Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+                filtered.append(id);
+            }
+        }
+        return filtered;
+    }
+
     // An auto selector has no server of its own: whichever member answers changes
     // minute to minute, so a stored result would be noise on that row.
     QList<int> withoutAutoSelectors(const QList<int>& profileIDs) {
@@ -275,7 +286,7 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
     // Must fire on every exit path — a caller may be blocked on it.
     const auto finish = [onFinished] { if (onFinished) onFinished(); };
 
-    const auto profileIDs = withoutAutoSelectors(requestedIDs);
+    const auto profileIDs = withoutAutoSelectors(withoutDisabled(requestedIDs));
     if (profileIDs.isEmpty()) {
         finish();
         return;
@@ -372,7 +383,9 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
 {
     // A live-connection test stays valid for a running selector: it measures
     // whichever member actually carries traffic.
-    const auto profileIDs = testCurrent ? requestedIDs : withoutAutoSelectors(requestedIDs);
+    const auto profileIDs = testCurrent
+        ? withoutDisabled(requestedIDs)
+        : withoutAutoSelectors(withoutDisabled(requestedIDs));
     if (profileIDs.isEmpty() && !testCurrent) {
         return;
     }

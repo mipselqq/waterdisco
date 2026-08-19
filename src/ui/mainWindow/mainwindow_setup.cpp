@@ -53,6 +53,8 @@
 
 #include <QUuid>
 
+#include <algorithm>
+
 #include <QClipboard>
 #include <QScrollBar>
 #include <QDesktopServices>
@@ -64,8 +66,84 @@
 #endif
 #include <QFileDialog>
 #include <QToolButton>
+#include <QStyledItemDelegate>
+#include <QStyleOptionButton>
+#include <QPainter>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QApplication>
 #include <include/global/HTTPRequestHelper.hpp>
 #include "include/global/DeviceDetailsHelper.hpp"
+
+namespace {
+class CenteredCheckBoxDelegate final : public QStyledItemDelegate {
+public:
+    explicit CenteredCheckBoxDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    static QRect indicatorRect(const QStyleOptionViewItem &option) {
+        QStyleOptionButton checkbox;
+        checkbox.state = QStyle::State_Enabled;
+        const QRect indicator = QApplication::style()->subElementRect(
+            QStyle::SE_CheckBoxIndicator, &checkbox);
+        return QStyle::alignedRect(option.direction, Qt::AlignCenter,
+                                   indicator.size(), option.rect);
+    }
+
+protected:
+    void initStyleOption(QStyleOptionViewItem *option,
+                         const QModelIndex &index) const override {
+        QStyledItemDelegate::initStyleOption(option, index);
+        option->features &= ~QStyleOptionViewItem::HasCheckIndicator;
+        option->features &= ~QStyleOptionViewItem::HasDisplay;
+        option->text.clear();
+    }
+
+public:
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override {
+        QStyledItemDelegate::paint(painter, option, index);
+        const QVariant checkState = index.data(Qt::CheckStateRole);
+        if (!checkState.isValid()) return;
+
+        QStyleOptionViewItem opt(option);
+        initStyleOption(&opt, index);
+        QStyleOptionButton checkbox;
+        checkbox.state = QStyle::State_Enabled |
+            (checkState.toInt() == Qt::Checked ? QStyle::State_On : QStyle::State_Off);
+        checkbox.rect = indicatorRect(opt);
+        QApplication::style()->drawControl(QStyle::CE_CheckBox, &checkbox, painter);
+    }
+
+    bool editorEvent(QEvent *event, QAbstractItemModel *model,
+                     const QStyleOptionViewItem &option,
+                     const QModelIndex &index) override {
+        if (!(index.flags() & Qt::ItemIsEnabled)
+            || !(index.flags() & Qt::ItemIsUserCheckable)) {
+            return false;
+        }
+        if (event->type() == QEvent::MouseButtonRelease) {
+            const auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if (mouseEvent->button() != Qt::LeftButton
+                || !indicatorRect(option).contains(mouseEvent->position().toPoint())) {
+                return false;
+            }
+        } else if (event->type() == QEvent::KeyPress) {
+            const auto *keyEvent = static_cast<QKeyEvent *>(event);
+            if (keyEvent->key() != Qt::Key_Space && keyEvent->key() != Qt::Key_Select) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+
+        const auto current = static_cast<Qt::CheckState>(
+            index.data(Qt::CheckStateRole).toInt());
+        return model->setData(index,
+            current == Qt::Checked ? Qt::Unchecked : Qt::Checked,
+            Qt::CheckStateRole);
+    }
+};
+}
 
 void UI_InitMainWindow() {
     mainwindow = new MainWindow;
@@ -418,6 +496,42 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     profilesFilterModel = new ProfilesFilterProxyModel(this);
     profilesFilterModel->setSourceModel(profilesTableModel);
     ui->profilesTableView->setModel(profilesFilterModel);
+    ui->profilesTableView->setItemDelegateForColumn(
+        ProfilesTableModel::ColStartup,
+        new CenteredCheckBoxDelegate(ui->profilesTableView));
+    ui->profilesTableView->setItemDelegateForColumn(
+        ProfilesTableModel::ColDisabled,
+        new CenteredCheckBoxDelegate(ui->profilesTableView));
+    ui->profilesTableView->setColumnHidden(ProfilesTableModel::ColAddress, true);
+    connect(profilesTableModel, &QAbstractItemModel::dataChanged, this,
+            [this](const QModelIndex &topLeft, const QModelIndex &bottomRight,
+                   const QList<int> &roles) {
+        if (!roles.contains(Qt::CheckStateRole)
+            || topLeft.column() > ProfilesTableModel::ColDisabled
+            || bottomRight.column() < ProfilesTableModel::ColDisabled) {
+            return;
+        }
+        // Defer the reset until the checkbox editor has returned from setData.
+        QTimer::singleShot(0, this, [this] {
+            auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+            if (!group) return;
+            GroupSortAction action;
+            action.method = GroupSortMethod::Raw;
+            if (group->SortProfiles(action)) {
+                Configs::dataManager->groupsRepo->Save(group);
+                refresh_proxy_list({}, true);
+            }
+            const auto selected = ui->profilesTableView->selectionModel()->selectedRows(0);
+            for (const QModelIndex &index : selected) {
+                const int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
+                if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+                    ui->profilesTableView->selectionModel()->select(
+                        index, QItemSelectionModel::Deselect | QItemSelectionModel::Rows);
+                }
+            }
+            refresh_startstop_button();
+        });
+    });
     // Keep the start/stop button's enabled/disabled state in sync with selection.
     connect(ui->profilesTableView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
             [this] { refresh_startstop_button(); });
@@ -426,12 +540,63 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         // A drop position in a filtered list says nothing about the group's real order.
         if (profilesFilterModel->hasActiveFilter()) return;
         if (row1 == row2) return;
+        const int movedId = profilesTableModel->data(
+            profilesTableModel->index(row1, ProfilesTableModel::ColStartup),
+            ProfilesTableModel::ProfileIdRole).toInt();
+        if (Configs::dataManager->settingsRepo->IsProfileDisabled(movedId)) return;
+
+        int firstDisabledRow = profilesTableModel->rowCount();
+        for (int row = 0; row < profilesTableModel->rowCount(); ++row) {
+            const int id = profilesTableModel->data(
+                profilesTableModel->index(row, ProfilesTableModel::ColStartup),
+                ProfilesTableModel::ProfileIdRole).toInt();
+            if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+                firstDisabledRow = row;
+                break;
+            }
+        }
+        if (firstDisabledRow > 0) row2 = std::min(row2, firstDisabledRow - 1);
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         group->EmplaceProfile(row1, row2);
         profilesTableModel->emplaceProfiles(row1, row2);
         Configs::dataManager->groupsRepo->Save(group);
     };
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionClicked, this, [=, this](int logicalIndex) {
+        if (logicalIndex == ProfilesTableModel::ColStartup
+            || logicalIndex == ProfilesTableModel::ColDisabled) {
+            auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+            if (!group) return;
+            const QList<int> ids = group->Profiles();
+            auto *settings = Configs::dataManager->settingsRepo.get();
+            if (logicalIndex == ProfilesTableModel::ColStartup) {
+                QList<int> enabled;
+                for (int id : ids) {
+                    if (!settings->IsProfileDisabled(id)) enabled.append(id);
+                }
+                const bool allChecked = !enabled.isEmpty()
+                    && std::all_of(enabled.cbegin(), enabled.cend(),
+                                   [settings](int id) { return settings->IsStartupProfile(id); });
+                for (int id : enabled) settings->SetStartupProfile(id, !allChecked);
+                settings->Save();
+                profilesTableModel->refreshTable();
+                return;
+            } else {
+                const bool allChecked = !ids.isEmpty()
+                    && std::all_of(ids.cbegin(), ids.cend(),
+                                   [settings](int id) { return settings->IsProfileDisabled(id); });
+                for (int id : ids) settings->SetProfileDisabled(id, !allChecked);
+            }
+            settings->Save();
+            GroupSortAction action;
+            action.method = GroupSortMethod::Raw;
+            if (group->SortProfiles(action)) {
+                Configs::dataManager->groupsRepo->Save(group);
+            }
+            refresh_proxy_list({}, true);
+            ui->profilesTableView->clearSelection();
+            refresh_startstop_button();
+            return;
+        }
         GroupSortAction action;
         if (proxy_last_order == logicalIndex) {
             action.descending = true;
@@ -1149,4 +1314,3 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 MainWindow::~MainWindow() {
     delete ui;
 }
-

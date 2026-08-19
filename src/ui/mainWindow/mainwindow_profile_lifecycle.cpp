@@ -65,26 +65,30 @@ bool MainWindow::set_system_dns(bool set, bool save_set) {
 }
 
 int MainWindow::get_profile_to_start() {
+    const auto isAvailable = [](int id) {
+        if (id < 0 || Configs::dataManager->settingsRepo->IsProfileDisabled(id)) return false;
+        const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+        if (!profile) return false;
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(profile->gid);
+        return group && !group->archive;
+    };
     const auto ents = get_now_selected_list();
-    if (ents.size() == 1) {
+    if (ents.size() == 1 && isAvailable(ents.first())) {
         return ents.first();
     }
     if (ents.isEmpty()) {
-        if (last_running_profile_id >= 0 && Configs::dataManager->profilesRepo->GetProfile(last_running_profile_id) != nullptr) {
+        if (isAvailable(last_running_profile_id)) {
             return last_running_profile_id;
         }
         const int rememberId = Configs::dataManager->settingsRepo->remember_id;
-        if (rememberId >= 0 && Configs::dataManager->profilesRepo->GetProfile(rememberId) != nullptr) {
+        if (isAvailable(rememberId)) {
             return rememberId;
         }
         const auto currentGroup = Configs::dataManager->groupsRepo->CurrentGroup();
         if (currentGroup) {
             const auto profiles = currentGroup->Profiles();
-            if (!profiles.isEmpty()) {
-                const int firstId = profiles.first();
-                if (Configs::dataManager->profilesRepo->GetProfile(firstId) != nullptr) {
-                    return firstId;
-                }
+            for (int id : profiles) {
+                if (isAvailable(id)) return id;
             }
         }
     }
@@ -193,6 +197,7 @@ void MainWindow::profile_start(int _id) {
         }
     }
     if (ent == nullptr) return;
+    if (Configs::dataManager->settingsRepo->IsProfileDisabled(ent->id)) return;
 
     last_running_profile_id = ent->id;
 

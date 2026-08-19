@@ -30,6 +30,13 @@ void MainWindow::show_group(int gid) {
         return;
     }
 
+    const QList<int> previousOrder = group->Profiles();
+    GroupSortAction normalizeDisabled;
+    normalizeDisabled.method = GroupSortMethod::Raw;
+    if (group->SortProfiles(normalizeDisabled) && group->Profiles() != previousOrder) {
+        Configs::dataManager->groupsRepo->Save(group);
+    }
+
     if (Configs::dataManager->settingsRepo->current_group != gid) {
         saveProfileFocusState();
         if (auto lastGroup = Configs::dataManager->groupsRepo->CurrentGroup()) {

@@ -413,6 +413,16 @@ namespace Configs {
             group->RemoveProfileBatch(ids);
             dataManager->groupsRepo->Save(group);
         }
+        bool settingsChanged = false;
+        for (int id : ids) {
+            if (dataManager->settingsRepo->IsStartupProfile(id)
+                || dataManager->settingsRepo->IsProfileDisabled(id)) {
+                dataManager->settingsRepo->SetStartupProfile(id, false);
+                dataManager->settingsRepo->SetProfileDisabled(id, false);
+                settingsChanged = true;
+            }
+        }
+        if (settingsChanged) dataManager->settingsRepo->Save();
         QMutexLocker locker(&mutex);
         for (int id : ids) identityMap.erase(id);
         if (!ids.isEmpty()) {

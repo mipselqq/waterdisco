@@ -3,6 +3,8 @@
 #include "include/database/ProfilesRepo.h"
 #include "include/global/Configs.hpp"
 
+#include <algorithm>
+
 namespace Configs
 {
     void Group::clearCalculatedColumnWidth() {
@@ -110,6 +112,12 @@ namespace Configs
                 break;
             }
         }
+        // Disabled profiles remain visible for management, but never interrupt the
+        // active portion of a group. Keep both partitions stable so manual order
+        // and the selected sort order are preserved within each one.
+        std::stable_partition(profiles.begin(), profiles.end(), [](int id) {
+            return !dataManager->settingsRepo->IsProfileDisabled(id);
+        });
         mutex.unlock();
         return true;
     }
