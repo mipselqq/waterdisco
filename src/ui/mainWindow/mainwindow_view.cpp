@@ -2,10 +2,19 @@
 #include "NkrVersion.h"
 
 #include <QApplication>
+#include <QAudioOutput>
+#include <QHBoxLayout>
 #include <QHeaderView>
+#include <QImage>
+#include <QLabel>
+#include <QMediaPlayer>
+#include <QPixmap>
 #include <QScrollBar>
 #include <QTimer>
 #include <QToolButton>
+#include <QUrl>
+#include <QVideoFrame>
+#include <QVideoSink>
 
 #include "include/api/RPC.h"
 #include "include/database/GroupsRepo.h"
@@ -42,6 +51,112 @@ void MainWindow::applyTopBarMetrics() {
     const QSize contentMin = minimumSizeHint();
     setMinimumSize(qMax(designMinimumSize.width(), contentMin.width()),
                    qMax(designMinimumSize.height(), contentMin.height()));
+}
+
+void MainWindow::runImproveMood() {
+    stopImproveMood();
+
+    auto *viewport = ui->profilesTableView->viewport();
+    auto *header = ui->profilesTableView->horizontalHeader();
+    if (!viewport || !header) return;
+    int usedWidth = 0;
+    for (int i = 0; i < header->count(); ++i) {
+        if (!ui->profilesTableView->isColumnHidden(i)) usedWidth += header->sectionSize(i);
+    }
+    if (viewport->width() - usedWidth < 120) {
+        MW_show_log(tr("No free right-side table space for video."));
+        return;
+    }
+
+    moodOverlay = new QWidget(viewport);
+    moodOverlay->setObjectName("moodOverlay");
+    moodOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    moodOverlay->setStyleSheet("QWidget#moodOverlay { background-color: rgba(0, 0, 0, 200); }");
+    auto *layout = new QHBoxLayout(moodOverlay);
+    layout->setContentsMargins(0, 0, 0, 0);
+    moodLabel = new QLabel(moodOverlay);
+    moodLabel->setAlignment(Qt::AlignCenter);
+    moodLabel->setStyleSheet("background: black;");
+    layout->addWidget(moodLabel);
+
+    moodVideoSink = new QVideoSink(this);
+    connect(moodVideoSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
+        if (!moodLabel || !frame.isValid()) return;
+        const QImage image = frame.toImage();
+        if (image.isNull() || moodLabel->size().isEmpty()) return;
+        moodLabel->setPixmap(QPixmap::fromImage(image).scaled(
+            moodLabel->size(), Qt::KeepAspectRatio, Qt::FastTransformation));
+    });
+
+    moodAudio = new QAudioOutput(this);
+    moodAudio->setVolume(1.0);
+    moodPlayer = new QMediaPlayer(this);
+    moodPlayer->setAudioOutput(moodAudio);
+    moodPlayer->setVideoOutput(moodVideoSink);
+    moodPlayer->setSource(QUrl("qrc:/Throne/public/easter.mp4"));
+    connect(moodPlayer, &QMediaPlayer::mediaStatusChanged, this,
+            [this](QMediaPlayer::MediaStatus status) {
+        if (status == QMediaPlayer::EndOfMedia || status == QMediaPlayer::InvalidMedia) stopImproveMood();
+    });
+    connect(moodPlayer, &QMediaPlayer::errorOccurred, this,
+            [this](QMediaPlayer::Error, const QString&) { stopImproveMood(); });
+
+    updateImproveMoodGeometry();
+    moodOverlay->show();
+    moodOverlay->raise();
+    moodPlayer->play();
+}
+
+void MainWindow::stopImproveMood() {
+    if (stoppingMoodPlayer) return;
+    stoppingMoodPlayer = true;
+    auto *player = moodPlayer.data();
+    auto *audio = moodAudio.data();
+    auto *sink = moodVideoSink.data();
+    auto *overlay = moodOverlay.data();
+    moodPlayer = nullptr;
+    moodAudio = nullptr;
+    moodVideoSink = nullptr;
+    moodLabel = nullptr;
+    moodOverlay = nullptr;
+
+    if (player) {
+        player->disconnect(this);
+        player->stop();
+        player->setSource({});
+        player->setVideoOutput(static_cast<QVideoSink*>(nullptr));
+        player->setAudioOutput(nullptr);
+        player->deleteLater();
+    }
+    if (audio) audio->deleteLater();
+    if (sink) sink->deleteLater();
+    if (overlay) {
+        overlay->hide();
+        overlay->deleteLater();
+    }
+    if (ui && ui->profilesTableView && ui->profilesTableView->viewport()) {
+        ui->profilesTableView->viewport()->update();
+    }
+    stoppingMoodPlayer = false;
+}
+
+void MainWindow::updateImproveMoodGeometry() {
+    if (!moodOverlay || stoppingMoodPlayer) return;
+    auto *viewport = ui->profilesTableView->viewport();
+    auto *header = ui->profilesTableView->horizontalHeader();
+    if (!viewport || !header) return;
+
+    int usedWidth = 0;
+    for (int i = 0; i < header->count(); ++i) {
+        if (!ui->profilesTableView->isColumnHidden(i)) usedWidth += header->sectionSize(i);
+    }
+    const int x = qBound(0, usedWidth, viewport->width());
+    const int width = viewport->width() - x;
+    if (width <= 0 || viewport->height() <= 0) {
+        stopImproveMood();
+        return;
+    }
+    moodOverlay->setGeometry(x, 0, width, viewport->height());
 }
 
 void MainWindow::UpdateDataView(bool force)

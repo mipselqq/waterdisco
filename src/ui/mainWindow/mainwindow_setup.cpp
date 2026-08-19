@@ -54,6 +54,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <memory>
 
 #include <QClipboard>
 #include <QScrollBar>
@@ -654,6 +655,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         });
     });
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionResized, this, [=, this](int, int, int) {
+        updateImproveMoodGeometry();
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         if (Configs::dataManager->settingsRepo->refreshing_group || group == nullptr) return;
         group->column_width.clear();
@@ -877,41 +879,46 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     tray->setIcon(GetTrayIcon(Icon::NONE));
     QApplication::setWindowIcon(Icon::GetTrayIcon(Icon::NONE));
     trayMenu = new QMenu();
-    trayMenu->addAction(ui->actionShow_window);
-    trayMenu->addSeparator();
-    trayMenu->addAction(ui->actionStart_with_system);
-    trayMenu->addAction(ui->actionRemember_last_proxy);
-    trayMenu->addAction(ui->actionAllow_LAN);
-    trayMenu->addSeparator();
-
-    auto *actSelectServer = new QAction(tr("Select Profile"), trayMenu);
-    connect(actSelectServer, &QAction::triggered, this, [this]() { openTraySelector(false); });
-    trayMenu->addAction(actSelectServer);
-    auto *actSelectRouting = new QAction(tr("Select Routing"), trayMenu);
-    connect(actSelectRouting, &QAction::triggered, this, [this]() { openTraySelector(true); });
-    trayMenu->addAction(actSelectRouting);
-    auto *actOtpCodes = new QAction(tr("OTP Codes"), trayMenu);
-    connect(actOtpCodes, &QAction::triggered, this, [this]() { openTrayOtpCodes(); });
-    trayMenu->addAction(actOtpCodes);
-    // MacOS cannot reuse menus across different parents properly
-    if (getOS() == Darwin) {
-        auto* traySpmodeMenu = new QMenu(ui->menu_spmode->title(), trayMenu);
-        traySpmodeMenu->addAction(ui->menu_spmode_system_proxy);
-        traySpmodeMenu->addAction(ui->menu_spmode_vpn);
-        connect(traySpmodeMenu, &QMenu::aboutToShow, this, [=,this]() {
-            ui->menu_spmode_disabled->setChecked(!(Configs::dataManager->settingsRepo->spmode_system_proxy || Configs::dataManager->settingsRepo->spmode_vpn));
-            ui->menu_spmode_system_proxy->setChecked(Configs::dataManager->settingsRepo->spmode_system_proxy);
-            ui->menu_spmode_vpn->setChecked(Configs::dataManager->settingsRepo->spmode_vpn);
-        });
-        trayMenu->addMenu(traySpmodeMenu);
-    } else {
-        trayMenu->addMenu(ui->menu_spmode);
-    }
-    trayMenu->addSeparator();
-
-    trayMenu->addAction(ui->actionRestart_Proxy);
+    auto *routeSeparator = trayMenu->addSeparator();
     trayMenu->addAction(ui->actionRestart_Program);
     trayMenu->addAction(ui->menu_exit);
+
+    auto routeIds = std::make_shared<QList<int>>();
+    auto routeActions = std::make_shared<QList<QAction*>>();
+    auto rebuildRouteActions = [this, routeIds, routeActions, routeSeparator] {
+        for (auto *action : *routeActions) {
+            trayMenu->removeAction(action);
+            action->deleteLater();
+        }
+        routeActions->clear();
+        routeIds->clear();
+        for (const auto &route : Configs::dataManager->routesRepo->GetAllRouteProfiles()) {
+            routeIds->append(route->id);
+            auto *action = new QAction(route->name, trayMenu);
+            action->setData(route->id);
+            action->setCheckable(true);
+            connect(action, &QAction::triggered, this, [this, action] {
+                const int routeId = action->data().toInt();
+                if (Configs::dataManager->settingsRepo->current_route_id == routeId) return;
+                Configs::dataManager->settingsRepo->current_route_id = routeId;
+                Configs::dataManager->settingsRepo->Save();
+                if (Configs::dataManager->settingsRepo->started_id >= 0) {
+                    profile_start(Configs::dataManager->settingsRepo->started_id);
+                }
+            });
+            trayMenu->insertAction(routeSeparator, action);
+            routeActions->append(action);
+        }
+    };
+    rebuildRouteActions();
+    connect(trayMenu, &QMenu::aboutToShow, this, [this, routeIds, routeActions, rebuildRouteActions] {
+        QList<int> currentIds;
+        for (const auto &route : Configs::dataManager->routesRepo->GetAllRouteProfiles()) currentIds.append(route->id);
+        if (currentIds != *routeIds) rebuildRouteActions();
+        for (auto *action : *routeActions) {
+            action->setChecked(Configs::dataManager->settingsRepo->current_route_id == action->data().toInt());
+        }
+    });
     tray->setVisible(!Configs::dataManager->settingsRepo->disable_tray);
     tray->setContextMenu(trayMenu);
     connect(tray, &QSystemTrayIcon::activated, qApp, [=, this](QSystemTrayIcon::ActivationReason reason) {
@@ -964,6 +971,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         Configs::dataManager->settingsRepo->net_use_proxy = checked;
         Configs::dataManager->settingsRepo->Save();
     });
+    connect(ui->actionImprove_mood, &QAction::triggered, this, &MainWindow::runImproveMood);
     connect(ui->actionStart_with_system, &QAction::triggered, this, [=,this](bool checked) {
         AutoRun_SetEnabled(checked);
         ui->actionStart_with_system->setChecked(checked);
@@ -1392,5 +1400,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 }
 
 MainWindow::~MainWindow() {
+    stopImproveMood();
     delete ui;
 }

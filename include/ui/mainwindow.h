@@ -51,6 +51,10 @@ namespace Configs_sys {
 class TrayProfileSelector;
 class TrayOtpCodes;
 class TestRunner;
+class QAudioOutput;
+class QLabel;
+class QMediaPlayer;
+class QVideoSink;
 
 namespace Qv2ray::ui { class SyntaxHighlighter; }
 
@@ -217,6 +221,15 @@ private:
     ProfilesFilterProxyModel *profilesFilterModel = nullptr;
     QSystemTrayIcon *tray;
     QMenu *trayMenu = nullptr;    // tray context menu
+    QPointer<QMediaPlayer> moodPlayer;
+    QPointer<QAudioOutput> moodAudio;
+    QPointer<QVideoSink> moodVideoSink;
+    QPointer<QWidget> moodOverlay;
+    QPointer<QLabel> moodLabel;
+    bool stoppingMoodPlayer = false;
+    void runImproveMood();
+    void stopImproveMood();
+    void updateImproveMoodGeometry();
     QPointer<TrayProfileSelector> traySelector;
     void openTraySelector(bool routing);
     QPointer<TrayOtpCodes> trayOtpCodes;

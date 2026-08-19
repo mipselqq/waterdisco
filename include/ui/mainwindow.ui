@@ -772,6 +772,7 @@ QTabBar::tab:selected {
     <addaction name="actionSpeed_test_fall_short"/>
     <addaction name="actionRoute_requests_via_connected_profile"/>
     <addaction name="actionAllow_LAN"/>
+    <addaction name="actionImprove_mood"/>
     <addaction name="separator"/>
     <addaction name="actionExport_application_state"/>
     <addaction name="actionImport_application_state"/>
@@ -1216,6 +1217,11 @@ QTabBar::tab:selected {
   <action name="actionRestart_Program">
    <property name="text">
     <string>Restart Program</string>
+   </property>
+  </action>
+  <action name="actionImprove_mood">
+   <property name="text">
+    <string>Improve mood</string>
    </property>
   </action>
   <action name="menu_open_config_folder">
