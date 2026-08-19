@@ -5,6 +5,7 @@
 #include <QAudioOutput>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QPointer>
 #include <QImage>
 #include <QLabel>
 #include <QMediaPlayer>
@@ -19,6 +20,8 @@
 #include "include/api/RPC.h"
 #include "include/database/GroupsRepo.h"
 #include "include/database/RoutesRepo.h"
+#include "include/global/HTTPRequestHelper.hpp"
+#include "include/stats/traffic/TrafficLooper.hpp"
 #include "include/stats/autoselector/AutoSelectorMonitor.hpp"
 #include "include/ui/setting/Icon.hpp"
 #include "include/ui/stats/dialog_auto_selector.h"
@@ -210,30 +213,7 @@ void MainWindow::applyProfileFilters()
 
 void MainWindow::refresh_status(const QString &traffic_update) {
     const auto* settings = Configs::dataManager->settingsRepo.get();
-
-    auto refresh_speed_label = [=,this] {
-        if (settings->disable_traffic_stats) {
-            ui->label_speed->setText("");
-        }
-        else if (traffic_update_cache == "") {
-            ui->label_speed->setText(QObject::tr("Proxy: %1\nDirect: %2").arg("", ""));
-        } else {
-            ui->label_speed->setText(traffic_update_cache);
-        }
-    };
-
-    // From TrafficLooper
-    if (!traffic_update.isEmpty() && !settings->disable_traffic_stats) {
-        traffic_update_cache = traffic_update;
-        if (traffic_update == "STOP") {
-            traffic_update_cache = "";
-        } else {
-            refresh_speed_label();
-            return;
-        }
-    }
-
-    refresh_speed_label();
+    Q_UNUSED(traffic_update)
 
     // From UI
     QString group_name;
@@ -242,32 +222,9 @@ void MainWindow::refresh_status(const QString &traffic_update) {
         if (group != nullptr) group_name = group->name;
     }
 
-    if (QDateTime::currentSecsSinceEpoch() - last_test_time > 2) {
-        QString runningLabelText;
-        if (running) {
-            runningLabelText = QString("[%1] %2").arg(group_name, running->outbound->DisplayName());
-            if (!running->runningCountryInfo.isEmpty()) {
-                runningLabelText += "\n" + running->runningCountryInfo;
-            }
-        } else {
-            runningLabelText = tr("Not Running");
-        }
-        ui->label_running->setText(runningLabelText);
-    }
-    //
-    const auto display_socks = DisplayAddress(settings->inbound_address, settings->inbound_socks_port);
-    const auto inbound_disabled = settings->disable_mixed_inbound;
-    const auto inbound_txt = QString("Mixed: %1").arg(inbound_disabled ? "Disabled" : display_socks);
-    ui->label_inbound->setText(inbound_txt);
-    //
     ui->checkBox_VPN->setChecked(settings->spmode_vpn);
     ui->checkBox_SystemProxy->setChecked(settings->spmode_system_proxy);
-    if (select_mode) {
-        ui->label_running->setText(tr("Select") + " *");
-        ui->label_running->setToolTip(tr("Select mode, double-click or press Enter to select a profile, press ESC to exit."));
-    } else {
-        ui->label_running->setToolTip({});
-    }
+    refreshInfoPanel();
 
     const auto route = Configs::dataManager->routesRepo->GetRouteProfile(settings->current_route_id);
     const QString activeRouteName = (route && route->name != "Default") ? route->name : "";
@@ -323,6 +280,59 @@ void MainWindow::refresh_status(const QString &traffic_update) {
     icon_status = icon_status_new;
 
     refresh_startstop_button();
+}
+
+void MainWindow::refreshInfoPanel() {
+    const bool trulyConnected = running && !running->ip_out.trimmed().isEmpty();
+    ui->proxy_connected_value->setText(trulyConnected ? tr("Yes") : tr("No"));
+    ui->proxy_connected_value->setStyleSheet(
+        trulyConnected ? "color: #2eaf57; font-weight: 600;" : "color: #d9534f; font-weight: 600;");
+    ui->proxy_ip_value->setText(trulyConnected ? running->ip_out : QStringLiteral("—"));
+    ui->host_ip_value->setText(hostInfoIp.isEmpty() ? QStringLiteral("—") : hostInfoIp);
+
+    qint64 proxyDown = 0, proxyUp = 0, directDown = 0, directUp = 0;
+    double proxyMax = 0, directMax = 0;
+    {
+        QMutexLocker locker(&Stats::trafficLooper->loop_mutex);
+        if (const auto& proxy = Stats::trafficLooper->proxy) {
+            proxyDown = proxy->downlink_total;
+            proxyUp = proxy->uplink_total;
+            proxyMax = proxy->max_rate;
+        }
+        if (const auto& direct = Stats::trafficLooper->direct) {
+            directDown = direct->downlink_total;
+            directUp = direct->uplink_total;
+            directMax = direct->max_rate;
+        }
+    }
+    const auto speed = [](double bytesPerSecond) {
+        return QString::number(bytesPerSecond * 8.0 / 1'000'000.0, 'f', 1) + " Mbps";
+    };
+    const auto traffic = [](qint64 down, qint64 up) {
+        return QString("↓ %1   ↑ %2").arg(ReadableSize(down), ReadableSize(up));
+    };
+    ui->proxy_speed_value->setText(speed(proxyMax));
+    ui->proxy_traffic_value->setText(traffic(proxyDown, proxyUp));
+    ui->host_speed_value->setText(speed(directMax));
+    ui->host_traffic_value->setText(traffic(directDown, directUp));
+
+    if (hostInfoIp.isEmpty() && !hostInfoProbeInFlight) refreshHostInfoIp();
+}
+
+void MainWindow::refreshHostInfoIp() {
+    if (hostInfoProbeInFlight) return;
+    hostInfoProbeInFlight = true;
+    QPointer<MainWindow> self(this);
+    runOnNewThread([self] {
+        const auto response = NetworkRequestHelper::HttpGetDirect("https://api.ipify.org");
+        const QString ip = response.error.isEmpty() ? QString::fromUtf8(response.data).trimmed() : QString();
+        runOnUiThread([self, ip] {
+            if (!self) return;
+            self->hostInfoProbeInFlight = false;
+            if (!ip.isEmpty()) self->hostInfoIp = ip;
+            self->refreshInfoPanel();
+        });
+    });
 }
 
 void MainWindow::refresh_startstop_button() {
@@ -484,7 +494,7 @@ void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, boo
 // Owns no test session, so unlike the group sweeps it stays out of TestRunner.
 void MainWindow::url_test_current() {
     last_test_time = QDateTime::currentSecsSinceEpoch();
-    ui->label_running->setText(tr("Testing"));
+    MW_show_log(tr("Testing current profile"));
 
     runOnNewThread([=,this] {
         libcore::TestReq req;
@@ -503,9 +513,9 @@ void MainWindow::url_test_current() {
                 MW_show_log(QString("UrlTest error: %1").arg(QString::fromStdString(result.results[0].error.value())));
             }
             if (latency <= 0) {
-                ui->label_running->setText(tr("Test Result") + ": " + tr("Unavailable"));
+                MW_show_log(tr("Test Result") + ": " + tr("Unavailable"));
             } else if (latency > 0) {
-                ui->label_running->setText(tr("Test Result") + ": " + QString("%1 ms").arg(latency));
+                MW_show_log(tr("Test Result") + ": " + QString("%1 ms").arg(latency));
             }
         });
     });

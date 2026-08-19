@@ -477,6 +477,7 @@ void TestRunner::applyIpResult(const std::shared_ptr<Configs::Profile>& ent, con
         ent->test_country.clear();
     }
     Configs::dataManager->profilesRepo->Save(ent);
+    runOnUiThread([this] { mw_->refresh_status(); });
 }
 
 void TestRunner::runUrlProbe(const Target& target) {

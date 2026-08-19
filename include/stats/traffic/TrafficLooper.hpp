@@ -14,6 +14,9 @@ namespace Stats {
         QString tag;
         double downlink_rate = 0;
         double uplink_rate = 0;
+        qint64 downlink_total = 0;
+        qint64 uplink_total = 0;
+        double max_rate = 0;
     };
 
     inline QString DisplaySpeed(const std::shared_ptr<TrafficLooperEntry> &entry) {

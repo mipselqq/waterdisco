@@ -33,6 +33,7 @@ namespace Stats {
 
         proxy->uplink_rate = 0;
         proxy->downlink_rate = 0;
+        QSet<QString> countedProxyTags;
 
         // For each chain group, read the matched-outbound's delta-since-last-query
         // and credit it to every user-visible profile in the chain. Aggregate
@@ -59,8 +60,16 @@ namespace Stats {
             }
             group.uplink_rate = static_cast<double>(up) * 1000.0 / static_cast<double>(interval);
             group.downlink_rate = static_cast<double>(down) * 1000.0 / static_cast<double>(interval);
-            proxy->uplink_rate += group.uplink_rate;
-            proxy->downlink_rate += group.downlink_rate;
+            // A route can expose the same watched outbound to more than one
+            // profile group. Each profile still needs its own accounting above,
+            // but the aggregate Proxy panel must count those core bytes once.
+            if (!countedProxyTags.contains(group.watchTag)) {
+                countedProxyTags.insert(group.watchTag);
+                proxy->uplink_rate += group.uplink_rate;
+                proxy->downlink_rate += group.downlink_rate;
+                proxy->uplink_total += up;
+                proxy->downlink_total += down;
+            }
         }
 
         // direct: not part of any chain group, tracked on its own for the
@@ -76,9 +85,13 @@ namespace Stats {
                 const auto down = resp.downs.at(directTag);
                 direct->uplink_rate = static_cast<double>(up) * 1000.0 / static_cast<double>(interval);
                 direct->downlink_rate = static_cast<double>(down) * 1000.0 / static_cast<double>(interval);
+                direct->uplink_total += up;
+                direct->downlink_total += down;
                 trafficStatsManager->AddConfigDelta(DIRECT_STAT_PROFILE_ID, up, down);
             }
         }
+        proxy->max_rate = qMax(proxy->max_rate, proxy->uplink_rate + proxy->downlink_rate);
+        direct->max_rate = qMax(direct->max_rate, direct->uplink_rate + direct->downlink_rate);
     }
 
     void TrafficLooper::Loop() {
@@ -175,6 +188,10 @@ namespace Stats {
     }
 
     void TrafficLooper::SetChainGroups(const QList<Configs::TrafficChainGroup>& configGroups) {
+        // The polling thread reads these containers while collecting core
+        // counters. Replacing a running configuration must be one atomic view
+        // for both the graph and the Info panel.
+        QMutexLocker locker(&loop_mutex);
         proxy = std::make_shared<TrafficLooperEntry>();
         proxy->tag = "proxy";
         direct = std::make_shared<TrafficLooperEntry>();

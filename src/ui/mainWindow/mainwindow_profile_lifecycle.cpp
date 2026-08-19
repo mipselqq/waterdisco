@@ -340,12 +340,21 @@ void MainWindow::profile_start(int _id) {
         }
 
         Configs::dataManager->settingsRepo->UpdateStartedId(ent->id);
+        // `ip_out` is persisted from the last probe. Do not show that stale
+        // result as a live connection until the new profile instance proves
+        // its actual egress address.
+        ent->ip_out.clear();
+        ent->test_country.clear();
         running = ent;
         if (Configs::dataManager->settingsRepo->spmode_system_proxy) set_system_proxy(true);
 
         runOnUiThread([=, this] {
             refresh_status();
             refresh_proxy_list({ent->id});
+            // This test builds a one-profile test core, so its result is the
+            // profile's real egress IP even when the application's split route
+            // would send a normal HTTP lookup directly.
+            testRunner->runIpTests({ent->id});
             // Reveals the Tools entry and seeds the data-view panel before the
             // first poll lands, so a selector never starts up invisibly.
             refresh_auto_selector_view();

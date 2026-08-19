@@ -368,8 +368,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         Configs::dataManager->groupsRepo->SetGroupsTabOrder(tabOrder);
         on_tabWidget_currentChanged(ui->tabWidget->tabBar()->currentIndex());
     });
-    ui->label_running->installEventFilter(this);
-    ui->label_inbound->installEventFilter(this);
     ui->splitter->installEventFilter(this);
     ui->tabWidget->installEventFilter(this);
     //

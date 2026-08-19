@@ -90,6 +90,22 @@ namespace Configs_network {
         return result;
     }
 
+    HTTPResponse NetworkRequestHelper::HttpGetDirect(const QString &url) {
+        QNetworkRequest request{QUrl(url)};
+        QNetworkAccessManager accessManager;
+        accessManager.setTransferTimeout(10000);
+        accessManager.setProxy(QNetworkProxy::NoProxy);
+        ConfigureRequest(request);
+        auto *reply = accessManager.get(request);
+        QEventLoop loop;
+        connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        loop.exec();
+        HTTPResponse result{reply->error() == QNetworkReply::NoError ? "" : reply->errorString(),
+                            reply->readAll(), reply->rawHeaderPairs()};
+        reply->deleteLater();
+        return result;
+    }
+
     QString NetworkRequestHelper::GetHeader(const QList<QPair<QByteArray, QByteArray>> &header, const QString &name) {
         for (const auto &p: header) {
             if (QString(p.first).toLower() == name.toLower()) return p.second;

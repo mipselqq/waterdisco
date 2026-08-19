@@ -37,6 +37,9 @@ namespace Configs_network {
 
         static HTTPResponse HttpGet(const QString &url, bool sendHwid = false, bool useProxy = false);
 
+        // Diagnostic requests that must never inherit the application's proxy policy.
+        static HTTPResponse HttpGetDirect(const QString &url);
+
         static QString GetHeader(const QList<QPair<QByteArray, QByteArray>> &header, const QString &name);
 
         static QString DownloadAsset(const QString &url, const QString &fileName);

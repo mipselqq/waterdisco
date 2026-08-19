@@ -255,6 +255,8 @@ private:
     bool m_profileDisconnecting = false;
     bool m_xrayGeoAssetBusy = false;
     QString traffic_update_cache;
+    QString hostInfoIp;
+    bool hostInfoProbeInFlight = false;
     qint64 last_test_time = 0;
     //
     int proxy_last_order = -1;
@@ -332,6 +334,9 @@ private:
 
     QList<int> get_now_selected_list();
     void refresh_startstop_button();
+
+    void refreshInfoPanel();
+    void refreshHostInfoIp();
 
     QList<int> get_selected_or_group();
 

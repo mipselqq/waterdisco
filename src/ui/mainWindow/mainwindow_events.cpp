@@ -200,13 +200,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     }
     if (type == QEvent::MouseButtonPress) {
         auto mouseEvent = dynamic_cast<QMouseEvent *>(event);
-        if (obj == ui->label_running && mouseEvent->button() == Qt::LeftButton && running != nullptr) {
-            url_test_current();
-            return true;
-        } else if (obj == ui->label_inbound && mouseEvent->button() == Qt::LeftButton) {
-            on_menu_basic_settings_triggered();
-            return true;
-        } else if (obj == ui->tabWidget && mouseEvent->button() == Qt::RightButton) {
+        if (obj == ui->tabWidget && mouseEvent->button() == Qt::RightButton) {
             on_tabWidget_customContextMenuRequested(mouseEvent->position().toPoint());
             return true;
         }

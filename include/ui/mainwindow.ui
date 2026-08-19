@@ -491,7 +491,7 @@ QTabBar::tab:selected {
        <layout class="QVBoxLayout" name="aaaaaaaaaaaa" stretch="0">
         <item>
          <widget class="QWidget" name="down_tab" native="true">
-          <layout class="QVBoxLayout" name="verticalLayout">
+          <layout class="QHBoxLayout" name="infoSplitLayout">
            <property name="spacing">
             <number>0</number>
            </property>
@@ -595,9 +595,62 @@ QTabBar::tab:selected {
                  <property name="openLinks">
                   <bool>false</bool>
                  </property>
+           </widget>
+           </item>
+           <item>
+            <widget class="QTabWidget" name="info_widget">
+             <property name="minimumSize">
+              <size><width>270</width><height>0</height></size>
+             </property>
+             <property name="maximumSize">
+              <size><width>340</width><height>16777215</height></size>
+             </property>
+             <property name="documentMode"><bool>true</bool></property>
+             <widget class="QWidget" name="info_tab">
+              <attribute name="title"><string>Info</string></attribute>
+              <layout class="QVBoxLayout" name="infoLayout">
+               <property name="leftMargin"><number>8</number></property>
+               <property name="topMargin"><number>8</number></property>
+               <property name="rightMargin"><number>8</number></property>
+               <property name="bottomMargin"><number>8</number></property>
+               <item>
+                <widget class="QGroupBox" name="proxyInfoGroup">
+                 <property name="title"><string>Proxy</string></property>
+                 <layout class="QFormLayout" name="proxyInfoForm">
+                  <property name="horizontalSpacing"><number>8</number></property>
+                  <property name="labelAlignment"><set>Qt::AlignRight|Qt::AlignVCenter</set></property>
+                  <item row="0" column="0"><widget class="QLabel" name="proxyConnectedTitle"><property name="text"><string>Truly connected</string></property></widget></item>
+                  <item row="0" column="1"><widget class="QLabel" name="proxy_connected_value"><property name="text"><string>No</string></property></widget></item>
+                  <item row="1" column="0"><widget class="QLabel" name="proxyIpTitle"><property name="text"><string>IP</string></property></widget></item>
+                  <item row="1" column="1"><widget class="QLabel" name="proxy_ip_value"><property name="text"><string>—</string></property></widget></item>
+                  <item row="2" column="0"><widget class="QLabel" name="proxySpeedTitle"><property name="text"><string>Max speed</string></property></widget></item>
+                  <item row="2" column="1"><widget class="QLabel" name="proxy_speed_value"><property name="text"><string>0 Mbps</string></property></widget></item>
+                  <item row="3" column="0"><widget class="QLabel" name="proxyTrafficTitle"><property name="text"><string>Traffic</string></property></widget></item>
+                  <item row="3" column="1"><widget class="QLabel" name="proxy_traffic_value"><property name="text"><string>↓ 0 B   ↑ 0 B</string></property></widget></item>
+                 </layout>
                 </widget>
                </item>
+               <item>
+                <widget class="QGroupBox" name="hostInfoGroup">
+                 <property name="title"><string>Host</string></property>
+                 <layout class="QFormLayout" name="hostInfoForm">
+                  <property name="horizontalSpacing"><number>8</number></property>
+                  <property name="labelAlignment"><set>Qt::AlignRight|Qt::AlignVCenter</set></property>
+                  <item row="0" column="0"><widget class="QLabel" name="hostIpTitle"><property name="text"><string>IP</string></property></widget></item>
+                  <item row="0" column="1"><widget class="QLabel" name="host_ip_value"><property name="text"><string>—</string></property></widget></item>
+                  <item row="1" column="0"><widget class="QLabel" name="hostSpeedTitle"><property name="text"><string>Max speed</string></property></widget></item>
+                  <item row="1" column="1"><widget class="QLabel" name="host_speed_value"><property name="text"><string>0 Mbps</string></property></widget></item>
+                  <item row="2" column="0"><widget class="QLabel" name="hostTrafficTitle"><property name="text"><string>Traffic</string></property></widget></item>
+                  <item row="2" column="1"><widget class="QLabel" name="host_traffic_value"><property name="text"><string>↓ 0 B   ↑ 0 B</string></property></widget></item>
+                 </layout>
+                </widget>
+               </item>
+               <item><spacer name="infoSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer></item>
               </layout>
+             </widget>
+            </widget>
+           </item>
+          </layout>
              </widget>
              <widget class="QWidget" name="connections_tab">
               <attribute name="title">
@@ -712,37 +765,6 @@ QTabBar::tab:selected {
        </layout>
       </widget>
      </widget>
-    </item>
-    <item>
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <widget class="QLabel" name="label_running">
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="label_inbound">
-        <property name="text">
-         <string/>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="label_speed">
-        <property name="text">
-         <string/>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-     </layout>
     </item>
    </layout>
   </widget>
