@@ -423,12 +423,14 @@ set(PROJECT_SOURCES
         include/database/TrafficStatsRepo.h
 
         include/database/entities/Profile.h
+        include/database/entities/ProfileMetrics.h
         include/database/entities/Group.h
         include/database/entities/RouteProfile.h
         include/database/entities/RouteRule.h
         include/database/entities/OtpProfile.h
 
         src/database/entities/Profile.cpp
+        src/database/entities/ProfileMetrics.cpp
         src/database/entities/Group.cpp
         src/database/entities/RouteProfile.cpp
         src/database/entities/RouteRule.cpp
@@ -491,6 +493,16 @@ set_target_properties(Throne PROPERTIES
         UNITY_BUILD ON
 )
 set_property(SOURCE "3rdparty/SQLiteCpp/src/sqlite3.c" PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
+
+include(CTest)
+if (BUILD_TESTING)
+    add_executable(profile_metrics_test
+            tests/profile_metrics_test.cpp
+            src/database/entities/ProfileMetrics.cpp)
+    target_include_directories(profile_metrics_test PRIVATE ${CMAKE_SOURCE_DIR})
+    target_link_libraries(profile_metrics_test PRIVATE Qt6::Core)
+    add_test(NAME profile_metrics COMMAND profile_metrics_test)
+endif ()
 
 # Verified to link. OMIT_VIRTUALTABLE/VIEW/ANALYZE/CTE/WINDOWFUNC/DECLTYPE all break this build.
 target_compile_definitions(Throne PRIVATE

@@ -500,7 +500,12 @@ void TestRunner::pollSpeedTest(const QMap<QString, int>& tag2entID, bool testCur
 
         if (result.error.value().empty() && !result.cancelled.value())
         {
-            if (!result.dl_speed.value().empty()) profile->dl_speed = QString::fromStdString(result.dl_speed.value());
+            if (!result.dl_speed.value().empty()) {
+                const QString speed = QString::fromStdString(result.dl_speed.value());
+                const int connectionTime = result.latency.value() > 0
+                    ? result.latency.value() : profile->connect_time_ms;
+                profile->SetPerformanceResult(connectionTime, Configs::ParseSpeedMbps(speed), speed);
+            }
             if (!result.ul_speed.value().empty()) profile->ul_speed = QString::fromStdString(result.ul_speed.value());
             if (profile->latency <= 0 && result.latency.value() > 0) profile->SetLatency(result.latency.value());
             if (!result.server_country.value().empty()) profile->test_country = CountryNameToCode(QString::fromStdString(result.server_country.value()));
@@ -611,12 +616,13 @@ void TestRunner::runSpeedProbe(const Target& target)
 
         const auto error = QString::fromStdString(res.error.value());
         if (error.isEmpty()) {
-            ent->dl_speed = QString::fromStdString(res.dl_speed.value());
+            const QString speed = QString::fromStdString(res.dl_speed.value());
+            ent->SetPerformanceResult(res.latency.value(), Configs::ParseSpeedMbps(speed), speed);
             ent->ul_speed = QString::fromStdString(res.ul_speed.value());
             if (ent->latency <= 0 && res.latency.value() > 0) ent->SetLatency(res.latency.value());
             if (!res.server_country.value().empty()) ent->test_country = CountryNameToCode(QString::fromStdString(res.server_country.value()));
         } else {
-            ent->dl_speed = "N/A";
+            ent->MarkPerformanceError();
             ent->ul_speed = "N/A";
             ent->SetLatency(-1);
             ent->test_country = "";

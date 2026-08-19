@@ -3,6 +3,8 @@
 #include <QJsonDocument>
 #include <QSet>
 
+#include <algorithm>
+
 #include "include/database/GroupsRepo.h"
 #include "include/global/Configs.hpp"
 
@@ -23,7 +25,43 @@ namespace Configs
         ip_out.clear();
         latency = 0;
         latency_at = 0;
+        ClearPerformanceTestResults();
+    }
+
+    void Profile::ClearPerformanceTestResults() {
+        connect_time_ms = 0;
+        rx_speed_mbps = 0.0;
+        site_score = 0;
+        performance_test_status = PerformanceTestStatus::Untested;
         dl_speed.clear();
+        ul_speed.clear();
+    }
+
+    void Profile::SetPerformanceResult(int connectionTimeMs, double rxMbps,
+                                       const QString &displaySpeed) {
+        connect_time_ms = std::max(0, connectionTimeMs);
+        rx_speed_mbps = std::max(0.0, rxMbps);
+        site_score = CalculateSiteScore(connect_time_ms, rx_speed_mbps);
+        performance_test_status = PerformanceTestStatus::Success;
+        dl_speed = displaySpeed.isEmpty()
+            ? QStringLiteral("%1 Mbps").arg(rx_speed_mbps, 0, 'f', 2)
+            : displaySpeed;
+    }
+
+    void Profile::MarkPerformanceSkipped() {
+        rx_speed_mbps = 0.0;
+        site_score = 0;
+        performance_test_status = PerformanceTestStatus::Skipped;
+        dl_speed = QStringLiteral("Skipped");
+        ul_speed.clear();
+    }
+
+    void Profile::MarkPerformanceError() {
+        if (connect_time_ms < 0) connect_time_ms = 0;
+        rx_speed_mbps = 0.0;
+        site_score = 0;
+        performance_test_status = PerformanceTestStatus::Error;
+        dl_speed = QStringLiteral("Error");
         ul_speed.clear();
     }
 
@@ -53,6 +91,37 @@ namespace Configs
         return result;
     }
 
+    QString Profile::DisplayLatency() const {
+        if (latency < 0) return QStringLiteral("Unavailable");
+        if (latency == 0) return {};
+        return QStringLiteral("%1 ms").arg(latency);
+    }
+
+    QString Profile::DisplayRxSpeed() const {
+        switch (performance_test_status) {
+        case PerformanceTestStatus::Success:
+            if (!dl_speed.isEmpty()) return dl_speed;
+            return QStringLiteral("%1 Mbps").arg(rx_speed_mbps, 0, 'f', 2);
+        case PerformanceTestStatus::Skipped: return QStringLiteral("Skipped");
+        case PerformanceTestStatus::Error: return QStringLiteral("Error");
+        case PerformanceTestStatus::Untested: return {};
+        }
+        return {};
+    }
+
+    QString Profile::DisplayConnectionTime() const {
+        if (connect_time_ms > 0) return QStringLiteral("%1 ms").arg(connect_time_ms);
+        if (performance_test_status == PerformanceTestStatus::Error) {
+            return QStringLiteral("Unavailable");
+        }
+        return {};
+    }
+
+    QString Profile::DisplaySiteScore() const {
+        if (performance_test_status != PerformanceTestStatus::Success) return {};
+        return QString::number(site_score);
+    }
+
     QColor Profile::DisplayLatencyColor() const {
         if (latency < 0) {
             return Qt::darkGray;
@@ -73,6 +142,16 @@ namespace Configs
     QString Profile::DisplayTraffic() const {
         if (traffic_downlink + traffic_uplink == 0) return "";
         return UNICODE_LRO + QString("%1↑ %2↓").arg(ReadableSize(traffic_uplink), ReadableSize(traffic_downlink));
+    }
+
+    QString Profile::DisplayTrafficRx() const {
+        if (traffic_downlink == 0) return {};
+        return UNICODE_LRO + ReadableSize(traffic_downlink);
+    }
+
+    QString Profile::DisplayTrafficTx() const {
+        if (traffic_uplink == 0) return {};
+        return UNICODE_LRO + ReadableSize(traffic_uplink);
     }
 
     void Profile::ResetTraffic() {

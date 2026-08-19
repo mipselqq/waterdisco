@@ -153,7 +153,7 @@ public slots:
         place(type_filter, ProfilesTableModel::ColType);
         place(address_filter, ProfilesTableModel::ColAddress);
         place(name_filter, ProfilesTableModel::ColName);
-        place(test_filter, ProfilesTableModel::ColTestResult);
+        place(test_filter, ProfilesTableModel::ColLatency);
     }
 
 signals:
@@ -201,7 +201,7 @@ private:
         case ProfilesTableModel::ColType:       return type_filter;
         case ProfilesTableModel::ColAddress:    return address_filter;
         case ProfilesTableModel::ColName:       return name_filter;
-        case ProfilesTableModel::ColTestResult: return test_filter;
+        case ProfilesTableModel::ColLatency:    return test_filter;
         default:                                return nullptr;
         }
     }
@@ -210,7 +210,7 @@ private:
         if (edit == type_filter)    return ProfilesTableModel::ColType;
         if (edit == address_filter) return ProfilesTableModel::ColAddress;
         if (edit == name_filter)    return ProfilesTableModel::ColName;
-        if (edit == test_filter)    return ProfilesTableModel::ColTestResult;
+        if (edit == test_filter)    return ProfilesTableModel::ColLatency;
         return -1;
     }
 

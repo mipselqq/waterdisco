@@ -162,9 +162,12 @@ void MainWindow::on_menu_reset_traffic_triggered() {
         ent->ResetTraffic();
         Configs::dataManager->profilesRepo->SaveTraffic(ent);
     }
-    if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid); group &&
-        group->calculated_column_width.size() > ProfilesTableModel::ColTraffic)
-        group->calculated_column_width[ProfilesTableModel::ColTraffic] = 0;
+    if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid)) {
+        if (group->calculated_column_width.size() > ProfilesTableModel::ColRxTraffic)
+            group->calculated_column_width[ProfilesTableModel::ColRxTraffic] = 0;
+        if (group->calculated_column_width.size() > ProfilesTableModel::ColTxTraffic)
+            group->calculated_column_width[ProfilesTableModel::ColTxTraffic] = 0;
+    }
     refresh_proxy_list(entIDs);
 }
 
@@ -364,9 +367,8 @@ void MainWindow::on_menu_clear_test_result_triggered() {
         ent->ClearTestResults();
     }
     Configs::dataManager->profilesRepo->SaveBatch(ents);
-    if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid); group &&
-        group->calculated_column_width.size() > ProfilesTableModel::ColTestResult)
-        group->calculated_column_width[ProfilesTableModel::ColTestResult] = 0;
+    if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid))
+        group->clearCalculatedColumnWidth();
     refresh_proxy_list();
 }
 

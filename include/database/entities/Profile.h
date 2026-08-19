@@ -27,6 +27,7 @@
 #include "include/configs/outbounds/xrayVless.h"
 
 #include "include/global/CountryHelper.hpp"
+#include "include/database/entities/ProfileMetrics.h"
 
 namespace Configs {
     class Profile {
@@ -40,6 +41,10 @@ namespace Configs {
         // Unix seconds when `latency` was measured; 0 = unknown/never. Lets a
         // consumer decide whether a stored result is still worth trusting.
         qint64 latency_at = 0;
+        int connect_time_ms = 0;
+        double rx_speed_mbps = 0.0;
+        int site_score = 0;
+        PerformanceTestStatus performance_test_status = PerformanceTestStatus::Untested;
         QString dl_speed;
         QString ul_speed;
         QString test_country;
@@ -56,6 +61,11 @@ namespace Configs {
         Profile(Configs::outbound *outbound, const QString &type_);
 
         void ClearTestResults();
+        void ClearPerformanceTestResults();
+        void SetPerformanceResult(int connectionTimeMs, double rxMbps,
+                                  const QString &displaySpeed = {});
+        void MarkPerformanceSkipped();
+        void MarkPerformanceError();
 
         // Always set latency through here: it stamps latency_at, which is what
         // lets consumers judge whether a stored result is still fresh.
@@ -63,9 +73,16 @@ namespace Configs {
 
         [[nodiscard]] QString DisplayTestResult() const;
 
+        [[nodiscard]] QString DisplayLatency() const;
+        [[nodiscard]] QString DisplayRxSpeed() const;
+        [[nodiscard]] QString DisplayConnectionTime() const;
+        [[nodiscard]] QString DisplaySiteScore() const;
+
         [[nodiscard]] QColor DisplayLatencyColor() const;
 
         [[nodiscard]] QString DisplayTraffic() const;
+        [[nodiscard]] QString DisplayTrafficRx() const;
+        [[nodiscard]] QString DisplayTrafficTx() const;
         void ResetTraffic();
 
         [[nodiscard]] Configs::socks *Socks() const {

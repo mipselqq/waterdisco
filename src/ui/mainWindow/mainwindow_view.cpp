@@ -273,12 +273,18 @@ void MainWindow::refresh_proxy_list_column_size() {
             hHeader->setSectionResizeMode(ProfilesTableModel::ColType, QHeaderView::ResizeToContents);
             hHeader->setSectionResizeMode(ProfilesTableModel::ColAddress, QHeaderView::Stretch);
             hHeader->setSectionResizeMode(ProfilesTableModel::ColName, QHeaderView::Stretch);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColTestResult, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColTraffic, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(ProfilesTableModel::ColLatency, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(ProfilesTableModel::ColRxSpeed, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(ProfilesTableModel::ColConnectionTime, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(ProfilesTableModel::ColSiteScore, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(ProfilesTableModel::ColRxTraffic, QHeaderView::ResizeToContents);
+            hHeader->setSectionResizeMode(ProfilesTableModel::ColTxTraffic, QHeaderView::ResizeToContents);
             // ResizeToContents only measures on-screen rows, so pin these columns to the
             // widest seen for this group or they jitter while scrolling.
-            for (int col : {ProfilesTableModel::ColType,
-                            ProfilesTableModel::ColTestResult, ProfilesTableModel::ColTraffic}) {
+            for (int col : {ProfilesTableModel::ColType, ProfilesTableModel::ColLatency,
+                            ProfilesTableModel::ColRxSpeed, ProfilesTableModel::ColConnectionTime,
+                            ProfilesTableModel::ColSiteScore, ProfilesTableModel::ColRxTraffic,
+                            ProfilesTableModel::ColTxTraffic}) {
                 if (group->calculated_column_width.size() > col &&
                     group->calculated_column_width[col] > hHeader->sectionSize(col)) {
                     hHeader->setSectionResizeMode(col, QHeaderView::Fixed);
@@ -333,6 +339,28 @@ void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, boo
     // The model holds the group in full; the proxy decides what is on screen.
     if (!ids.isEmpty()) {
         for (auto id:ids) profilesTableModel->refreshProfileId(id);
+        GroupSortAction action;
+        action.descending = live_sort_descending;
+        if (live_sort_column == ProfilesTableModel::ColType) {
+            action.method = (Configs::dataManager->settingsRepo->show_config_security
+                             && currentGroup->type_sort_by == Configs::typeBy::bySecurity)
+                ? GroupSortMethod::BySecurity : GroupSortMethod::ByType;
+        } else if (live_sort_column == ProfilesTableModel::ColAddress) {
+            action.method = GroupSortMethod::ByAddress;
+        } else if (live_sort_column == ProfilesTableModel::ColName) {
+            action.method = GroupSortMethod::ByName;
+        } else if (live_sort_column >= ProfilesTableModel::ColLatency
+                   && live_sort_column <= ProfilesTableModel::ColSiteScore) {
+            action.method = GroupSortMethod::ByTestResult;
+        } else if (live_sort_column == ProfilesTableModel::ColRxTraffic
+                   || live_sort_column == ProfilesTableModel::ColTxTraffic) {
+            action.method = GroupSortMethod::ByTraffic;
+        } else {
+            return;
+        }
+        if (currentGroup->SortProfiles(action)) {
+            profilesTableModel->reorderProfiles(currentGroup->Profiles());
+        }
     } else {
         profilesTableModel->refreshTable(currentGroup->profiles, mayNeedReset);
     }

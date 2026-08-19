@@ -26,8 +26,12 @@ public:
         ColType,
         ColAddress,
         ColName,
-        ColTestResult,
-        ColTraffic,
+        ColLatency,
+        ColRxSpeed,
+        ColConnectionTime,
+        ColSiteScore,
+        ColRxTraffic,
+        ColTxTraffic,
         ColumnCount,
     };
 
@@ -61,6 +65,10 @@ public:
     void refreshProfileId(int profileId);
 
     void emplaceProfiles(int row1, int row2);
+
+    // Match a newly sorted group without resetting the model or discarding the
+    // profile cache and selection.
+    void reorderProfiles(const QList<int> &ids);
 
     int indexOfProfile(int id);
 

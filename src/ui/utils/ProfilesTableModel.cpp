@@ -135,9 +135,28 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         }
         case ColAddress: return profile->outbound ? profile->outbound->DisplayAddress() : QString();
         case ColName: return profile->outbound ? profile->outbound->name : QString();
-        case ColTestResult: return profile->DisplayTestResult();
-        case ColTraffic: return profile->DisplayTraffic();
+        case ColLatency: return profile->DisplayLatency();
+        case ColRxSpeed: return profile->DisplayRxSpeed();
+        case ColConnectionTime: return profile->DisplayConnectionTime();
+        case ColSiteScore: return profile->DisplaySiteScore();
+        case ColRxTraffic: return profile->DisplayTrafficRx();
+        case ColTxTraffic: return profile->DisplayTrafficTx();
         default: return {};
+        }
+    }
+    if (role == Qt::TextAlignmentRole) {
+        switch (index.column()) {
+        case ColStartup:
+        case ColDisabled:
+        case ColLatency:
+        case ColRxSpeed:
+        case ColConnectionTime:
+        case ColSiteScore:
+        case ColRxTraffic:
+        case ColTxTraffic:
+            return static_cast<int>(Qt::AlignCenter);
+        default:
+            return static_cast<int>(Qt::AlignVCenter | Qt::AlignLeft);
         }
     }
     if (role == Qt::ToolTipRole) {
@@ -151,9 +170,28 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         if (Configs::dataManager->settingsRepo->IsProfileDisabled(profileId)) {
             return QApplication::palette().color(QPalette::Disabled, QPalette::Text);
         }
-        if (index.column() == ColTestResult) {
+        if (index.column() == ColLatency) {
             QColor latencyColor = profile->DisplayLatencyColor();
             if (latencyColor.isValid()) return latencyColor;
+        }
+        if (index.column() == ColRxSpeed) {
+            if (profile->performance_test_status == Configs::PerformanceTestStatus::Error) {
+                return QColor(Qt::red);
+            }
+            if (profile->performance_test_status == Configs::PerformanceTestStatus::Skipped) {
+                return QApplication::palette().color(QPalette::Disabled, QPalette::Text);
+            }
+        }
+        if (index.column() == ColConnectionTime && profile->connect_time_ms > 0) {
+            if (profile->connect_time_ms <= 100) return QColor(Qt::darkGreen);
+            if (profile->connect_time_ms <= 300) return QColor(Qt::darkYellow);
+            return QColor(Qt::red);
+        }
+        if (index.column() == ColSiteScore
+            && profile->performance_test_status == Configs::PerformanceTestStatus::Success) {
+            if (profile->site_score >= 80) return QColor(Qt::darkGreen);
+            if (profile->site_score >= 55) return QColor(Qt::darkYellow);
+            return QColor(Qt::red);
         }
         if (isRunning && linkColor.isValid()) return linkColor;
         return {};
@@ -198,8 +236,12 @@ QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation
         case ColType: return tr("Type");
         case ColAddress: return tr("Address");
         case ColName: return tr("Name");
-        case ColTestResult: return tr("Test Result");
-        case ColTraffic: return tr("Traffic");
+        case ColLatency: return tr("Latency");
+        case ColRxSpeed: return tr("Rx speed");
+        case ColConnectionTime: return tr("Connection\ntime");
+        case ColSiteScore: return tr("Site Score");
+        case ColRxTraffic: return tr("Rx traffic");
+        case ColTxTraffic: return tr("Tx traffic");
         default: return {};
         }
     }
@@ -304,6 +346,20 @@ void ProfilesTableModel::emplaceProfiles(int row1, int row2) {
     const int to = std::min(std::max(row1, row2), static_cast<int>(m_profileIds.size()) - 1);
     for (int i = from; i <= to; ++i) id2row[m_profileIds[i]] = i;
     for (int i = from; i <= to; ++i) refreshProfileId(m_profileIds[i]);
+}
+
+void ProfilesTableModel::reorderProfiles(const QList<int> &ids) {
+    if (ids.size() != m_profileIds.size()) return;
+    for (int targetRow = 0; targetRow < ids.size(); ++targetRow) {
+        const int sourceRow = m_profileIds.indexOf(ids[targetRow], targetRow);
+        if (sourceRow < 0 || sourceRow == targetRow) continue;
+        const int destinationChild = sourceRow < targetRow ? targetRow + 1 : targetRow;
+        beginMoveRows({}, sourceRow, sourceRow, {}, destinationChild);
+        m_profileIds.move(sourceRow, targetRow);
+        endMoveRows();
+    }
+    id2row.clear();
+    for (int row = 0; row < m_profileIds.size(); ++row) id2row.insert(m_profileIds[row], row);
 }
 
 int ProfilesTableModel::indexOfProfile(int id) {

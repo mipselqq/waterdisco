@@ -503,6 +503,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         ProfilesTableModel::ColDisabled,
         new CenteredCheckBoxDelegate(ui->profilesTableView));
     ui->profilesTableView->setColumnHidden(ProfilesTableModel::ColAddress, true);
+    ui->profilesTableView->setColumnHidden(ProfilesTableModel::ColLatency, true);
     connect(profilesTableModel, &QAbstractItemModel::dataChanged, this,
             [this](const QModelIndex &topLeft, const QModelIndex &bottomRight,
                    const QList<int> &roles) {
@@ -598,14 +599,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             return;
         }
         GroupSortAction action;
-        if (proxy_last_order == logicalIndex) {
-            action.descending = true;
-            proxy_last_order = -1;
-        } else {
-            proxy_last_order = logicalIndex;
-        }
+        const bool sameColumn = live_sort_column == logicalIndex;
+        action.descending = sameColumn
+            ? !live_sort_descending
+            : logicalIndex == ProfilesTableModel::ColSiteScore;
+        proxy_last_order = logicalIndex;
+        live_sort_column = logicalIndex;
+        live_sort_descending = action.descending;
+        auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         if (logicalIndex == ProfilesTableModel::ColType) {
-            auto group = Configs::dataManager->groupsRepo->CurrentGroup();
             action.method = (Configs::dataManager->settingsRepo->show_config_security && group
                              && group->type_sort_by == Configs::typeBy::bySecurity)
                                 ? GroupSortMethod::BySecurity
@@ -614,15 +616,34 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             action.method = GroupSortMethod::ByAddress;
         } else if (logicalIndex == ProfilesTableModel::ColName) {
             action.method = GroupSortMethod::ByName;
-        } else if (logicalIndex == ProfilesTableModel::ColTestResult) {
+        } else if (logicalIndex >= ProfilesTableModel::ColLatency
+                   && logicalIndex <= ProfilesTableModel::ColSiteScore) {
             action.method = GroupSortMethod::ByTestResult;
-        } else if (logicalIndex == ProfilesTableModel::ColTraffic) {
+            if (group) {
+                if (logicalIndex == ProfilesTableModel::ColLatency)
+                    group->test_sort_by = Configs::testBy::latency;
+                else if (logicalIndex == ProfilesTableModel::ColRxSpeed)
+                    group->test_sort_by = Configs::testBy::rxSpeed;
+                else if (logicalIndex == ProfilesTableModel::ColConnectionTime)
+                    group->test_sort_by = Configs::testBy::connectTime;
+                else
+                    group->test_sort_by = Configs::testBy::siteScore;
+            }
+        } else if (logicalIndex == ProfilesTableModel::ColRxTraffic
+                   || logicalIndex == ProfilesTableModel::ColTxTraffic) {
             action.method = GroupSortMethod::ByTraffic;
+            if (group) {
+                group->traffic_sort_by = logicalIndex == ProfilesTableModel::ColRxTraffic
+                    ? Configs::trafficBy::rx : Configs::trafficBy::tx;
+            }
         } else {
+            live_sort_column = -1;
             return;
         }
+        if (!group) return;
+        const int sortGroupId = group->id;
         runOnNewThread([=, this] {
-            auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+            auto currGroup = Configs::dataManager->groupsRepo->GetGroup(sortGroupId);
             if (currGroup == nullptr) return;
             if (!currGroup->SortProfiles(action)) {
                 runOnUiThread([=] {
@@ -632,7 +653,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             }
             Configs::dataManager->groupsRepo->Save(currGroup);
             runOnUiThread([=, this] {
-                refresh_proxy_list({}, true);
+                if (Configs::dataManager->settingsRepo->current_group == sortGroupId)
+                    refresh_proxy_list({}, true);
             });
         });
     });
@@ -643,7 +665,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         for (int i = 0; i < ui->profilesTableView->horizontalHeader()->count(); i++) {
             group->column_width.push_back(ui->profilesTableView->horizontalHeader()->sectionSize(i));
         }
-        Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
+        Configs::dataManager->groupsRepo->Save(group);
     });
     ui->profilesTableView->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->profilesTableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
@@ -674,12 +696,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
             group->type_sort_by = static_cast<Configs::typeBy>(chosen->data().toInt());
             Configs::dataManager->groupsRepo->Save(group);
+            const int sortGroupId = group->id;
             GroupSortAction action;
             action.method = group->type_sort_by == Configs::typeBy::bySecurity
                                 ? GroupSortMethod::BySecurity
                                 : GroupSortMethod::ByType;
+            live_sort_column = ProfilesTableModel::ColType;
+            live_sort_descending = false;
             runOnNewThread([=, this] {
-                auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+                auto currGroup = Configs::dataManager->groupsRepo->GetGroup(sortGroupId);
                 if (currGroup == nullptr) return;
                 if (!currGroup->SortProfiles(action)) {
                     runOnUiThread([=] {
@@ -689,53 +714,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 }
                 Configs::dataManager->groupsRepo->Save(currGroup);
                 runOnUiThread([=, this] {
-                    refresh_proxy_list({}, true);
+                    if (Configs::dataManager->settingsRepo->current_group == sortGroupId)
+                        refresh_proxy_list({}, true);
                 });
             });
             return;
         }
-        if (columnIndex == ProfilesTableModel::ColTestResult) {
+        if (columnIndex >= ProfilesTableModel::ColLatency
+            && columnIndex <= ProfilesTableModel::ColSiteScore) {
             QMenu menu(this);
-            auto* includeLabel = menu.addAction(tr("Include:"));
-            includeLabel->setEnabled(false);
-
-            auto* actionShowOutIP = menu.addAction(tr("Out IP"));
-            actionShowOutIP->setCheckable(true);
-            actionShowOutIP->setChecked(group->test_items_to_show == Configs::testShowItems::all ||
-                group->test_items_to_show == Configs::testShowItems::ipOnly);
-
-            auto* actionShowSpeed = menu.addAction(tr("Speed"));
-            actionShowSpeed->setCheckable(true);
-            actionShowSpeed->setChecked(group->test_items_to_show == Configs::testShowItems::all ||
-                group->test_items_to_show == Configs::testShowItems::speedOnly);
-
-            auto updateTestItemsToShow = [this, group, actionShowOutIP, actionShowSpeed] {
-                    const bool ip = actionShowOutIP->isChecked();
-                    const bool speed = actionShowSpeed->isChecked();
-                    if (ip && speed) group->test_items_to_show = Configs::testShowItems::all;
-                    else if (ip) group->test_items_to_show = Configs::testShowItems::ipOnly;
-                    else if (speed) group->test_items_to_show = Configs::testShowItems::speedOnly;
-                    else group->test_items_to_show = Configs::testShowItems::none;
-                    Configs::dataManager->groupsRepo->Save(group);
-                    if (group->calculated_column_width.size() > ProfilesTableModel::ColTestResult) {
-                        group->calculated_column_width[ProfilesTableModel::ColTestResult] = 0;
-                    }
-                    refresh_proxy_list();
-                };
-
-            connect(actionShowOutIP, &QAction::triggered, this, updateTestItemsToShow);
-            connect(actionShowSpeed, &QAction::triggered, this, updateTestItemsToShow);
-
-            menu.addSeparator();
             auto* sortByLabel = menu.addAction(tr("Sort By:"));
             sortByLabel->setEnabled(false);
 
             struct SortOption { int value; QString label; };
             QList<SortOption> options = {
                 { static_cast<int>(Configs::testBy::latency), tr("Latency") },
-                { static_cast<int>(Configs::testBy::dlSpeed), tr("Download Speed") },
-                { static_cast<int>(Configs::testBy::ulSpeed), tr("Upload Speed") },
-                { static_cast<int>(Configs::testBy::ipOut), tr("IP Out") }
+                { static_cast<int>(Configs::testBy::rxSpeed), tr("Rx Speed") },
+                { static_cast<int>(Configs::testBy::connectTime), tr("Connection Time") },
+                { static_cast<int>(Configs::testBy::siteScore), tr("Site Score") }
             };
             for (const auto& opt : options) {
                 auto* act = menu.addAction(opt.label);
@@ -750,11 +746,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             int testSortBy = chosen->data().toInt();
             group->test_sort_by = static_cast<Configs::testBy>(testSortBy);
             Configs::dataManager->groupsRepo->Save(group);
+            const int sortGroupId = group->id;
             GroupSortAction action;
             action.method = GroupSortMethod::ByTestResult;
-            action.descending = true;
+            action.descending = group->test_sort_by == Configs::testBy::siteScore;
+            if (group->test_sort_by == Configs::testBy::latency)
+                live_sort_column = ProfilesTableModel::ColLatency;
+            else if (group->test_sort_by == Configs::testBy::rxSpeed)
+                live_sort_column = ProfilesTableModel::ColRxSpeed;
+            else if (group->test_sort_by == Configs::testBy::connectTime)
+                live_sort_column = ProfilesTableModel::ColConnectionTime;
+            else
+                live_sort_column = ProfilesTableModel::ColSiteScore;
+            live_sort_descending = action.descending;
             runOnNewThread([=, this] {
-                auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+                auto currGroup = Configs::dataManager->groupsRepo->GetGroup(sortGroupId);
                 if (currGroup == nullptr) return;
                 if (!currGroup->SortProfiles(action)) {
                     runOnUiThread([=] {
@@ -764,21 +770,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 }
                 Configs::dataManager->groupsRepo->Save(currGroup);
                 runOnUiThread([=, this] {
-                    refresh_proxy_list({}, true);
+                    if (Configs::dataManager->settingsRepo->current_group == sortGroupId)
+                        refresh_proxy_list({}, true);
                     });
                 });
             return;
         }
-        if (columnIndex == ProfilesTableModel::ColTraffic) {
+        if (columnIndex == ProfilesTableModel::ColRxTraffic
+            || columnIndex == ProfilesTableModel::ColTxTraffic) {
             QMenu menu(this);
             auto* sortByLabel = menu.addAction(tr("Sort By:"));
             sortByLabel->setEnabled(false);
 
             struct TrafficSortOption { int value; QString label; };
             QList<TrafficSortOption> options = {
-                { 0, tr("Total") },
-                { 1, tr("Downloaded") },
-                { 2, tr("Uploaded") }
+                { static_cast<int>(Configs::trafficBy::rx), tr("Rx traffic") },
+                { static_cast<int>(Configs::trafficBy::tx), tr("Tx traffic") }
             };
 
             for (const auto& opt : options) {
@@ -794,11 +801,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             int trafficSortBy = chosen->data().toInt();
             group->traffic_sort_by = static_cast<Configs::trafficBy>(trafficSortBy);
             Configs::dataManager->groupsRepo->Save(group);
+            const int sortGroupId = group->id;
             GroupSortAction action;
             action.method = GroupSortMethod::ByTraffic;
             action.descending = false;
+            live_sort_column = group->traffic_sort_by == Configs::trafficBy::rx
+                ? ProfilesTableModel::ColRxTraffic : ProfilesTableModel::ColTxTraffic;
+            live_sort_descending = false;
             runOnNewThread([=, this] {
-                auto currGroup = Configs::dataManager->groupsRepo->CurrentGroup();
+                auto currGroup = Configs::dataManager->groupsRepo->GetGroup(sortGroupId);
                 if (currGroup == nullptr) return;
                 if (!currGroup->SortProfiles(action)) {
                     runOnUiThread([=] {
@@ -806,9 +817,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                         });
                     return;
                 }
-                Configs::dataManager->groupsRepo->Save(Configs::dataManager->groupsRepo->CurrentGroup());
+                Configs::dataManager->groupsRepo->Save(currGroup);
                 runOnUiThread([=, this] {
-                    refresh_proxy_list();
+                    if (Configs::dataManager->settingsRepo->current_group == sortGroupId)
+                        refresh_proxy_list();
                     });
                 });
             return;
@@ -1129,9 +1141,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             ent->ClearTestResults();
         }
         Configs::dataManager->profilesRepo->SaveBatch(ents);
-        if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid); group &&
-            group->calculated_column_width.size() > ProfilesTableModel::ColTestResult)
-            group->calculated_column_width[ProfilesTableModel::ColTestResult] = 0;
+        if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid))
+            group->clearCalculatedColumnWidth();
         refresh_proxy_list();
     });
     connect(ui->actionUrl_Test_Selected, &QAction::triggered, this, [=,this]() {

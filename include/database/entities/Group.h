@@ -9,9 +9,10 @@ namespace Configs
 {
     enum class testBy : int {
         latency = 0,
-        dlSpeed,
-        ulSpeed,
-        ipOut
+        txSpeed,
+        rxSpeed,
+        connectTime,
+        siteScore
     };
 
     enum class testShowItems : int {
@@ -22,9 +23,8 @@ namespace Configs
     };
 
     enum class trafficBy : int {
-        total = 0,
-        dl,
-        ul
+        tx = 0,
+        rx
     };
 
     enum class typeBy : int {
@@ -51,8 +51,8 @@ namespace Configs
         QList<int> calculated_column_width; // memory only, no need to save to db
         QList<int> profiles;
         int scroll_last_profile = -1;
-        testBy test_sort_by = testBy::latency;
-        trafficBy traffic_sort_by = trafficBy::total;
+        testBy test_sort_by = testBy::siteScore;
+        trafficBy traffic_sort_by = trafficBy::tx;
         typeBy type_sort_by = typeBy::byType;
         testShowItems test_items_to_show = testShowItems::all;
         // Memory only, not persisted. Pairs of (profileID, row as displayed).
