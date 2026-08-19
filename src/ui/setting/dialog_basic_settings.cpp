@@ -6,7 +6,6 @@
 #include "include/global/GuiUtils.hpp"
 #include "include/global/Configs.hpp"
 #include "include/global/HTTPRequestHelper.hpp"
-#include "include/global/DeviceDetailsHelper.hpp"
 
 #include <QStyleFactory>
 #include <QFileDialog>
@@ -199,17 +198,12 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_BOOL(sub_show_change_popup)
     D_LOAD_BOOL(net_insecure)
     D_LOAD_BOOL(sub_send_hwid)
-    D_LOAD_STRING(sub_custom_hwid_params)
+    D_LOAD_STRING(sub_device_model)
+    D_LOAD_STRING(sub_device_os)
+    D_LOAD_STRING(sub_hwid)
+    D_LOAD_STRING(sub_ver_os)
     D_LOAD_INT_ENABLE(sub_auto_update, sub_auto_update_enable)
     D_LOAD_INT_ENABLE(route_auto_update, route_auto_update_enable)
-    auto details = GetDeviceDetails();
-	ui->sub_send_hwid->setToolTip(
-        ui->sub_send_hwid->toolTip()
-            .arg(details.hwid.isEmpty() ? "N/A" : details.hwid,
-                details.os.isEmpty() ? "N/A" : details.os,
-                details.osVersion.isEmpty() ? "N/A" : details.osVersion,
-                details.model.isEmpty() ? "N/A" : details.model));
-
     // Mux
     D_LOAD_INT(mux_concurrency)
     D_LOAD_COMBO_STRING(mux_protocol)
@@ -405,7 +399,10 @@ void DialogBasicSettings::accept() {
     D_SAVE_BOOL(sub_show_change_popup)
     D_SAVE_BOOL(net_insecure)
     D_SAVE_BOOL(sub_send_hwid)
-    D_SAVE_STRING(sub_custom_hwid_params)
+    D_SAVE_STRING(sub_device_model)
+    D_SAVE_STRING(sub_device_os)
+    D_SAVE_STRING(sub_hwid)
+    D_SAVE_STRING(sub_ver_os)
     D_SAVE_INT_ENABLE(sub_auto_update, sub_auto_update_enable)
     D_SAVE_INT_ENABLE(route_auto_update, route_auto_update_enable)
 
@@ -804,4 +801,3 @@ void DialogBasicSettings::on_backup_restore_clicked() {
     MW_dialog_message(MwMessage::RestartProgram, {});
     QDialog::reject();
 }
-

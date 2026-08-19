@@ -761,10 +761,21 @@ QTabBar::tab:hover:!selected {
       </attribute>
       <layout class="QGridLayout" name="gridLayout_7">
        <item row="9" column="1">
-        <widget class="QLineEdit" name="sub_custom_hwid_params">
-         <property name="placeholderText">
-          <string>hwid=custom_value,os=custom_os,osVersion=custom_version,model=custom_model</string>
-         </property>
+        <widget class="QWidget" name="subscription_identity_fields" native="true">
+         <layout class="QGridLayout" name="gridLayout_subscription_identity">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <item row="0" column="0"><widget class="QLabel" name="label_sub_device_model"><property name="text"><string>Model</string></property></widget></item>
+          <item row="0" column="1"><widget class="QLineEdit" name="sub_device_model"/></item>
+          <item row="1" column="0"><widget class="QLabel" name="label_sub_device_os"><property name="text"><string>OS</string></property></widget></item>
+          <item row="1" column="1"><widget class="QLineEdit" name="sub_device_os"/></item>
+          <item row="2" column="0"><widget class="QLabel" name="label_sub_hwid"><property name="text"><string>HWID</string></property></widget></item>
+          <item row="2" column="1"><widget class="QLineEdit" name="sub_hwid"/></item>
+          <item row="3" column="0"><widget class="QLabel" name="label_sub_ver_os"><property name="text"><string>OS version</string></property></widget></item>
+          <item row="3" column="1"><widget class="QLineEdit" name="sub_ver_os"/></item>
+         </layout>
         </widget>
        </item>
        <item row="4" column="0">
@@ -846,11 +857,8 @@ QTabBar::tab:hover:!selected {
        </item>
        <item row="9" column="0">
         <widget class="QLabel" name="label_custom_hwid_params">
-         <property name="toolTip">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Format: hwid=value,os=value,osVersion=value,model=value&lt;/p&gt;&lt;p&gt;Leave empty to use default values. Only specify the parameters you want to override.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
          <property name="text">
-          <string>Custom System Parameters (optional)</string>
+          <string>Subscription identity</string>
          </property>
         </widget>
        </item>
@@ -1285,7 +1293,10 @@ QTabBar::tab:hover:!selected {
           <item row="0" column="0">
            <widget class="QCheckBox" name="net_use_proxy">
             <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Use proxy for subscription request, update request etc&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Route subscription, update, route-profile, asset and WARP requests through the connected profile. Requests go directly when no profile is active.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Route requests via connected profile</string>
             </property>
             <property name="text">
              <string>Use proxy</string>

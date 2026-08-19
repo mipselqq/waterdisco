@@ -770,6 +770,7 @@ QTabBar::tab:selected {
     <addaction name="actionRemember_last_proxy"/>
     <addaction name="actionAuto_connect_with_best_site_score"/>
     <addaction name="actionSpeed_test_fall_short"/>
+    <addaction name="actionRoute_requests_via_connected_profile"/>
     <addaction name="actionAllow_LAN"/>
     <addaction name="separator"/>
     <addaction name="actionRestart_Proxy"/>
@@ -1333,6 +1334,14 @@ QTabBar::tab:selected {
    </property>
    <property name="text">
     <string>Speed test fall short</string>
+   </property>
+  </action>
+  <action name="actionRoute_requests_via_connected_profile">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Route requests via connected profile</string>
    </property>
   </action>
   <action name="actionHide_window">

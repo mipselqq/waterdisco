@@ -926,6 +926,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         Configs::dataManager->settingsRepo->auto_connect_best_site_score);
     ui->actionSpeed_test_fall_short->setChecked(
         Configs::dataManager->settingsRepo->speed_test_fall_short);
+    ui->actionRoute_requests_via_connected_profile->setChecked(
+        Configs::dataManager->settingsRepo->net_use_proxy);
     ui->actionStart_with_system->setChecked(AutoRun_IsEnabled());
     ui->actionAllow_LAN->setChecked(QStringList{"::", "0.0.0.0"}.contains(Configs::dataManager->settingsRepo->inbound_address));
 
@@ -953,6 +955,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         Configs::dataManager->settingsRepo->Save();
         MW_show_log(checked ? tr("Speedtest fall-short mode enabled")
                             : tr("Speedtest fall-short mode disabled"));
+    });
+    connect(ui->actionRoute_requests_via_connected_profile, &QAction::toggled, this, [=, this](bool checked) {
+        Configs::dataManager->settingsRepo->net_use_proxy = checked;
+        Configs::dataManager->settingsRepo->Save();
     });
     connect(ui->actionStart_with_system, &QAction::triggered, this, [=,this](bool checked) {
         AutoRun_SetEnabled(checked);

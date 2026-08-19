@@ -140,7 +140,13 @@ namespace Configs {
         qint64 sub_auto_update_last = 0;
         bool sub_clear = false;
         bool sub_show_change_popup = true;
-        bool sub_send_hwid = false;
+        bool sub_send_hwid = true;
+        QString sub_device_model = "Linux x86_64 (x86-64)";
+        QString sub_device_os = "linux";
+        QString sub_hwid = "472e9bd8af6552c730f016261b66601d2305f8f15723830459275742824b789a";
+        QString sub_ver_os = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
+        // Kept only to read settings saved by older upstream releases. New
+        // requests use the explicit fields above.
         QString sub_custom_hwid_params = "";
         bool allow_stopping_active_profile = false;
 

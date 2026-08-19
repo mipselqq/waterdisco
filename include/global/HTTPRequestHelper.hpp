@@ -3,6 +3,9 @@
 #include <QObject>
 #include <functional>
 
+class QNetworkAccessManager;
+class QNetworkRequest;
+
 namespace Configs_network {
     struct HTTPResponse {
         QString error;
@@ -26,6 +29,12 @@ namespace Configs_network {
         ;
 
     public:
+        // Applies the one persisted routing policy to every app HTTP client.
+        // It deliberately falls back to direct networking if no profile is up.
+        static void ConfigureAccessManager(QNetworkAccessManager &manager);
+
+        static void ConfigureRequest(QNetworkRequest &request, bool sendIdentity = false);
+
         static HTTPResponse HttpGet(const QString &url, bool sendHwid = false, bool useProxy = false);
 
         static QString GetHeader(const QList<QPair<QByteArray, QByteArray>> &header, const QString &name);
