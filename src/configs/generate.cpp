@@ -788,12 +788,6 @@ namespace Configs {
 
         void buildDNSSection(BuildContext &ctx, bool useDnsObj = true) {
             const auto &settings = *dataManager->settingsRepo;
-            if (getOS() == Darwin && settings.core_box_underlying_dns.isEmpty() && settings.spmode_vpn)
-            {
-                ctx.error = QObject::tr("Local DNS and Tun mode do not work together, please set an IP to be used as the Local DNS server in the Routing Settings -> Local override");
-                return;
-            }
-
             if (settings.use_dns_object && useDnsObj) {
                 ctx.result->coreConfig["dns"] = QString2QJsonObject(settings.dns_object);
                 return;
@@ -978,7 +972,10 @@ namespace Configs {
             };
 
             // Local
-            auto dnsLocalAddress = settings.core_box_underlying_dns.isEmpty() ? "local" : settings.core_box_underlying_dns;
+            auto dnsLocalAddress = settings.core_box_underlying_dns.trimmed();
+            if (dnsLocalAddress.isEmpty() || dnsLocalAddress.compare("local", Qt::CaseInsensitive) == 0) {
+                dnsLocalAddress = "8.8.8.8";
+            }
             auto dnsLocalObj = buildDnsObj(ctx, dnsLocalAddress);
             dnsLocalObj["tag"] = tags::dnsLocal;
             servers += dnsLocalObj;

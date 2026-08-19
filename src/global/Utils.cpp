@@ -372,8 +372,13 @@ void runOnUiThread(const std::function<void()> &callback, bool wait) {
 
     QEventLoop loop;
     QObject::connect(timer, &QTimer::timeout, [=, &loop]() {
-        // main thread
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& e) {
+            qWarning() << "Unhandled exception in UI callback:" << e.what();
+        } catch (...) {
+            qWarning() << "Unhandled non-standard exception in UI callback";
+        }
         timer->deleteLater();
 
         if (wait)
@@ -465,7 +470,13 @@ void runOnNewThread(const std::function<void()> &callback, bool wait) {
 
     QEventLoop loop;
     QObject::connect(timer, &QTimer::timeout, [=, &loop]() {
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& e) {
+            qWarning() << "Unhandled exception in worker callback:" << e.what();
+        } catch (...) {
+            qWarning() << "Unhandled non-standard exception in worker callback";
+        }
         timer->deleteLater();
         QMetaObject::invokeMethod(thread, "quit", Qt::QueuedConnection);
 
@@ -494,7 +505,13 @@ void runOnThread(const std::function<void()> &callback, QObject *parent, bool wa
 
     QEventLoop loop;
     QObject::connect(timer, &QTimer::timeout, [=, &loop]() {
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& e) {
+            qWarning() << "Unhandled exception in thread callback:" << e.what();
+        } catch (...) {
+            qWarning() << "Unhandled non-standard exception in thread callback";
+        }
         timer->deleteLater();
 
         if (wait)

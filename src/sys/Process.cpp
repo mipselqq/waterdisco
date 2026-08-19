@@ -11,6 +11,13 @@
 #include "include/ui/mainwindow.h"
 
 namespace Configs_sys {
+    namespace {
+        bool IsIgnorableRouterLog(const QByteArray& log) {
+            return log.contains("router: failed to search process: process not found")
+                || log.contains("network: updated default interface");
+        }
+    }
+
     CoreProcess::~CoreProcess() {
     }
 
@@ -30,11 +37,13 @@ namespace Configs_sys {
                 MW_show_log("Extra Core exited, stopping profile...");
                 MW_dialog_message(MwMessage::CoreCrashed, {});
             }
+            if (IsIgnorableRouterLog(log)) return;
             if (logCounter.fetchAndAddRelaxed(log.count("\n")) > Configs::dataManager->settingsRepo->max_log_line) return;
             MW_show_log(log);
         });
         connect(this, &QProcess::readyReadStandardError, this, [&]() {
             auto log = readAllStandardError().trimmed();
+            if (IsIgnorableRouterLog(log)) return;
             MW_show_log(log);
         });
         connect(this, &QProcess::errorOccurred, this, [&](ProcessError error) {

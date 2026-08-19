@@ -50,9 +50,9 @@ namespace Configs {
         fn += ".exe";
 #endif
         auto fi = QFileInfo(fn);
-        QString path;
-        if (fi.isSymLink()) path =  fi.symLinkTarget();
-        path = fn;
+        QString path = fi.canonicalFilePath();
+        if (path.isEmpty()) path = fi.absoluteFilePath();
+        if (path.isEmpty()) path = fn;
 #ifdef Q_OS_WIN
         path.replace("/", "\\");
 #endif
