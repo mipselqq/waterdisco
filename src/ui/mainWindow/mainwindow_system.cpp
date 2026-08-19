@@ -263,22 +263,25 @@ bool MainWindow::get_elevated_permissions(ExitReason reason) {
     }
     auto n = QMessageBox::warning(GetMessageBoxParent(), software_name, tr("Please give the core root privileges"), QMessageBox::Yes | QMessageBox::No);
     if (n == QMessageBox::Yes) {
-        runOnNewThread([=,this]
-        {
-            auto chownArgs = QString("root:root " + Configs::FindCoreRealPath());
-            auto ret = Linux_Run_Command("chown", chownArgs);
-            if (ret != 0) {
-                MW_show_log(QString("Failed to run chown %1 code is %2").arg(chownArgs).arg(ret));
-            }
-            auto chmodArgs = QString("u+s " + Configs::FindCoreRealPath());
-            ret = Linux_Run_Command("chmod", chmodArgs);
-            if (ret == 0) {
-                StopVPNProcess();
-            } else {
-                MW_show_log(QString("Failed to run chmod %1").arg(chmodArgs));
-            }
-        });
-        return false;
+        const auto corePath = Configs::FindCoreRealPath();
+        auto quotedCorePath = corePath;
+        quotedCorePath.replace("'", "'\\''");
+        const auto command = QString("chown root:root '%1' && chmod u+s '%1'").arg(quotedCorePath);
+        const int ret = Linux_Run_Command("sh", QString("-c \"%1\"").arg(command));
+        if (ret != 0) {
+            MW_show_log(QString("Failed to grant core privileges, code: %1").arg(ret));
+            return false;
+        }
+
+        // The setuid bit only affects a newly spawned core. Restart it now and
+        // let profile_start defer to CoreStarted, rather than requiring a
+        // second Tun click (and a second password prompt).
+        runOnThread([this] {
+            profile_stop(true, true, true);
+            if (core_process != nullptr) core_process->Restart();
+        }, DS_cores, true);
+        MW_show_log(tr("Core privileges granted."));
+        return true;
     }
 #endif
 #ifdef Q_OS_WIN
