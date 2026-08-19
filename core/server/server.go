@@ -489,9 +489,9 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 
 		if err := sys.SetSystemDNS(tunDNS.String(), box.Network().InterfaceMonitor()); err != nil {
 			log.Println("Failed to set system DNS:", err)
+		} else {
+			needUnsetDNS = true
 		}
-
-		needUnsetDNS = true
 	}
 
 	return

@@ -356,6 +356,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->menu_start->setShortcuts({QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)});
     connect(ui->menu_start, &QAction::triggered, this, [=,this]() { profile_start(); });
     connect(ui->menu_stop, &QAction::triggered, this, [=,this]() { profile_stop(false, false, true); });
+#ifdef Q_OS_MACOS
+    // The main menu is intentionally hidden in Waterdisco, so macOS has no
+    // native Quit item to provide this standard application shortcut for us.
+    auto *quitShortcut = new QShortcut(QKeySequence::Quit, this);
+    quitShortcut->setContext(Qt::ApplicationShortcut);
+    connect(quitShortcut, &QShortcut::activated, this, &MainWindow::on_menu_exit_triggered);
+#endif
     connect(ui->toolButton_startstop, &QAbstractButton::clicked, this, [=,this]() {
         // The button is disabled while Connecting/Disabled, so a click here means
         // either a running profile (stop it) or a selected, idle one (start it).
