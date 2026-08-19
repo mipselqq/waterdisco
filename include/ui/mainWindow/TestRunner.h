@@ -24,6 +24,8 @@ class MainWindow;
 // signals would reorder the synchronous progress path, and tr() would change context.
 class TestRunner {
 public:
+    enum class RankedStartMode { AsIs, ByConnectionTime, BySavedSiteScore };
+
     explicit TestRunner(MainWindow* mw) : mw_(mw) {}
 
     TestRunner(const TestRunner&) = delete;
@@ -35,6 +37,12 @@ public:
     void runIpTests(const QList<int>& profileIDs);
 
     void runSpeedTests(const QList<int>& profileIDs, bool testCurrent = false);
+
+    // Waterdisco's ranked test measures a connection probe and a fixed 2 MiB
+    // Cloudflare download per profile.  It owns restoring (or replacing) a
+    // profile that was active before the test began.
+    void runRankedSpeedTests(const QList<int>& profileIDs, RankedStartMode mode,
+                             bool connectBestSiteScore, bool fallShort);
 
     void stop();
 
@@ -67,6 +75,25 @@ private:
     void runIpProbe(const Target& target);
 
     void runSpeedProbe(const Target& target);
+
+    struct RankedProbeResult {
+        bool completed = false;
+        bool success = false;
+        bool skipped = false;
+        int connectionTimeMs = 0;
+        qint64 elapsedMs = 0;
+        QString error;
+    };
+
+    Target buildTarget(const std::shared_ptr<Configs::Profile>& profile, QString* error) const;
+    QList<int> orderedRankedProfiles(const QList<int>& profileIDs, RankedStartMode mode) const;
+    RankedProbeResult runConnectionProbe(const std::shared_ptr<Configs::Profile>& profile,
+                                         int timeoutMs);
+    RankedProbeResult runDownloadProbe(const std::shared_ptr<Configs::Profile>& profile,
+                                       int timeoutMs);
+    void updateRankedProgress(const QString& stage, const std::shared_ptr<Configs::Profile>& profile,
+                              int tested, int skipped, int total);
+    int bestSiteScoreProfile(const QList<int>& profileIDs) const;
 
     // Shared by the live progress poll and the final pass, which must not drift.
     void applyUrlResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::URLTestResp& res);

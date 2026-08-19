@@ -11,7 +11,10 @@
 #include <QSemaphore>
 #include <QThread>
 #include <QThreadPool>
+#include <QElapsedTimer>
 
+#include <algorithm>
+#include <limits>
 #include <utility>
 
 using namespace API;
@@ -21,6 +24,7 @@ namespace {
     constexpr int kTestBatchSize = 100;
     constexpr int kLatencyPollIntervalMs = 200;
     constexpr int kSpeedPollIntervalMs = 100;
+    constexpr auto kWaterdiscoProbeUrl = "https://speed.cloudflare.com/__down?bytes=2000000";
 
     QList<int> withoutDisabled(const QList<int>& profileIDs) {
         QList<int> filtered;
@@ -92,6 +96,336 @@ namespace {
     private:
         std::shared_ptr<std::atomic<bool>> stop_;
     };
+}
+
+TestRunner::Target TestRunner::buildTarget(const std::shared_ptr<Configs::Profile>& profile, QString* error) const {
+    auto build = Configs::BuildTestConfig({profile});
+    if (!build->error.isEmpty()) {
+        if (error) *error = build->error;
+        return {};
+    }
+
+    Target target;
+    if (build->fullConfigs.contains(profile->id)) {
+        target.coreConfig = build->fullConfigs[profile->id];
+        target.useDefaultOutbound = true;
+        target.entID = profile->id;
+        return target;
+    }
+    if (build->outboundTags.empty()) {
+        if (error) *error = MainWindow::tr("No testable outbound was generated");
+        return {};
+    }
+    target.coreConfig = QJsonObject2QString(build->coreConfig, false);
+    target.xrayConfig = build->isXrayNeeded ? QJsonObject2QString(build->xrayConfig, false) : QString();
+    target.xrayFullConfigs = build->xrayFullConfigs;
+    target.outboundTags = build->outboundTags;
+    target.tag2entID = build->tag2entID;
+    target.entID = profile->id;
+    return target;
+}
+
+QList<int> TestRunner::orderedRankedProfiles(const QList<int>& profileIDs, RankedStartMode mode) const {
+    QList<int> ordered = profileIDs;
+    if (mode == RankedStartMode::AsIs || ordered.size() < 2) return ordered;
+
+    const auto metric = [mode](const std::shared_ptr<Configs::Profile>& profile) {
+        return mode == RankedStartMode::ByConnectionTime ? profile->connect_time_ms : profile->site_score;
+    };
+    const bool descending = mode == RankedStartMode::BySavedSiteScore;
+    const bool haveValues = std::any_of(ordered.cbegin(), ordered.cend(), [&](int id) {
+        const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+        return profile && metric(profile) > 0;
+    });
+    if (!haveValues) return ordered;
+
+    std::stable_sort(ordered.begin(), ordered.end(), [&](int leftID, int rightID) {
+        const auto left = Configs::dataManager->profilesRepo->GetProfile(leftID);
+        const auto right = Configs::dataManager->profilesRepo->GetProfile(rightID);
+        const int leftValue = left ? metric(left) : 0;
+        const int rightValue = right ? metric(right) : 0;
+        const bool leftKnown = leftValue > 0;
+        const bool rightKnown = rightValue > 0;
+        if (leftKnown != rightKnown) return leftKnown;
+        if (!leftKnown) return false;
+        return descending ? leftValue > rightValue : leftValue < rightValue;
+    });
+    return ordered;
+}
+
+TestRunner::RankedProbeResult TestRunner::runConnectionProbe(
+    const std::shared_ptr<Configs::Profile>& profile, int timeoutMs) {
+    RankedProbeResult outcome;
+    if (stopRequested_.load()) return outcome;
+
+    QString buildError;
+    const auto target = buildTarget(profile, &buildError);
+    if (!buildError.isEmpty()) {
+        profile->MarkPerformanceError();
+        Configs::dataManager->profilesRepo->Save(profile);
+        outcome.completed = true;
+        outcome.error = buildError;
+        return outcome;
+    }
+
+    libcore::TestReq req;
+    fillCommonTestReq(req, target);
+    req.url = kWaterdiscoProbeUrl;
+    req.max_concurrency = 1;
+    req.test_timeout_ms = std::max(1, timeoutMs);
+
+    bool rpcOK = false;
+    QString coreError;
+    const auto response = defaultClient->Test(&rpcOK, req, &coreError);
+    if (!rpcOK || response.results.empty()) {
+        if (!rpcOK) mw_->handleXrayGeoAssetError(coreError, contextName(profile->id));
+        profile->MarkPerformanceError();
+        Configs::dataManager->profilesRepo->Save(profile);
+        outcome.completed = true;
+        outcome.error = coreError.isEmpty() ? MainWindow::tr("Connection probe returned no result") : coreError;
+        return outcome;
+    }
+
+    const auto& result = response.results.front();
+    const QString error = QString::fromStdString(result.error.value());
+    if (isTestAborted(error) || stopRequested_.load()) return outcome;
+
+    outcome.completed = true;
+    if (!error.isEmpty() || result.latency_ms.value() <= 0) {
+        profile->MarkPerformanceError();
+        outcome.error = error.isEmpty() ? MainWindow::tr("Connection probe failed") : error;
+    } else {
+        outcome.success = true;
+        outcome.connectionTimeMs = result.latency_ms.value();
+        profile->connect_time_ms = outcome.connectionTimeMs;
+    }
+    Configs::dataManager->profilesRepo->Save(profile);
+    return outcome;
+}
+
+TestRunner::RankedProbeResult TestRunner::runDownloadProbe(
+    const std::shared_ptr<Configs::Profile>& profile, int timeoutMs) {
+    RankedProbeResult outcome;
+    if (stopRequested_.load()) return outcome;
+
+    QString buildError;
+    const auto target = buildTarget(profile, &buildError);
+    if (!buildError.isEmpty()) {
+        profile->MarkPerformanceError();
+        Configs::dataManager->profilesRepo->Save(profile);
+        outcome.completed = true;
+        outcome.error = buildError;
+        return outcome;
+    }
+
+    libcore::SpeedTestRequest req;
+    fillCommonTestReq(req, target);
+    req.simple_download = true;
+    req.simple_download_addr = kWaterdiscoProbeUrl;
+    req.timeout_ms = std::max(1, timeoutMs);
+
+    QElapsedTimer elapsed;
+    elapsed.start();
+    bool rpcOK = false;
+    QString coreError;
+    const auto response = defaultClient->SpeedTest(&rpcOK, req, &coreError);
+    outcome.elapsedMs = elapsed.elapsed();
+    if (!rpcOK || response.results.empty()) {
+        if (!rpcOK) mw_->handleXrayGeoAssetError(coreError, contextName(profile->id));
+        profile->MarkPerformanceError();
+        Configs::dataManager->profilesRepo->Save(profile);
+        outcome.completed = true;
+        outcome.error = coreError.isEmpty() ? MainWindow::tr("Download probe returned no result") : coreError;
+        return outcome;
+    }
+
+    const auto& result = response.results.front();
+    const QString error = QString::fromStdString(result.error.value());
+    if (result.cancelled.value() || isTestAborted(error) || stopRequested_.load()) return outcome;
+
+    outcome.completed = true;
+    if (!error.isEmpty()) {
+        profile->MarkPerformanceError();
+        outcome.error = error;
+    } else {
+        const QString speed = QString::fromStdString(result.dl_speed.value());
+        const double rxMbps = Configs::ParseSpeedMbps(speed);
+        if (rxMbps <= 0.0 || profile->connect_time_ms <= 0) {
+            profile->MarkPerformanceError();
+            outcome.error = MainWindow::tr("Download probe returned no usable speed");
+        } else {
+            profile->SetPerformanceResult(profile->connect_time_ms, rxMbps, speed);
+            creditTraffic(profile, QString::fromStdString(result.outbound_tag.value()),
+                          result.ul_bytes.value(), result.dl_bytes.value());
+            outcome.success = true;
+        }
+    }
+    Configs::dataManager->profilesRepo->Save(profile);
+    return outcome;
+}
+
+void TestRunner::updateRankedProgress(const QString& stage, const std::shared_ptr<Configs::Profile>& profile,
+                                      int tested, int skipped, int total) {
+    if (!profile) return;
+    runOnUiThread([this, stage, name = profile->outbound->name, tested, skipped, total] {
+        mw_->dataViewHtmlGenerator_.setRankedSpeedtestProgress(stage, name, tested, skipped, total);
+        mw_->UpdateDataView(true);
+    });
+}
+
+int TestRunner::bestSiteScoreProfile(const QList<int>& profileIDs) const {
+    int bestID = -1;
+    int bestScore = -1;
+    for (const int id : profileIDs) {
+        const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+        if (!profile || profile->performance_test_status != Configs::PerformanceTestStatus::Success) continue;
+        if (profile->site_score > bestScore) {
+            bestScore = profile->site_score;
+            bestID = id;
+        }
+    }
+    return bestID;
+}
+
+void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStartMode mode,
+                                     bool connectBestSiteScore, bool fallShort) {
+    const auto profileIDs = withoutAutoSelectors(withoutDisabled(requestedIDs));
+    if (profileIDs.isEmpty()) return;
+    if (!session_.tryLock()) {
+        MessageBoxWarning(software_name, MainWindow::tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
+        return;
+    }
+    sessionGen_.fetch_add(1);
+
+    runOnNewThread([this, profileIDs, mode, connectBestSiteScore, fallShort] {
+        stopRequested_.store(false);
+        { QMutexLocker lock(&creditMu_); credited_.clear(); }
+
+        runOnUiThread([this] {
+            mw_->ui->pushButton_cancel_speedtest->setVisible(true);
+            mw_->ui->pushButton_cancel_speedtest->setEnabled(true);
+        });
+
+        const int profileToRestore = mw_->running ? mw_->running->id : -1;
+        if (mw_->running) {
+            mw_->profile_stop(false, true, false);
+            if (mw_->running) {
+                MW_show_log(MainWindow::tr("Failed to stop active profile before speedtest; speedtest cancelled."));
+                session_.unlock();
+                runOnUiThread([this] { mw_->ui->pushButton_cancel_speedtest->setVisible(false); });
+                return;
+            }
+        }
+
+        // Ordering by an existing score must use the values before this run
+        // clears its participating rows.
+        const auto initialOrder = orderedRankedProfiles(profileIDs, mode);
+        const auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
+        for (const auto& profile : profiles) profile->ClearPerformanceTestResults();
+        Configs::dataManager->profilesRepo->SaveBatch(profiles);
+        runOnUiThread([this, profileIDs] { mw_->refresh_proxy_list(profileIDs); });
+
+        int tested = 0;
+        int skipped = 0;
+        qint64 bestConnectionMs = -1;
+        qint64 bestDownloadMs = -1;
+        bool completed = true;
+        bool hadErrors = false;
+
+        auto connectionTimeout = [&] {
+            int timeout = std::max(1, Configs::dataManager->settingsRepo->url_test_timeout_ms);
+            if (fallShort && bestConnectionMs > 0) timeout = std::min<qint64>(timeout, bestConnectionMs * 3);
+            return timeout;
+        };
+        auto downloadTimeout = [&] {
+            int timeout = std::max(1, Configs::dataManager->settingsRepo->speed_test_timeout_ms);
+            if (fallShort && bestDownloadMs > 0) timeout = std::min<qint64>(timeout, bestDownloadMs * 2);
+            if (fallShort && bestConnectionMs > 0) timeout = std::min<qint64>(timeout, bestConnectionMs * 3);
+            return timeout;
+        };
+        auto runConnection = [&](const std::shared_ptr<Configs::Profile>& profile) {
+            updateRankedProgress(MainWindow::tr("Connection Test"), profile, tested, skipped, profileIDs.size());
+            const int timeout = connectionTimeout();
+            const auto probe = runConnectionProbe(profile, timeout);
+            if (!probe.completed) { completed = false; return false; }
+            if (probe.success) bestConnectionMs = bestConnectionMs <= 0
+                ? probe.connectionTimeMs : std::min<qint64>(bestConnectionMs, probe.connectionTimeMs);
+            else {
+                ++skipped;
+                const bool skippedByDeadline = fallShort && timeout < Configs::dataManager->settingsRepo->url_test_timeout_ms;
+                if (skippedByDeadline) {
+                    profile->MarkPerformanceSkipped();
+                    Configs::dataManager->profilesRepo->Save(profile);
+                } else {
+                    hadErrors = true;
+                }
+            }
+            runOnUiThread([this, id = profile->id] { mw_->refresh_proxy_list({id}); });
+            return probe.success;
+        };
+
+        QList<int> candidates = initialOrder;
+        if (mode == RankedStartMode::ByConnectionTime) {
+            for (const int id : candidates) {
+                if (stopRequested_.load()) { completed = false; break; }
+                const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+                if (profile) runConnection(profile);
+                if (!completed) break;
+            }
+            candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [](int id) {
+                const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+                return !profile || profile->connect_time_ms <= 0;
+            }), candidates.end());
+            candidates = orderedRankedProfiles(candidates, RankedStartMode::ByConnectionTime);
+        }
+
+        for (const int id : candidates) {
+            if (stopRequested_.load()) { completed = false; break; }
+            const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (!profile) continue;
+            if (mode != RankedStartMode::ByConnectionTime && !runConnection(profile)) {
+                if (!completed) break;
+                continue;
+            }
+            updateRankedProgress(fallShort ? MainWindow::tr("Speedtest (Fall-short)") : MainWindow::tr("Speedtest"),
+                                 profile, tested, skipped, profileIDs.size());
+            const int timeout = downloadTimeout();
+            const auto probe = runDownloadProbe(profile, timeout);
+            if (!probe.completed) { completed = false; break; }
+            if (probe.success) {
+                ++tested;
+                bestDownloadMs = bestDownloadMs <= 0 ? probe.elapsedMs : std::min(bestDownloadMs, probe.elapsedMs);
+            } else {
+                ++skipped;
+                const bool skippedByDeadline = fallShort && timeout < Configs::dataManager->settingsRepo->speed_test_timeout_ms;
+                if (skippedByDeadline) profile->MarkPerformanceSkipped();
+                else hadErrors = true;
+                Configs::dataManager->profilesRepo->Save(profile);
+            }
+            mw_->dataViewHtmlGenerator_.addTestProgress();
+            runOnUiThread([this, id] { mw_->refresh_proxy_list({id}); });
+        }
+
+        const bool canChooseProfile = completed && !stopRequested_.load();
+        // A partial error may still leave useful measurements, but it is not a
+        // successful auto-connect run: restore the prior connection instead.
+        const int bestID = canChooseProfile && !hadErrors && connectBestSiteScore
+            ? bestSiteScoreProfile(profileIDs) : -1;
+        session_.unlock();
+        runOnUiThread([this, profileIDs, bestID, profileToRestore, canChooseProfile] {
+            mw_->dataViewHtmlGenerator_.clearTestSections();
+            mw_->UpdateDataView(true);
+            mw_->refresh_proxy_list(profileIDs);
+            mw_->ui->pushButton_cancel_speedtest->setVisible(false);
+            mw_->ui->pushButton_cancel_speedtest->setEnabled(false);
+            MW_show_log(canChooseProfile ? MainWindow::tr("Speedtest finished!") : MainWindow::tr("Speedtest interrupted."));
+            if (bestID >= 0) {
+                mw_->profile_start(bestID);
+            } else if (profileToRestore >= 0) {
+                mw_->profile_start(profileToRestore);
+            }
+        });
+    });
 }
 
 bool TestRunner::isRunning() {

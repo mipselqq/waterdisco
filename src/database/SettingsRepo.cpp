@@ -24,6 +24,8 @@ namespace Configs {
             {"tls_tricks_default_on",         &tls_tricks_default_on},
             {"net_use_proxy",                 &net_use_proxy},
             {"remember_enable",               &remember_enable},
+            {"auto_connect_best_site_score",  &auto_connect_best_site_score},
+            {"speed_test_fall_short",         &speed_test_fall_short},
             {"skip_cert",                     &skip_cert},
             {"fakedns",                       &fake_dns},
             {"disable_traffic_stats",         &disable_traffic_stats},

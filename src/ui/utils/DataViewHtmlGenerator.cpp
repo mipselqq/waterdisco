@@ -27,6 +27,18 @@ void DataViewHtmlGenerator::setSpeedtestProgress(const QString &profileName, con
     speedtest_.serverName = QString::fromStdString(result.server_name.value());
 }
 
+void DataViewHtmlGenerator::setRankedSpeedtestProgress(const QString &stage, const QString &profileName,
+                                                        int tested, int skipped, int totalProfiles) {
+    QMutexLocker lk(&mu_);
+    speedtest_.kind = SpeedtestPanelState::Kind::Speed;
+    speedtest_.visible = true;
+    speedtest_.stage = stage;
+    speedtest_.profileName = profileName;
+    speedtest_.tested = tested;
+    speedtest_.skipped = skipped;
+    speedtest_.totalProfiles = totalProfiles;
+}
+
 void DataViewHtmlGenerator::seedLatencyTest(LatencyTestPanelState::Kind kind, int totalProfiles) {
     QMutexLocker lk(&mu_);
     testProgress.store(0);
@@ -108,9 +120,15 @@ QString DataViewHtmlGenerator::downloadSectionHtml() {
 
 QString DataViewHtmlGenerator::speedtestSectionHtml() {
     if (speedtest_.kind == SpeedtestPanelState::Kind::Speed) {
-        auto firstLine = QStringLiteral("Running Speedtest: %1").arg(speedtest_.profileName);
+        auto firstLine = speedtest_.stage.isEmpty()
+            ? QStringLiteral("Running Speedtest: %1").arg(speedtest_.profileName)
+            : QStringLiteral("%1: %2").arg(speedtest_.stage, speedtest_.profileName);
         if (speedtest_.totalProfiles > 1) {
             firstLine += QString(" (%1 / %2)").arg(Int2String(testProgress.load()), Int2String(speedtest_.totalProfiles));
+        }
+        if (speedtest_.tested != 0 || speedtest_.skipped != 0) {
+            firstLine += QStringLiteral(" — %1 tested, %2 skipped")
+                             .arg(speedtest_.tested).arg(speedtest_.skipped);
         }
         if (speedtest_.serverName.isEmpty()) return QString("<p style='text-align:center;margin:0;'>%1</p>").arg(firstLine);
         return QString(

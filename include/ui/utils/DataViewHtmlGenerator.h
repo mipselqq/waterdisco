@@ -24,7 +24,10 @@ public:
         QString serverCountryFlag;
         QString serverCountry;
         QString serverName;
+        QString stage;
         int totalProfiles = 0;
+        int tested = 0;
+        int skipped = 0;
     };
 
     struct LatencyTestPanelState {
@@ -47,6 +50,9 @@ public:
     void seedSpeedTest(int totalProfiles);
 
     void setSpeedtestProgress(const QString &profileName, const libcore::SpeedTestResult &result);
+
+    void setRankedSpeedtestProgress(const QString &stage, const QString &profileName,
+                                    int tested, int skipped, int totalProfiles);
 
     void seedLatencyTest(LatencyTestPanelState::Kind kind, int totalProfiles);
 

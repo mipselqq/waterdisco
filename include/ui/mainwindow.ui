@@ -381,6 +381,16 @@ QToolButton::menu-indicator {
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_cancel_speedtest">
+        <property name="text">
+         <string>Cancel</string>
+        </property>
+        <property name="visible">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
      </layout>
     </item>
     <item>
@@ -758,6 +768,8 @@ QTabBar::tab:selected {
     <addaction name="separator"/>
     <addaction name="actionStart_with_system"/>
     <addaction name="actionRemember_last_proxy"/>
+    <addaction name="actionAuto_connect_with_best_site_score"/>
+    <addaction name="actionSpeed_test_fall_short"/>
     <addaction name="actionAllow_LAN"/>
     <addaction name="separator"/>
     <addaction name="actionRestart_Proxy"/>
@@ -1305,6 +1317,22 @@ QTabBar::tab:selected {
    </property>
    <property name="shortcut">
     <string notr="true">Ctrl+Alt+P</string>
+   </property>
+  </action>
+  <action name="actionAuto_connect_with_best_site_score">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Auto connect with best site score</string>
+   </property>
+  </action>
+  <action name="actionSpeed_test_fall_short">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Speed test fall short</string>
    </property>
   </action>
   <action name="actionHide_window">
