@@ -493,6 +493,12 @@ set_target_properties(Throne PROPERTIES
         UNITY_BUILD ON
 )
 set_property(SOURCE "3rdparty/SQLiteCpp/src/sqlite3.c" PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
+# These two translation units both define a private RecolorIcon helper.  Keep
+# them out of unity batches so their anonymous namespaces remain isolated.
+set_property(SOURCE
+    "src/ui/setting/dialog_edit_otp.cpp"
+    "src/ui/setting/OtpItem.cpp"
+    PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
 
 include(CTest)
 if (BUILD_TESTING)
