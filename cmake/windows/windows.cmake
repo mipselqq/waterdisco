@@ -5,11 +5,11 @@ include(cmake/windows/generate_product_version.cmake)
 generate_product_version(
         QV2RAY_RC
         ICON "${CMAKE_SOURCE_DIR}/res/Throne.ico"
-        NAME "Throne"
-        BUNDLE "Throne"
-        COMPANY_NAME "Throne"
-        COMPANY_COPYRIGHT "Throne"
-        FILE_DESCRIPTION "Throne"
+        NAME "Waterdisco"
+        BUNDLE "Waterdisco"
+        COMPANY_NAME "Waterdisco"
+        COMPANY_COPYRIGHT "Waterdisco"
+        FILE_DESCRIPTION "Waterdisco"
 )
 add_definitions(-DUNICODE -D_UNICODE -DNOMINMAX)
 set(GUI_TYPE WIN32)

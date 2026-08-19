@@ -47,7 +47,7 @@ void UrlScheme_Apply() {
         QTextStream ts(&f);
         ts << "[Desktop Entry]\n"
            << "Type=Application\n"
-           << "Name=Throne\n"
+           << "Name=Waterdisco\n"
            << "Icon=" << iconTarget() << "\n"
            << "Exec=\"" << execTarget() << "\" %U\n"
            << "MimeType=x-scheme-handler/throne;application/json;application/yaml;text/yaml;text/plain;\n"

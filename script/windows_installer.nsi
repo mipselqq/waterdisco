@@ -1,4 +1,4 @@
-Name "Throne"
+Name "Waterdisco"
 OutFile "ThroneSetup.exe"
 
 ; 1. NEVER ask for UAC on launch
@@ -14,14 +14,14 @@ SetCompressorDictSize 64
 !include WinVer.nsh
 !include x64.nsh
 
-!define APP_DIR_NAME "Throne"
+!define APP_DIR_NAME "Waterdisco"
 
 !define MUI_ICON "res\Throne.ico"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TITLE "Welcome to Throne Installer"
-!define MUI_WELCOMEPAGE_TEXT "This wizard will guide you through the installation of Throne."
+!define MUI_WELCOMEPAGE_TITLE "Welcome to Waterdisco Installer"
+!define MUI_WELCOMEPAGE_TEXT "This wizard will guide you through the installation of Waterdisco."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Throne.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "Launch Throne"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch Waterdisco"
 !addplugindir .\script\
 
 ; This is the Windows constant used to draw the UAC Shield on a button
@@ -258,11 +258,11 @@ Section "Install"
     Abort "Unsupported CPU architecture!"
   ${EndIf}
 
-  CreateShortcut "$DESKTOP\Throne.lnk" "$INSTDIR\Throne.exe"
-  CreateShortcut "$SMPROGRAMS\Throne.lnk" "$INSTDIR\Throne.exe" "" "$INSTDIR\Throne.exe" 0
+  CreateShortcut "$DESKTOP\Waterdisco.lnk" "$INSTDIR\Throne.exe"
+  CreateShortcut "$SMPROGRAMS\Waterdisco.lnk" "$INSTDIR\Throne.exe" "" "$INSTDIR\Throne.exe" 0
 
   WriteRegStr SHCTX "Software\Throne" "InstallPath" "$INSTDIR"
-  WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Throne" "DisplayName" "Throne"
+  WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Throne" "DisplayName" "Waterdisco"
   WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Throne" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Throne" "InstallLocation" "$INSTDIR"
   WriteRegDWORD SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Throne" "NoModify" 1
@@ -348,8 +348,8 @@ FunctionEnd
 Section "Uninstall"
   !insertmacro AbortOnRunningApp "$INSTDIR\Throne.exe"
 
-  Delete "$SMPROGRAMS\Throne.lnk"
-  Delete "$DESKTOP\Throne.lnk"
+  Delete "$SMPROGRAMS\Waterdisco.lnk"
+  Delete "$DESKTOP\Waterdisco.lnk"
   RMDir "$SMPROGRAMS\Throne"
 
   Delete "$INSTDIR\libcronet.dll"

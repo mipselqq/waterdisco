@@ -17,7 +17,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string notr="true">Throne</string>
+   <string notr="true">Waterdisco</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,1,0">
@@ -757,7 +757,7 @@ QTabBar::tab:selected {
    </property>
    <widget class="QMenu" name="menu_program">
     <property name="title">
-     <string>Program</string>
+     <string>Application</string>
     </property>
     <addaction name="actionHide_window"/>
     <addaction name="separator"/>
@@ -1216,7 +1216,7 @@ QTabBar::tab:selected {
   </action>
   <action name="actionRestart_Program">
    <property name="text">
-    <string>Restart Program</string>
+    <string>Restart Application</string>
    </property>
   </action>
   <action name="actionImprove_mood">

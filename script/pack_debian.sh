@@ -23,7 +23,7 @@ EOF
 cat >Throne/DEBIAN/postinst <<-EOF
 cat >/usr/share/applications/Throne.desktop<<-END
 [Desktop Entry]
-Name=Throne
+Name=Waterdisco
 Comment=Qt based cross-platform GUI proxy configuration manager (backend: sing-box)
 Exec=sh -c "PATH=/opt/Throne:\$PATH /opt/Throne/Throne -appdata"
 Icon=/opt/Throne/Throne.png

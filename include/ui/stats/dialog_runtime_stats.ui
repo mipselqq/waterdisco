@@ -25,7 +25,7 @@
         <item row="0" column="0">
          <widget class="QLabel" name="labelThroneName">
           <property name="text">
-           <string notr="true">Throne</string>
+           <string notr="true">Waterdisco</string>
           </property>
          </widget>
         </item>

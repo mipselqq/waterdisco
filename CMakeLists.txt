@@ -489,6 +489,9 @@ set_target_properties(Throne PROPERTIES
         MACOSX_BUNDLE_ICON_FILE "Throne.icns"
         RESOURCE ${MACOSX_ICON}
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/res/MacOSXBundleInfo.plist
+        MACOSX_BUNDLE_BUNDLE_NAME "Waterdisco"
+        MACOSX_BUNDLE_INFO_STRING "Waterdisco"
+        MACOSX_BUNDLE_LONG_VERSION_STRING "Waterdisco"
         MACOSX_BUNDLE_GUI_IDENTIFIER moe.Throne.macosx
         MACOSX_BUNDLE TRUE
         WIN32_EXECUTABLE TRUE

@@ -47,7 +47,7 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Throne profile</string>
+			<string>Waterdisco profile</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>

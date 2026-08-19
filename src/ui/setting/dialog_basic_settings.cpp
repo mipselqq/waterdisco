@@ -36,6 +36,9 @@
 DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     : QDialog(parent), ui(new Ui::DialogBasicSettings) {
     ui->setupUi(this);
+    // Full-state export/import is available from Application. Hide the obsolete
+    // selective backup UI while retaining its reader for legacy .thrbackup files.
+    ui->tabWidget->removeTab(ui->tabWidget->indexOf(ui->tab_backup));
     ADD_ASTERISK(this);
 
     // Common
