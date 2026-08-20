@@ -24,7 +24,7 @@ class MainWindow;
 // signals would reorder the synchronous progress path, and tr() would change context.
 class TestRunner {
 public:
-    enum class RankedStartMode { AsIs, ByConnectionTime, BySavedSiteScore };
+    enum class RankedStartMode { ByConnectionTime, BySavedSiteScore };
 
     explicit TestRunner(MainWindow* mw) : mw_(mw) {}
 
@@ -43,8 +43,8 @@ public:
     void runSpeedTests(const QList<int>& profileIDs, bool testCurrent = false);
 
     // Ranked 2 MiB Cloudflare download. ByConnectionTime prepends a concurrent
-    // TTFB pretest then downloads fastest-this-run first. AsIs / BySavedSiteScore
-    // take TTFB from the download. Last-run values only change order.
+    // TTFB pretest then downloads fastest-this-run first. BySavedSiteScore
+    // takes TTFB from the download. Last-run values only change order.
     void runRankedSpeedTests(const QList<int>& profileIDs, RankedStartMode mode,
                              bool connectBestSiteScore, bool fallShort);
 

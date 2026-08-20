@@ -38,11 +38,11 @@ int main() {
     // --- Ranked speedtest schedule (model order, not UI) ---
     // TestRunner snapshots these rows, then calls the same helpers below.
 
-    // Speedtest as is: no pretest, downloads keep selection order.
-    const QList<RankedScheduleRow> asIs = {{1, 0, 0}, {2, 0, 0}, {3, 0, 0}};
-    assert(RankedScheduleIds(asIs) == (QList<int>{1, 2, 3}));
-    assert(OrderRankedConnectionPretest(asIs) == (QList<int>{1, 2, 3}));
-    assert(OrderRankedByConnectionTime(asIs) == (QList<int>{1, 2, 3}));
+    // No saved metrics: ranked helpers keep selection order.
+    const QList<RankedScheduleRow> noSavedMetrics = {{1, 0, 0}, {2, 0, 0}, {3, 0, 0}};
+    assert(RankedScheduleIds(noSavedMetrics) == (QList<int>{1, 2, 3}));
+    assert(OrderRankedConnectionPretest(noSavedMetrics) == (QList<int>{1, 2, 3}));
+    assert(OrderRankedByConnectionTime(noSavedMetrics) == (QList<int>{1, 2, 3}));
 
     // Speedtest by connection time, first run (nothing saved):
     // 1) TTFB pretest walks selection order.

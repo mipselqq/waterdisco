@@ -101,7 +101,7 @@ void MainWindow::startAfterCoreReady(int requestedProfileId) {
     // The runner starts only after setup_rpc accepted the core connection; no
     // timer is needed to paper over an IPC race.  It also applies the normal
     // auto-connect policy after a completely successful startup sweep.
-    testRunner->runRankedSpeedTests(startupIDs, TestRunner::RankedStartMode::AsIs,
+    testRunner->runRankedSpeedTests(startupIDs, TestRunner::RankedStartMode::BySavedSiteScore,
                                     settings->auto_connect_best_site_score,
                                     settings->speed_test_fall_short);
 }

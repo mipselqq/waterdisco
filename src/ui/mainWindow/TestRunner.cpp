@@ -471,8 +471,7 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
         }
 
         // Snapshot last-run metrics before clearing. Ordering after a clear is a
-        // no-op, which is how the old "by saved site score" item silently became
-        // "as is".
+        // no-op for saved-site-score mode.
         QList<Configs::RankedScheduleRow> snapshot;
         snapshot.reserve(profileIDs.size());
         for (int id : profileIDs) {
