@@ -91,6 +91,9 @@ message TestReq {
   // Opaque full configs, each its own instance backing a socks outbound already
   // in `config`. Never merged into `xray_config`.
   repeated string xray_full_configs = 10;
+  // Cancel a URL probe once it has taken more than 3x the best success in this
+  // batch. Used by ranked connection-time pretest under fall-short.
+  optional bool dynamic_fall_short = 11 [default = false];
 }
 
 message TestResp {

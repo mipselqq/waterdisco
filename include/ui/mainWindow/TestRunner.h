@@ -42,9 +42,9 @@ public:
 
     void runSpeedTests(const QList<int>& profileIDs, bool testCurrent = false);
 
-    // Waterdisco's ranked test measures a connection probe and a fixed 2 MiB
-    // Cloudflare download per profile.  It owns restoring (or replacing) a
-    // profile that was active before the test began.
+    // Ranked 2 MiB Cloudflare download. ByConnectionTime prepends a concurrent
+    // TTFB pretest then downloads fastest-this-run first. AsIs / BySavedSiteScore
+    // take TTFB from the download. Last-run values only change order.
     void runRankedSpeedTests(const QList<int>& profileIDs, RankedStartMode mode,
                              bool connectBestSiteScore, bool fallShort);
 
@@ -90,11 +90,19 @@ private:
     };
 
     Target buildTarget(const std::shared_ptr<Configs::Profile>& profile, QString* error) const;
-    QList<int> orderedRankedProfiles(const QList<int>& profileIDs, RankedStartMode mode) const;
-    RankedProbeResult runConnectionProbe(const std::shared_ptr<Configs::Profile>& profile,
-                                         int timeoutMs);
+    QList<Target> buildTargets(const QList<std::shared_ptr<Configs::Profile>>& profiles,
+                               QString* error) const;
     RankedProbeResult runDownloadProbe(const std::shared_ptr<Configs::Profile>& profile,
-                                       int timeoutMs);
+                                       int timeoutMs, bool fallShort, int defaultTimeoutMs);
+    bool runRankedDownloadTarget(const Target& target, int timeoutMs, bool fallShort,
+                                 int defaultTimeoutMs, qint64* elapsedMs,
+                                 int* tested, int* skipped, bool* hadErrors);
+    bool runRankedConnectionPretest(const QList<int>& profileIDs, bool fallShort,
+                                    qint64* bestConnectionMs, int* skipped, bool* hadErrors);
+    void runRankedUrlProbe(const Target& target, bool fallShort, int timeoutMs,
+                           std::atomic<qint64>* bestConnectionMs);
+    void applyConnectionResult(const std::shared_ptr<Configs::Profile>& ent,
+                               const libcore::URLTestResp& res, std::atomic<qint64>* bestConnectionMs);
     void updateRankedProgress(const QString& stage, const std::shared_ptr<Configs::Profile>& profile,
                               int tested, int skipped, int total);
     int bestSiteScoreProfile(const QList<int>& profileIDs) const;

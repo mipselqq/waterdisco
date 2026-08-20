@@ -584,7 +584,8 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 	// A muxed config needs a warm connection; the live instance already is one.
 	twice := !in.GetTestCurrent()
 	results := test_utils.BatchURLTest(test_utils.TestContext(), env.box, env.tags, in.GetUrl(),
-		int(in.GetMaxConcurrency()), twice, time.Duration(in.GetTestTimeoutMs())*time.Millisecond)
+		int(in.GetMaxConcurrency()), twice, time.Duration(in.GetTestTimeoutMs())*time.Millisecond,
+		in.GetDynamicFallShort())
 
 	res := make([]*gen.URLTestResp, 0, len(results))
 	for idx, data := range results {

@@ -3,6 +3,7 @@ package test_utils
 import (
 	"context"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"ThroneCore/internal/boxbox"
@@ -20,18 +21,64 @@ type URLTestResult struct {
 	Error    error
 }
 
-func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url string, maxConcurrency int, twice bool, timeout time.Duration) []*URLTestResult {
+func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url string, maxConcurrency int, twice bool, timeout time.Duration, dynamicFallShort bool) []*URLTestResult {
 	if timeout <= 0 {
 		timeout = URLTestTimeout
 	}
 
+	var bestSuccessfulMs int64
 	results := runBatch(ctx, i, outboundTags, maxConcurrency, batchProbe[URLTestResult]{
 		run: func(ctx context.Context, tag string, outbound adapter.Outbound) *URLTestResult {
-			client := outboundHTTPClient(ctx, outbound, timeout)
+			probeCtx := ctx
+			var cancel context.CancelFunc
+			if dynamicFallShort {
+				probeCtx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				startAt := time.Now()
+				go func() {
+					ticker := time.NewTicker(2 * time.Millisecond)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-probeCtx.Done():
+							return
+						case <-ticker.C:
+							bestMs := atomic.LoadInt64(&bestSuccessfulMs)
+							if bestMs <= 0 {
+								continue
+							}
+							threshold := 3 * bestMs
+							if threshold < 1 {
+								threshold = 1
+							}
+							if time.Since(startAt) > time.Duration(threshold)*time.Millisecond {
+								cancel()
+								return
+							}
+						}
+					}
+				}()
+			}
+
+			client := outboundHTTPClient(probeCtx, outbound, timeout)
 			// to properly measure muxed configs, let's do the test twice
-			duration, err := urlTest(ctx, client, url)
+			duration, err := urlTest(probeCtx, client, url)
 			if err == nil && twice {
-				duration, err = urlTest(ctx, client, url)
+				duration, err = urlTest(probeCtx, client, url)
+			}
+			if err == nil && dynamicFallShort {
+				ms := duration.Milliseconds()
+				if ms > 0 {
+					for {
+						current := atomic.LoadInt64(&bestSuccessfulMs)
+						if current > 0 && current <= ms {
+							break
+						}
+						if atomic.CompareAndSwapInt64(&bestSuccessfulMs, current, ms) {
+							break
+						}
+					}
+				}
 			}
 			return &URLTestResult{Duration: duration, Tag: tag, Error: err}
 		},
