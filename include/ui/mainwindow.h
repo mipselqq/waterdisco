@@ -303,6 +303,7 @@ private:
     //
     // for data view
     std::atomic<qint64> lastUpdatedMs = QDateTime::currentMSecsSinceEpoch();
+    std::atomic<bool> dataViewUpdateScheduled_{false};
     DataViewHtmlGenerator dataViewHtmlGenerator_;
 
     // shortcuts

@@ -1422,6 +1422,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     });
     connect(ui->menu_stop_testing, &QAction::triggered, this, [=,this]() { testRunner->stop(); });
     connect(ui->pushButton_cancel_speedtest, &QPushButton::clicked, this, [=, this] {
+        ui->pushButton_cancel_speedtest->setVisible(false);
         ui->pushButton_cancel_speedtest->setEnabled(false);
         testRunner->stop();
     });

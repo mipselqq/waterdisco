@@ -33,6 +33,8 @@ namespace API {
 
         void StopTests(bool *rpcOK);
 
+        void FailInFlightCalls();
+
         libcore::QueryURLTestResponse QueryURLTest(bool *rpcOK);
 
         libcore::IPTestResp IPTest(bool *rpcOK, const libcore::IPTestRequest &request, QString *coreError = nullptr);

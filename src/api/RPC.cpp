@@ -87,10 +87,15 @@ namespace API {
 
         void wakeAllWithError() {
             connected_.store(false, std::memory_order_release);
+            failPending();
+        }
+
+        void failPending() {
             std::lock_guard<std::mutex> lock(pending_mu);
             for (auto &call : pending) {
                 std::lock_guard<std::mutex> cg(call->mu);
                 call->done = true;
+                call->status = 1;
                 call->cv.notify_one();
             }
             pending.clear();
@@ -189,6 +194,8 @@ namespace API {
 
             connected_.store(true, std::memory_order_release);
         }
+
+        void FailPending() { failPending(); }
 
         int Call(const QString &methodName, const std::string &req,
                  std::vector<uint8_t> &rsp, int timeout_ms = 0) {
@@ -300,6 +307,10 @@ namespace API {
         channel->Reconnect(socket);
     }
 
+    void Client::FailInFlightCalls() {
+        channel->FailPending();
+    }
+
 #define NOT_OK      \
     *rpcOK = false; \
     MW_show_log(QString("IPC call failed (code %1)\n").arg(status));
@@ -364,7 +375,7 @@ namespace API {
     void Client::StopTests(bool *rpcOK) {
         const libcore::EmptyReq request;
         std::vector<uint8_t> resp;
-        auto status = channel->Call("StopTest", spb::pb::serialize<std::string>(request), resp);
+        auto status = channel->Call("StopTest", spb::pb::serialize<std::string>(request), resp, 2000);
 
         if (status == LocalSocketChannel::CallOK) {
             *rpcOK = true;
@@ -378,7 +389,7 @@ namespace API {
         libcore::EmptyReq request;
         libcore::QueryURLTestResponse reply;
         std::vector<uint8_t> resp;
-        auto status = channel->Call("QueryURLTest", spb::pb::serialize<std::string>(request), resp);
+        auto status = channel->Call("QueryURLTest", spb::pb::serialize<std::string>(request), resp, 500);
 
         if (status == LocalSocketChannel::CallOK && tryDeserialize(resp, reply)) {
             *rpcOK = true;
@@ -409,7 +420,7 @@ namespace API {
         libcore::EmptyReq request;
         libcore::QueryIPTestResponse reply;
         std::vector<uint8_t> resp;
-        auto status = channel->Call("QueryIPTest", spb::pb::serialize<std::string>(request), resp);
+        auto status = channel->Call("QueryIPTest", spb::pb::serialize<std::string>(request), resp, 500);
 
         if (status == LocalSocketChannel::CallOK && tryDeserialize(resp, reply)) {
             *rpcOK = true;
@@ -563,7 +574,7 @@ namespace API {
         const libcore::EmptyReq request;
         libcore::QuerySpeedTestResponse reply;
         std::vector<uint8_t> resp;
-        auto status = channel->Call("QuerySpeedTest", spb::pb::serialize<std::string>(request), resp);
+        auto status = channel->Call("QuerySpeedTest", spb::pb::serialize<std::string>(request), resp, 500);
 
         if (status == LocalSocketChannel::CallOK && tryDeserialize(resp, reply)) {
             *rpcOK = true;
@@ -579,7 +590,7 @@ namespace API {
         const libcore::EmptyReq request;
         libcore::QueryCountryTestResponse reply;
         std::vector<uint8_t> resp;
-        auto status = channel->Call("QueryCountryTest", spb::pb::serialize<std::string>(request), resp);
+        auto status = channel->Call("QueryCountryTest", spb::pb::serialize<std::string>(request), resp, 500);
 
         if (status == LocalSocketChannel::CallOK && tryDeserialize(resp, reply)) {
             *rpcOK = true;

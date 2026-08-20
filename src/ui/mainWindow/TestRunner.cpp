@@ -8,6 +8,7 @@
 #include "include/database/ProfilesRepo.h"
 #include "include/stats/traffic/TrafficStatsManager.hpp"
 
+#include <QCoreApplication>
 #include <QPointer>
 #include <QSemaphore>
 #include <QSet>
@@ -215,12 +216,12 @@ namespace {
     // poll may itself sit in a 30s RPC, and the batch driver must not stall on it.
     class ResultPoller {
     public:
-        ResultPoller(std::function<void()> tick, int intervalMs)
+        ResultPoller(std::function<void()> tick, int intervalMs, std::atomic<bool>* abort)
             : stop_(std::make_shared<std::atomic<bool>>(false)) {
-            runOnNewThread([stop = stop_, tick = std::move(tick), intervalMs] {
-                while (!stop->load()) {
+            runOnNewThread([stop = stop_, tick = std::move(tick), intervalMs, abort] {
+                while (!stop->load() && (abort == nullptr || !abort->load())) {
                     QThread::msleep(intervalMs);
-                    if (stop->load()) break;
+                    if (stop->load() || (abort != nullptr && abort->load())) break;
                     tick();
                 }
             });
@@ -376,16 +377,16 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int lim
             }
             if (updated.isEmpty()) return;
             postUi([updated](MainWindow* mw) {
-                mw->UpdateDataView(true);
+                mw->UpdateDataView();
                 mw->refresh_proxy_list(updated);
             });
-        }, kLatencyPollIntervalMs);
+        }, kLatencyPollIntervalMs, &stopRequested_);
 
         result = defaultClient->Test(&rpcOK, req, &coreError);
     }
 
     if (!rpcOK) {
-        mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
+        if (!stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
         return;
     }
     for (const auto& res : result.results) {
@@ -629,10 +630,10 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
             if (updated.isEmpty()) return;
             persistProfileIDs(updated);
             postUi([updated](MainWindow* mw) {
-                mw->UpdateDataView(true);
+                mw->UpdateDataView();
                 mw->refresh_proxy_list(updated);
             });
-        }, kSpeedPollIntervalMs);
+        }, kSpeedPollIntervalMs, &stopRequested_);
 
         result = defaultClient->SpeedTest(&rpcOK, req, &coreError);
     }
@@ -645,6 +646,7 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
     };
 
     if (!rpcOK) {
+        if (stopRequested_.load()) return false;
         mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
         const auto ids = targetIDs();
         for (int id : ids) markUnresolved(id);
@@ -686,7 +688,7 @@ void TestRunner::updateRankedProgress(const QString& stage, const std::shared_pt
     const QString name = profile->outbound ? profile->outbound->name : profile->name;
     postUi([stage, name, tested, skipped, total](MainWindow* mw) {
         mw->dataViewHtmlGenerator_.setRankedSpeedtestProgress(stage, name, tested, skipped, total);
-        mw->UpdateDataView(true);
+        mw->UpdateDataView();
     });
 }
 
@@ -708,13 +710,10 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
                                      bool connectBestSiteScore, bool fallShort) {
     const auto profileIDs = withoutAutoSelectors(withoutDisabled(requestedIDs));
     if (profileIDs.isEmpty()) return;
-    if (!session_.tryLock()) {
-        MessageBoxWarning(software_name, MainWindow::tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
-        return;
-    }
-    sessionGen_.fetch_add(1);
 
     runOnNewThread([this, profileIDs, mode, connectBestSiteScore, fallShort] {
+        takeSession();
+        sessionGen_.fetch_add(1);
         stopRequested_.store(false);
         { QMutexLocker lock(&creditMu_); credited_.clear(); }
 
@@ -853,12 +852,13 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
         const bool canChooseProfile = completed && !stopRequested_.load();
         const int bestID = canChooseProfile && connectBestSiteScore
             ? bestSiteScoreProfile(profileIDs) : -1;
+        const bool cancelled = stopRequested_.load();
         const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
-        postUi([this, profileIDs, bestID, canChooseProfile, elapsedMs](MainWindow* mw) {
+        postUi([this, profileIDs, bestID, canChooseProfile, elapsedMs, cancelled](MainWindow* mw) {
             mw->dataViewHtmlGenerator_.clearTestSections();
             mw->UpdateDataView(true);
-            mw->refresh_proxy_list(profileIDs);
+            if (!cancelled) mw->refresh_proxy_list(profileIDs);
             mw->ui->pushButton_cancel_speedtest->setVisible(false);
             mw->ui->pushButton_cancel_speedtest->setEnabled(false);
             MW_show_log(testFinishLog(
@@ -888,12 +888,22 @@ bool TestRunner::isRunning() {
 void TestRunner::stop() {
     stopRequested_.store(true);
     sessionGen_.fetch_add(1);
-    bool ok;
-    defaultClient->StopTests(&ok);
-
-    if (!ok) {
-        MW_show_log(MainWindow::tr("Failed to stop tests"));
+    defaultClient->FailInFlightCalls();
+    auto notifyCore = [] {
+        bool ok = false;
+        defaultClient->StopTests(&ok);
+    };
+    if (QThread::currentThread() == QCoreApplication::instance()->thread()) {
+        runOnNewThread(notifyCore);
+    } else {
+        notifyCore();
     }
+}
+
+void TestRunner::takeSession() {
+    if (session_.tryLock()) return;
+    stop();
+    session_.lock();
 }
 
 QString TestRunner::contextName(int entID) const {
@@ -970,10 +980,10 @@ void TestRunner::runUrlProbe(const Target& target) {
             if (updated.isEmpty()) return;
             postUi([updated](MainWindow* mw) {
                 mw->dataViewHtmlGenerator_.addTestProgress(updated.size());
-                mw->UpdateDataView(true);
+                mw->UpdateDataView();
                 mw->refresh_proxy_list(updated);
             });
-        }, kLatencyPollIntervalMs);
+        }, kLatencyPollIntervalMs, &stopRequested_);
 
         result = defaultClient->Test(&rpcOK, req, &coreError);
     }
@@ -981,7 +991,7 @@ void TestRunner::runUrlProbe(const Target& target) {
     if (!rpcOK || result.results.empty()) {
         // A failed Test RPC yields no per-result errors, so inspect it here for the
         // geo-asset prompt - the same flow profile start uses.
-        if (!rpcOK) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
+        if (!rpcOK && !stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
         return;
     }
 
@@ -1039,17 +1049,17 @@ bool TestRunner::runIpProbe(const Target& target) {
             if (updated.isEmpty()) return;
             postUi([updated](MainWindow* mw) {
                 mw->dataViewHtmlGenerator_.addTestProgress(updated.size());
-                mw->UpdateDataView(true);
+                mw->UpdateDataView();
                 mw->refresh_proxy_list(updated);
             });
-        }, kLatencyPollIntervalMs);
+        }, kLatencyPollIntervalMs, &stopRequested_);
 
         result = defaultClient->IPTest(&rpcOK, req, &coreError);
     }
 
     if (!rpcOK || result.results.empty()) {
         // Detect missing Xray geo assets from a failed IPTest RPC (see runUrlProbe).
-        if (!rpcOK) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
+        if (!rpcOK && !stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
         return false;
     }
 
@@ -1077,14 +1087,11 @@ bool TestRunner::runIpProbe(const Target& target) {
 void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
     const auto profileIDs = withoutAutoSelectors(withoutDisabled(requestedIDs));
     if (profileIDs.isEmpty()) return;
-    if (!session_.tryLock()) {
-        MessageBoxWarning(software_name, MainWindow::tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
-        return;
-    }
     const bool fallShort = Configs::dataManager->settingsRepo->speed_test_fall_short;
-    sessionGen_.fetch_add(1);
 
     runOnNewThread([this, profileIDs, fallShort] {
+        takeSession();
+        sessionGen_.fetch_add(1);
         stopRequested_.store(false);
         { QMutexLocker lock(&creditMu_); credited_.clear(); }
 
@@ -1137,11 +1144,12 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
                                                             &skipped, &hadErrors, stage);
 
         const qint64 elapsedMs = elapsed.elapsed();
+        const bool cancelled = stopRequested_.load();
         session_.unlock();
-        postUi([profileIDs, completed, elapsedMs](MainWindow* mw) {
+        postUi([profileIDs, completed, elapsedMs, cancelled](MainWindow* mw) {
             mw->dataViewHtmlGenerator_.clearTestSections();
             mw->UpdateDataView(true);
-            mw->refresh_proxy_list(profileIDs);
+            if (!cancelled) mw->refresh_proxy_list(profileIDs);
             mw->ui->pushButton_cancel_speedtest->setVisible(false);
             mw->ui->pushButton_cancel_speedtest->setEnabled(false);
             MW_show_log(testFinishLog(
@@ -1210,16 +1218,10 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
         finish();
         return;
     }
-    if (!session_.tryLock()) {
-        MessageBoxWarning(software_name, isUrl
-            ? MainWindow::tr("The last url test did not exit completely, please wait. If it persists, please restart the program.")
-            : MainWindow::tr("The last test did not exit completely, please wait. If it persists, please restart the program."));
-        finish();
-        return;
-    }
-    sessionGen_.fetch_add(1);
 
     runOnNewThread([this, profileIDs, panelKind, isUrl, finish]() {
+        takeSession();
+        sessionGen_.fetch_add(1);
         stopRequested_.store(false);
         postUi([panelKind, count = profileIDs.size()](MainWindow* mw) {
             mw->dataViewHtmlGenerator_.seedLatencyTest(panelKind, count);
@@ -1312,15 +1314,11 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
     if (profileIDs.isEmpty() && !testCurrent) {
         return;
     }
-    if (!session_.tryLock()) {
-        MessageBoxWarning(software_name, MainWindow::tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
-        return;
-    }
-    sessionGen_.fetch_add(1);
-
-    testingCurrent_.store(testCurrent);
 
     runOnNewThread([this, profileIDs, testCurrent]() {
+        takeSession();
+        sessionGen_.fetch_add(1);
+        testingCurrent_.store(testCurrent);
         stopRequested_.store(false);
         QElapsedTimer elapsed;
         elapsed.start();
@@ -1378,7 +1376,7 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
         postUi([=, this, profileIDs, elapsedMs, cancelled = stopRequested_.load()](MainWindow* mw) {
             mw->dataViewHtmlGenerator_.clearTestSections();
             mw->UpdateDataView(true);
-            mw->refresh_proxy_list(profileIDs);
+            if (!cancelled) mw->refresh_proxy_list(profileIDs);
             MW_show_log(testFinishLog(
                 cancelled ? MainWindow::tr("Speedtest interrupted.") : MainWindow::tr("Speedtest finished!"),
                 elapsedMs));
@@ -1471,7 +1469,7 @@ void TestRunner::pollCountryTest(const QMap<QString, int>& tag2entID, bool testC
     }
     postUi([](MainWindow* mw) {
         mw->dataViewHtmlGenerator_.addTestProgress();
-        mw->UpdateDataView(true);
+        mw->UpdateDataView();
     });
 }
 
@@ -1513,14 +1511,14 @@ void TestRunner::runSpeedProbe(const Target& target)
             if (sessionGen_.load() != gen || stopRequested_.load()) return;
             if (speedtestConf == Configs::TestConfig::COUNTRY) pollCountryTest(tag2entID, testCurrent);
             else pollSpeedTest(tag2entID, testCurrent);
-        }, kSpeedPollIntervalMs);
+        }, kSpeedPollIntervalMs, &stopRequested_);
 
         result = defaultClient->SpeedTest(&rpcOK, req, &coreError);
     }
 
     if (!rpcOK || result.results.empty()) {
         // Detect missing Xray geo assets from a failed SpeedTest RPC (see runUrlProbe).
-        if (!rpcOK) mw_->handleXrayGeoAssetError(coreError, contextName(contextID));
+        if (!rpcOK && !stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(contextID));
         return;
     }
 

@@ -126,6 +126,9 @@ private:
 
     void postUi(const std::function<void(MainWindow*)>& fn) const;
 
+    // Worker threads only. Aborts a previous sweep and takes session_.
+    void takeSession();
+
     MainWindow* mw_;
 
     // Held for a whole sweep, so it must never double as a per-batch latch.

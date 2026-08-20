@@ -169,18 +169,18 @@ void MainWindow::updateImproveMoodGeometry() {
     moodOverlay->setGeometry(x, 0, width, viewport->height());
 }
 
-void MainWindow::UpdateDataView(bool force)
+void MainWindow::UpdateDataView(bool)
 {
-    const auto now = QDateTime::currentMSecsSinceEpoch();
-    if (!force && now - lastUpdatedMs.load() < 100)
-    {
-        return;
-    }
-    auto html = dataViewHtmlGenerator_.buildHtml();
-    runOnUiThread([=, this] {
-        ui->data_view->setHtml(html);
-    });
-    lastUpdatedMs.store(QDateTime::currentMSecsSinceEpoch());
+    // One queued setHtml at a time. Pollers used to force a rebuild every tick;
+    // QTextBrowser::setHtml on the GUI thread is what made Cancel look hung.
+    if (dataViewUpdateScheduled_.exchange(true)) return;
+    QPointer<MainWindow> self(this);
+    QMetaObject::invokeMethod(qApp, [self] {
+        if (!self) return;
+        self->dataViewUpdateScheduled_.store(false);
+        self->ui->data_view->setHtml(self->dataViewHtmlGenerator_.buildHtml());
+        self->lastUpdatedMs.store(QDateTime::currentMSecsSinceEpoch());
+    }, Qt::QueuedConnection);
 }
 
 void MainWindow::setDownloadReport(const DownloadProgressReport& report, bool show)
