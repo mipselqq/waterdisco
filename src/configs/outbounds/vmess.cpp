@@ -145,6 +145,9 @@ namespace Configs {
 
     BuildResult vmess::Build()
     {
+        if (IsXray()) {
+            return {QJsonObject{{"type", "socks"}, {"server", "127.0.0.1"}}, ""};
+        }
         QJsonObject object;
         object["type"] = "vmess";
         mergeJsonObjects(object, outbound::Build().object);
@@ -158,6 +161,20 @@ namespace Configs {
         if (auto transportObj = transport->Build().object; !transportObj.isEmpty()) object["transport"] = transportObj;
         if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
+    }
+
+    BuildResult vmess::BuildXray()
+    {
+        QJsonObject sb;
+        sb["type"] = "vmess";
+        mergeJsonObjects(sb, outbound::ExportToJson());
+        if (!uuid.isEmpty()) sb["uuid"] = uuid;
+        if (security != "auto") sb["security"] = security;
+        if (alter_id > 0) sb["alter_id"] = alter_id;
+        if (auto tlsObj = tls->Build().object; !tlsObj.isEmpty()) sb["tls"] = tlsObj;
+        auto transportObj = transport->ExportFullJson();
+        if (!transportObj.isEmpty()) sb["transport"] = transportObj;
+        return {singBoxOutboundToXray(sb), ""};
     }
 
     QString vmess::DisplayType()

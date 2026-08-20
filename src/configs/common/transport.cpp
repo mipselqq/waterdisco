@@ -18,6 +18,8 @@ namespace Configs {
             if ((type == "tcp" && query.queryItemValue("headerType") == "http") || type == "h2") {
                 type = "http";
                 method = "GET";
+            } else if (type == "raw" || type == "tcp") {
+                type.clear();
             }
         }
         if (query.hasQueryItem("host")) host = query.queryItemValue("host");
@@ -41,7 +43,10 @@ namespace Configs {
     bool Transport::ParseFromJson(const QJsonObject& object)
     {
         if (object.isEmpty()) return false;
-        if (object.contains("type")) type = object["type"].toString();
+        if (object.contains("type")) {
+            type = object["type"].toString();
+            if (type == "raw" || type == "tcp") type.clear();
+        }
         if (object.contains("host")) host = object["host"].toString();
         if (object.contains("path")) path = object["path"].toString();
         if (object.contains("method")) method = object["method"].toString();
@@ -69,6 +74,13 @@ namespace Configs {
         if (object.contains("max_early_data")) max_early_data = object["max_early_data"].toInt();
         if (object.contains("early_data_header_name")) early_data_header_name = object["early_data_header_name"].toString();
         if (object.contains("service_name")) service_name = object["service_name"].toString();
+        static const QStringList knownKeys = {
+            "type", "host", "path", "method", "headers", "idle_timeout", "ping_timeout",
+            "max_early_data", "early_data_header_name", "service_name",
+        };
+        for (const auto &key : object.keys()) {
+            if (!knownKeys.contains(key)) extra[key] = object[key];
+        }
         return true;
     }
     bool Transport::ParseFromClash(const clash::Proxies& object)
@@ -123,7 +135,7 @@ namespace Configs {
     QString Transport::ExportToLink()
     {
         QUrlQuery query;
-        if (type.isEmpty() || type == "tcp") return "";
+        if (type.isEmpty() || type == "tcp" || type == "raw") return "";
         if (!type.isEmpty()) query.addQueryItem("type", type);
         if (!host.isEmpty()) query.addQueryItem("host", host);
         if (!path.isEmpty()) query.addQueryItem("path", path);
@@ -139,7 +151,7 @@ namespace Configs {
     QJsonObject Transport::ExportToJson()
     {
         QJsonObject object;
-        if (type.isEmpty() || type == "tcp") return object;
+        if (type.isEmpty() || type == "tcp" || type == "raw") return object;
         if (!type.isEmpty()) object["type"] = type;
         if (path.contains("?ed=")) {
             auto spl = path.split("?ed=");
@@ -168,10 +180,17 @@ namespace Configs {
         if (!service_name.isEmpty()) object["service_name"] = service_name;
         return object;
     }
+    QJsonObject Transport::ExportFullJson()
+    {
+        auto object = ExportToJson();
+        if (object.isEmpty() && !type.isEmpty()) object["type"] = type;
+        mergeJsonObjects(object, extra);
+        return object;
+    }
     QJsonObject Transport::ExportIdentity()
     {
         QJsonObject object;
-        if (type.isEmpty() || type == "tcp") return object;
+        if (type.isEmpty() || type == "tcp" || type == "raw") return object;
         object["type"] = type;
         return object;
     }

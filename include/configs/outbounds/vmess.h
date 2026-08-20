@@ -3,6 +3,7 @@
 #include "include/configs/common/Outbound.h"
 #include "include/configs/common/TLS.h"
 #include "include/configs/common/transport.h"
+#include "include/configs/common/utils.h"
 
 namespace Configs
 {
@@ -53,6 +54,11 @@ namespace Configs
         QString ExportToLink() override;
         QJsonObject ExportToJson() override;
         BuildResult Build() override;
+        BuildResult BuildXray() override;
+
+        bool IsXray() override {
+            return singBoxTransportNeedsXray(transport->type);
+        }
 
         QString DisplayType() override;
         SecurityInfo GetSecurity() override;

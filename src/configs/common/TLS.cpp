@@ -62,6 +62,7 @@ namespace Configs {
             obj["enabled"] = true;
             obj["fingerprint"] = Configs::dataManager->settingsRepo->utlsFingerprint;
         }
+        if (obj["fingerprint"].toString() == "unsafe") return {};
         return {obj, ""};
     }
 
@@ -275,6 +276,7 @@ namespace Configs {
         if (object.contains("ech")) ech->ParseFromJson(object["ech"].toObject());
         if (object.contains("utls")) utls->ParseFromJson(object["utls"].toObject());
         if (object.contains("reality")) reality->ParseFromJson(object["reality"].toObject());
+        if (reality->enabled || !server_name.isEmpty()) enabled = true;
         return true;
     }
     bool TLS::ParseFromClash(const clash::Proxies& object)
@@ -421,13 +423,19 @@ namespace Configs {
         if (record_fragment) object["record_fragment"] = record_fragment;
         if (TlsTricksEffectivelyOn()) object["tls_tricks"] = QJsonObject{{"mixedcase_sni", true}};
         if (auto obj = ech->Build().object;!obj.isEmpty()) object["ech"] = obj;
-        if (auto obj = utls->Build().object;!obj.isEmpty()) {
+        if (reality->enabled) {
+            auto utlsObj = utls->Build().object;
+            const auto fp = utlsObj["fingerprint"].toString();
+            if (utlsObj.isEmpty() || !utlsObj["enabled"].toBool() || fp == "unsafe" || fp.isEmpty()) {
+                object["utls"] = QJsonObject{
+                        {"enabled", true},
+                        {"fingerprint", "random"},
+                    };
+            } else {
+                object["utls"] = utlsObj;
+            }
+        } else if (auto obj = utls->Build().object; !obj.isEmpty() && obj["fingerprint"].toString() != "unsafe") {
             object["utls"] = obj;
-        } else if (reality->enabled) {
-            object["utls"] = QJsonObject{
-                    {"enabled", true},
-                    {"fingerprint", "random"},
-                };
         }
         if (auto obj = reality->Build().object;!obj.isEmpty()) object["reality"] = obj;
         return {object, ""};

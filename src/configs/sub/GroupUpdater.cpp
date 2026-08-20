@@ -717,7 +717,8 @@ namespace Subscription {
     
                 // VLESS
                 if (out.type == "vless") {
-                    if (out.network == "xhttp" || (!out.encryption.empty() && out.encryption != "none")) {
+                    if (out.network == "xhttp" || out.network == "kcp"
+                        || (!out.encryption.empty() && out.encryption != "none")) {
                         ent = Configs::ProfilesRepo::NewProfile("xrayvless");
                         auto ok = ent->XrayVLESS()->ParseFromClash(out);
                         if (!ok) continue;

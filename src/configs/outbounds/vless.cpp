@@ -99,6 +99,9 @@ namespace Configs {
 
     BuildResult vless::Build()
     {
+        if (IsXray()) {
+            return {QJsonObject{{"type", "socks"}, {"server", "127.0.0.1"}}, ""};
+        }
         QJsonObject object;
         object["type"] = "vless";
         mergeJsonObjects(object, outbound::Build().object);
@@ -109,6 +112,19 @@ namespace Configs {
         if (auto transportObj = transport->Build().object; !transportObj.isEmpty()) object["transport"] = transportObj;
         if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
+    }
+
+    BuildResult vless::BuildXray()
+    {
+        QJsonObject sb;
+        sb["type"] = "vless";
+        mergeJsonObjects(sb, outbound::ExportToJson());
+        if (!uuid.isEmpty()) sb["uuid"] = uuid;
+        if (!flow.isEmpty()) sb["flow"] = flow;
+        if (auto tlsObj = tls->Build().object; !tlsObj.isEmpty()) sb["tls"] = tlsObj;
+        auto transportObj = transport->ExportFullJson();
+        if (!transportObj.isEmpty()) sb["transport"] = transportObj;
+        return {singBoxOutboundToXray(sb), ""};
     }
 
     QString vless::DisplayType()

@@ -23,6 +23,11 @@ namespace Configs
         // gRPC
         QString service_name;
 
+        // Unparsed transport keys (kcp seed/mtu/header, etc.) kept for Xray conversion.
+        QJsonObject extra;
+
+        QJsonObject ExportFullJson();
+
         // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;

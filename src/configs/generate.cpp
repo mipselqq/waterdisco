@@ -1,6 +1,7 @@
 #include "include/configs/generate.h"
 #include "include/api/RPC.h"
 #include "include/configs/AutoSelectorPlan.h"
+#include "include/configs/common/utils.h"
 #include "include/global/Configs.hpp"
 
 #include <QApplication>
@@ -1243,6 +1244,7 @@ namespace Configs {
                     ctx.error += error;
                     return;
                 }
+                normalizeSingBoxOutbound(object);
                 object["tag"] = tag;
                 if (!nextTag.isEmpty() && opts.link) object["detour"] = nextTag;
                 if (opts.warpWrap && idx == 0) object["detour"] = tags::warpBypass;
@@ -2043,6 +2045,25 @@ namespace Configs {
                 // Testing a selector means testing its members; the caller ranks
                 // those directly.
                 return {testCandidate::Skip, "Skipping auto selector conf (test its members instead)"};
+            if (profile->outbound != nullptr && profile->outbound->HasTransport()
+                && isCoreUnsupportedTransport(profile->type, profile->outbound->GetTLS().get(),
+                                              profile->outbound->GetTransport().get())) {
+                return {testCandidate::Skip, coreUnsupportedTransportSkipReason()};
+            }
+            if (profile->type == "custom") {
+                if (auto custom = profile->Custom(); custom != nullptr && custom->type == Custom::CustomOutbound) {
+                    const auto obj = QString2QJsonObject(custom->config);
+                    const auto transport = obj["transport"].toObject();
+                    if (singBoxTransportNeedsXray(transport["type"].toString())) {
+                        const auto tls = obj["tls"].toObject();
+                        const bool hasTls = tls["enabled"].toBool() || tls["reality"].toObject()["enabled"].toBool();
+                        const auto protocol = obj["type"].toString();
+                        if (protocol != "vmess" && !hasTls) {
+                            return {testCandidate::Skip, coreUnsupportedTransportSkipReason()};
+                        }
+                    }
+                }
+            }
             return {testCandidate::Build, nullptr};
         }
 
@@ -2113,6 +2134,27 @@ namespace Configs {
                 return false;
             }
             return !plan.build.isEmpty();
+        }
+        if (ent->outbound != nullptr && ent->outbound->HasTransport()
+            && isCoreUnsupportedTransport(ent->type, ent->outbound->GetTLS().get(),
+                                          ent->outbound->GetTransport().get())) {
+            MW_show_log(coreUnsupportedTransportSkipReason());
+            return false;
+        }
+        if (ent->type == "custom") {
+            if (auto custom = ent->Custom(); custom != nullptr && custom->type == Custom::CustomOutbound) {
+                const auto obj = QString2QJsonObject(custom->config);
+                const auto transport = obj["transport"].toObject();
+                if (singBoxTransportNeedsXray(transport["type"].toString())) {
+                    const auto tls = obj["tls"].toObject();
+                    const bool hasTls = tls["enabled"].toBool() || tls["reality"].toObject()["enabled"].toBool();
+                    const auto protocol = obj["type"].toString();
+                    if (protocol != "vmess" && !hasTls) {
+                        MW_show_log(coreUnsupportedTransportSkipReason());
+                        return false;
+                    }
+                }
+            }
         }
         if (ent->type == "chain")
         {
@@ -2195,7 +2237,9 @@ namespace Configs {
         if (!fullConf)
         {
             auto out = ent->outbound->Build();
-            auto outArr = QJsonArray{out.object};
+            auto outObj = out.object;
+            normalizeSingBoxOutbound(outObj);
+            auto outArr = QJsonArray{outObj};
             auto key = ent->outbound->IsEndpoint() ? "endpoints" : "outbounds";
             conf = {
                 {key, outArr},
@@ -2303,7 +2347,7 @@ namespace Configs {
                 }
                 if (custom->type == Custom::CustomFullConfig)
                 {
-                    auto obj = QString2QJsonObject(custom->config);
+                    auto obj = normalizeSingBoxConfig(QString2QJsonObject(custom->config));
                     obj["inbounds"] = QJsonArray();
                     res->fullConfigs[item->id] = QJsonObject2QString(obj, true);
                     continue;

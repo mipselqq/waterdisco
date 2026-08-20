@@ -1,6 +1,7 @@
 #pragma once
 #include <QJsonArray>
 #include "include/configs/common/Outbound.h"
+#include "include/configs/common/utils.h"
 
 namespace Configs
 {
@@ -101,9 +102,18 @@ namespace Configs
             return t == "wireguard" || t == "tailscale";
         }
 
-        bool IsXray() override { return type == CustomXrayOutbound; }
+        bool IsXray() override { return type == CustomXrayOutbound || usesSingBoxViaXray(); }
 
         bool IsXrayFullConfig() override { return type == CustomXrayFullConfig; }
+
+        bool usesSingBoxViaXray() const {
+            if (type != CustomOutbound) return false;
+            const auto obj = QString2QJsonObject(config);
+            const auto transportType = obj["transport"].toObject()["type"].toString();
+            if (!singBoxTransportNeedsXray(transportType)) return false;
+            const auto tls = obj["tls"].toObject();
+            return tls["enabled"].toBool() || tls["reality"].toObject()["enabled"].toBool();
+        }
 
         // Every server address embedded in a custom Xray full config's outbounds
         // (vnext / servers / address). sing-box needs the domain ones in its
@@ -132,6 +142,20 @@ namespace Configs
             return domains;
         }
 
+        BuildResult BuildXray() override
+        {
+            if (type == CustomXrayOutbound) {
+                // Outbound server-domain resolution is wired onto the Xray
+                // instance after creation (ThroneWiring), not baked into the
+                // config as a sockopt.domainStrategy.
+                return {QString2QJsonObject(config), ""};
+            }
+            if (usesSingBoxViaXray()) {
+                return {singBoxOutboundToXray(QString2QJsonObject(config)), ""};
+            }
+            return {};
+        }
+
         BuildResult Build() override
         {
             if (type == CustomXrayFullConfig) {
@@ -151,18 +175,13 @@ namespace Configs
                             {"server", "127.0.0.1"},
                         }, ""};
             }
-            return {QString2QJsonObject(config), ""};
-        }
-
-        BuildResult BuildXray() override
-        {
-            if (type == CustomXrayOutbound) {
-                // Outbound server-domain resolution is wired onto the Xray
-                // instance after creation (ThroneWiring), not baked into the
-                // config as a sockopt.domainStrategy.
-                return {QString2QJsonObject(config), ""};
+            if (usesSingBoxViaXray()) {
+                return {QJsonObject{
+                            {"type", "socks"},
+                            {"server", "127.0.0.1"},
+                        }, ""};
             }
-            return {};
+            return {QString2QJsonObject(config), ""};
         }
     };
 }
