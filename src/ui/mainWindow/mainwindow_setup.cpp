@@ -308,8 +308,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         this->restoreGeometry(geo);
     }
 
-    // setup log
-    ui->splitter->restoreState(DecodeB64IfValid(Configs::dataManager->settingsRepo->splitter_state));
     setLogHighlighter(themeUsesDarkLog(Configs::dataManager->settingsRepo->theme));
     qvLogDocument->setUndoRedoEnabled(false);
     const int maxUiLogLines = qMax(1, Configs::dataManager->settingsRepo->max_log_line);
@@ -533,25 +531,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->tabWidget->setParent(nullptr);
     ui->tabWidget->deleteLater();
     ui->splitter->insertWidget(0, profilePane);
-
-    // On a fresh installation start the lower tools at their smallest useful
-    // height. The splitter remains collapsible, so dragging farther down still
-    // hides the pane exactly as before; an existing user splitter state wins.
-    {
-        auto *lowerTools = ui->aaaaaaaaaaaaaaaaaa;
-        const int lowerMinHeight = lowerTools->minimumSizeHint().height();
-        if (lowerMinHeight > 0) {
-            lowerTools->setMinimumHeight(lowerMinHeight);
-        }
-        if (Configs::dataManager->settingsRepo->splitter_state.isEmpty()) {
-            QTimer::singleShot(0, this, [this, lowerMinHeight] {
-                const int availableHeight = ui->splitter->height();
-                if (availableHeight > lowerMinHeight) {
-                    ui->splitter->setSizes({availableHeight - lowerMinHeight, lowerMinHeight});
-                }
-            });
-        }
-    }
+    ui->splitter->restoreState(DecodeB64IfValid(Configs::dataManager->settingsRepo->splitter_state));
+    QTimer::singleShot(0, this, [this] {
+        const auto sizes = ui->splitter->sizes();
+        if (sizes.size() != 2 || sizes[1] <= 0) return;
+        const int lower = qMax(1, static_cast<int>(sizes[1] / 1.7));
+        ui->splitter->setSizes({sizes[0] + sizes[1] - lower, lower});
+    });
 
     ui->splitter->installEventFilter(this);
     //
