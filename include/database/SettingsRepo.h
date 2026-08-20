@@ -165,7 +165,7 @@ namespace Configs {
         bool remember_system_proxy = false;
         bool remember_tun = false;
         int remember_id = NoProfileId;
-        bool remember_enable = false;
+        bool remember_enable = true;
         bool auto_connect_best_site_score = false;
         bool speed_test_fall_short = true;
         bool windows_set_admin = false;

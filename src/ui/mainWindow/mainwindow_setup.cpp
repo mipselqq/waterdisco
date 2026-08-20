@@ -537,15 +537,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // On a fresh installation start the lower tools at their smallest useful
     // height. The splitter remains collapsible, so dragging farther down still
     // hides the pane exactly as before; an existing user splitter state wins.
-    if (Configs::dataManager->settingsRepo->splitter_state.isEmpty()) {
-        QTimer::singleShot(0, this, [this] {
-            auto *lowerTools = ui->aaaaaaaaaaaaaaaaaa;
-            const int lowerHeight = lowerTools->minimumSizeHint().height();
-            const int availableHeight = ui->splitter->height();
-            if (availableHeight > lowerHeight) {
-                ui->splitter->setSizes({availableHeight - lowerHeight, lowerHeight});
-            }
-        });
+    {
+        auto *lowerTools = ui->aaaaaaaaaaaaaaaaaa;
+        const int lowerMinHeight = lowerTools->minimumSizeHint().height();
+        if (lowerMinHeight > 0) {
+            lowerTools->setMinimumHeight(lowerMinHeight);
+        }
+        if (Configs::dataManager->settingsRepo->splitter_state.isEmpty()) {
+            QTimer::singleShot(0, this, [this, lowerMinHeight] {
+                const int availableHeight = ui->splitter->height();
+                if (availableHeight > lowerMinHeight) {
+                    ui->splitter->setSizes({availableHeight - lowerMinHeight, lowerMinHeight});
+                }
+            });
+        }
     }
 
     ui->splitter->installEventFilter(this);

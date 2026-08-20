@@ -65,13 +65,11 @@ func ipTest(ctx context.Context, client *http.Client) (IPInfo, error) {
 	for _, endpoint := range ipInfoAPIs {
 		info, err := fetchIPInfo(ctx, client, endpoint)
 		if err == nil && info.IP != "" {
-			Diag("IP_OK endpoint=%s ip=%s country=%s", endpoint, info.IP, info.CountryCode)
 			return info, nil
 		}
 		if err == nil {
 			err = errors.New("empty IP in response")
 		}
-		Diag("IP_FAIL endpoint=%s err=%v", endpoint, err)
 		lastErr = err
 		if ctx.Err() != nil {
 			break
@@ -79,11 +77,9 @@ func ipTest(ctx context.Context, client *http.Client) (IPInfo, error) {
 		if isTransientHTTPErr(err) {
 			info, err = fetchIPInfo(ctx, client, endpoint)
 			if err == nil && info.IP != "" {
-				Diag("IP_OK_RETRY endpoint=%s ip=%s country=%s", endpoint, info.IP, info.CountryCode)
 				return info, nil
 			}
 			if err != nil {
-				Diag("IP_FAIL_RETRY endpoint=%s err=%v", endpoint, err)
 				lastErr = err
 			}
 		}

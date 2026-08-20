@@ -90,8 +90,6 @@ func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, t
 		concurrency = 5
 	}
 	_ = SpeedReporter.Results()
-	Diag("SPEED_BATCH start tags=%d concurrency=%d timeout=%s simpleDL=%v countryOnly=%v testDl=%v testUl=%v fallShort=%v bestConn=%d bestDl=%d",
-		len(outboundTags), concurrency, timeout, simpleDL, countryOnly, testDl, testUl, dynamicFallShort, globalBestConnMs, globalBestDlMs)
 	queuer := make(chan struct{}, concurrency)
 	wg := &sync.WaitGroup{}
 	bestConnMs := globalBestConnMs
@@ -149,9 +147,6 @@ func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, t
 				noteFasterMs(&bestConnMs, int64(res.Latency))
 				noteFasterMs(&bestDlMs, res.ElapsedMs)
 			}
-			Diag("SPEED_ONE tag=%s err=%v cancelled=%v latency=%d elapsedMs=%d dl=%s bytes=%d bestConn=%d bestDl=%d",
-				res.Tag, err, res.Cancelled, res.Latency, res.ElapsedMs, res.DlSpeed, res.DlBytes,
-				atomic.LoadInt64(&bestConnMs), atomic.LoadInt64(&bestDlMs))
 			if err != nil {
 				if errors.Is(err, context.Canceled) && ctx.Err() != nil {
 					res.Cancelled = true
@@ -220,9 +215,6 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 				case <-ticker.C:
 					limit := fallShortDownloadTimeoutMs(configuredMs, atomic.LoadInt64(bestDlMs), atomic.LoadInt64(bestConnMs))
 					if time.Since(reqStart) > time.Duration(limit)*time.Millisecond {
-						Diag("SPEED_FALLSHORT_CANCEL tag=%s elapsedMs=%d limitMs=%d bestConn=%d bestDl=%d",
-							res.Tag, time.Since(reqStart).Milliseconds(), limit,
-							atomic.LoadInt64(bestConnMs), atomic.LoadInt64(bestDlMs))
 						cancel()
 						return
 					}
@@ -236,7 +228,6 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 		resp, err := client.Do(req)
 		if err != nil {
 			elapsedMs.Store(time.Since(reqStart).Milliseconds())
-			Diag("SIMPLEDL_DO_FAIL tag=%s err=%v elapsedMs=%d", res.Tag, err, elapsedMs.Load())
 			downloadErr = err
 			return
 		}
@@ -245,13 +236,11 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 		latencyMs.Store(int32(ttfb))
 		noteFasterMs(bestConnMs, ttfb)
 		startNs.Store(time.Now().UnixNano())
-		n, copyErr := io.Copy(&counted, resp.Body)
+		_, copyErr := io.Copy(&counted, resp.Body)
 		elapsedMs.Store(time.Since(reqStart).Milliseconds())
 		if copyErr != nil {
 			downloadErr = copyErr
 		}
-		Diag("SIMPLEDL_BODY tag=%s status=%d ttfbMs=%d bytes=%d elapsedMs=%d copyErr=%v",
-			res.Tag, resp.StatusCode, latencyMs.Load(), n, elapsedMs.Load(), copyErr)
 	}()
 
 	ticker := time.NewTicker(speedtestSampleInterval)

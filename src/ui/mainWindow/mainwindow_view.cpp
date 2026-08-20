@@ -27,6 +27,7 @@
 #include "include/stats/traffic/TrafficLooper.hpp"
 #include "include/stats/autoselector/AutoSelectorMonitor.hpp"
 #include "include/ui/setting/Icon.hpp"
+#include "include/global/CountryHelper.hpp"
 #include "include/ui/stats/dialog_auto_selector.h"
 #include "include/ui/utils/ProfilesTableFilterHeader.h"
 #include "include/ui/utils/ProfilesTableModel.h"
@@ -291,7 +292,14 @@ void MainWindow::refresh_status(const QString &traffic_update) {
 
 void MainWindow::refreshInfoPanel() {
     const bool hasProxyIp = running != nullptr && !running->ip_out.trimmed().isEmpty();
-    ui->proxy_ip_value->setText(hasProxyIp ? running->ip_out : QStringLiteral("—"));
+    if (hasProxyIp) {
+        const QString flag = running->test_country.isEmpty()
+            ? QString()
+            : CountryCodeToFlag(running->test_country) + QStringLiteral(" ");
+        ui->proxy_ip_value->setText(flag + running->ip_out);
+    } else {
+        ui->proxy_ip_value->setText(QStringLiteral("—"));
+    }
     ui->host_ip_value->setText(hostInfoIp.isEmpty() ? QStringLiteral("—") : hostInfoIp);
     ui->proxy_ip_copy->setEnabled(hasProxyIp);
     ui->host_ip_copy->setEnabled(!hostInfoIp.isEmpty());

@@ -6,9 +6,9 @@
 #include "include/configs/generate.h"
 #include "include/database/GroupsRepo.h"
 #include "include/database/ProfilesRepo.h"
-#include "include/global/DiagLog.h"
 #include "include/stats/traffic/TrafficStatsManager.hpp"
 
+#include <QPointer>
 #include <QSemaphore>
 #include <QSet>
 #include <QThread>
@@ -199,18 +199,6 @@ namespace {
         return QStringLiteral("?");
     }
 
-    QString profileDiag(const std::shared_ptr<Configs::Profile>& p) {
-        if (!p) return QStringLiteral("profile=null");
-        return QStringLiteral("id=%1 name=%2 type=%3 status=%4 connectMs=%5 rxMbps=%6 dl=%7 tipEmpty=%8")
-            .arg(p->id)
-            .arg(p->outbound ? p->outbound->name : p->name)
-            .arg(p->type)
-            .arg(statusName(p->performance_test_status))
-            .arg(p->connect_time_ms)
-            .arg(p->rx_speed_mbps, 0, 'f', 3)
-            .arg(p->dl_speed)
-            .arg(p->DisplayRxSpeedTooltip().isEmpty() ? "yes" : "no");
-    }
 
     // Target is deduced, not named: access control applies to naming a private type.
     template <typename Req, typename Target>
@@ -310,19 +298,7 @@ void TestRunner::applyConnectionResult(const std::shared_ptr<Configs::Profile>& 
     if (!ent) return;
     QMutexLocker lock(&rankedApplyMu_);
     const QString error = QString::fromStdString(res.error.value());
-    DIAG_LOG(QStringLiteral("CONN_RESULT tag=%1 latencyMs=%2 error=%3 fallShort=%4 limitMs=%5 defaultTimeout=%6 %7")
-                 .arg(QString::fromStdString(res.outbound_tag.value()))
-                 .arg(res.latency_ms.value())
-                 .arg(error)
-                 .arg(fallShort ? "yes" : "no")
-                 .arg(limitMs)
-                 .arg(defaultTimeoutMs)
-                 .arg(profileDiag(ent)));
     if (isTestAborted(error) || stopRequested_.load()) {
-        DIAG_LOG(QStringLiteral("CONN_RESULT_IGNORED aborted_or_stop id=%1 aborted=%2 stop=%3")
-                     .arg(ent->id)
-                     .arg(isTestAborted(error) ? "yes" : "no")
-                     .arg(stopRequested_.load() ? "yes" : "no"));
         return;
     }
 
@@ -377,14 +353,6 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int lim
     if (fallShort && bestConnectionMs) {
         req.fall_short_best_ms = static_cast<int32_t>(std::max<qint64>(0, bestConnectionMs->load()));
     }
-    DIAG_LOG(QStringLiteral("CONN_RPC tags=%1 mapped=%2 concurrency=%3 timeoutMs=%4 fallShort=%5 globalBestMs=%6 url=%7")
-                 .arg(target.outboundTags.size())
-                 .arg(target.tag2entID.size())
-                 .arg(configuredTestConcurrency())
-                 .arg(std::max(1, limitMs))
-                 .arg(fallShort ? "yes" : "no")
-                 .arg(bestConnectionMs ? bestConnectionMs->load() : 0)
-                 .arg(QString::fromStdString(kWaterdiscoProbeUrl)));
 
     bool rpcOK = false;
     QString coreError;
@@ -407,8 +375,10 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int lim
                 updated << entid;
             }
             if (updated.isEmpty()) return;
-            mw_->UpdateDataView(true);
-            runOnUiThread([this, updated] { mw_->refresh_proxy_list(updated); });
+            postUi([updated](MainWindow* mw) {
+                mw->UpdateDataView(true);
+                mw->refresh_proxy_list(updated);
+            });
         }, kLatencyPollIntervalMs);
 
         result = defaultClient->Test(&rpcOK, req, &coreError);
@@ -452,14 +422,13 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
         QString buildError;
         const auto targets = buildTargets(profiles, &buildError);
         if (!buildError.isEmpty()) {
-            DIAG_LOG(QStringLiteral("CONN_CHUNK_BUILD_FAIL i=%1 slice=%2 err=%3").arg(i).arg(slice.size()).arg(buildError));
             MW_show_log(MainWindow::tr("Failed to build test config for batch: ") + buildError);
             for (const auto& profile : profiles) {
                 profile->MarkPerformanceError(speedTestBuildError(buildError));
                 if (hadErrors) *hadErrors = true;
             }
             persistProfiles(profiles);
-            mw_->dataViewHtmlGenerator_.addTestProgress(slice.size());
+            postUi([n = slice.size()](MainWindow* mw) { mw->dataViewHtmlGenerator_.addTestProgress(n); });
             continue;
         }
 
@@ -467,23 +436,7 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
             const int limitMs = fallShort
                 ? Configs::RankedFallShortConnectionTimeoutMs(configuredTimeout, best.load())
                 : configuredTimeout;
-            DIAG_LOG(QStringLiteral("CONN_CHUNK i=%1 slice=%2 tags=%3 fallShort=%4 limitMs=%5 bestMs=%6 concurrency=%7 batch=%8 xray=%9")
-                         .arg(i)
-                         .arg(slice.size())
-                         .arg(target.outboundTags.size())
-                         .arg(fallShort ? "yes" : "no")
-                         .arg(limitMs)
-                         .arg(best.load())
-                         .arg(configuredTestConcurrency())
-                         .arg(chunkSize)
-                         .arg(target.xrayConfig.isEmpty() ? "no" : "yes"));
-            DIAG_LOG(QStringLiteral("CONN_TARGET entID=%1 tags=%2 mapped=%3 xray=%4 xrayFull=%5 defaultOut=%6")
-                         .arg(target.entID)
-                         .arg(target.outboundTags.size())
-                         .arg(target.tag2entID.size())
-                         .arg(target.xrayConfig.isEmpty() ? "no" : "yes")
-                         .arg(target.xrayFullConfigs.size())
-                         .arg(target.useDefaultOutbound ? "yes" : "no"));
+
             if (stopRequested_.load()) {
                 persistProfileIDs(slice);
                 return false;
@@ -515,11 +468,6 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
                 }
                 return false;
             }();
-            DIAG_LOG(QStringLiteral("CONN_LEFTOVER inTarget=%1 fallShort=%2 limitMs=%3 %4")
-                         .arg(inTargetMap ? "yes" : "no")
-                         .arg(fallShort ? "yes" : "no")
-                         .arg(leftoverLimitMs)
-                         .arg(profileDiag(profile)));
             const auto detail = connectionProbeLimitDetail(fallShort, leftoverLimitMs, configuredTimeout);
             if (fallShort) {
                 profile->MarkPerformanceSkipped(detail);
@@ -545,20 +493,17 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
                  || profile->performance_test_status == Configs::PerformanceTestStatus::Error)
                 && profile->DisplayRxSpeedTooltip().isEmpty()) {
                 leftoverEmptyTip++;
-                DIAG_LOG(QStringLiteral("EMPTY_TOOLTIP_AFTER_CHUNK %1").arg(profileDiag(profile)));
             }
         }
-        DIAG_LOG(QStringLiteral("CONN_CHUNK_SUMMARY ok=%1 skip=%2 error=%3 emptyTip=%4 slice=%5")
-                     .arg(leftoverOk).arg(leftoverSkip).arg(leftoverError).arg(leftoverEmptyTip).arg(slice.size()));
         const int skip = skipped ? *skipped : 0;
         const int processed = i + slice.size();
         if (!profiles.isEmpty()) {
             updateRankedProgress(progressStage, profiles.front(),
                                  qMax(0, processed - skip), skip, profileIDs.size());
         } else {
-            mw_->dataViewHtmlGenerator_.addTestProgress(slice.size());
+            postUi([n = slice.size()](MainWindow* mw) { mw->dataViewHtmlGenerator_.addTestProgress(n); });
         }
-        runOnUiThread([this, slice] { mw_->refresh_proxy_list(slice); });
+        postUi([slice](MainWindow* mw) { mw->refresh_proxy_list(slice); });
     }
 
     if (bestConnectionMs) {
@@ -594,13 +539,6 @@ void TestRunner::applyDownloadResult(const std::shared_ptr<Configs::Profile>& pr
 
     const bool canceled = res.cancelled.value() || isCanceledProbeError(error);
     if (!error.isEmpty() || res.cancelled.value()) {
-        DIAG_LOG(QStringLiteral("DL_FAIL fallShort=%1 timeoutMs=%2 defaultTimeout=%3 elapsedMs=%4 coreError=%5 %6")
-                     .arg(fallShort ? "yes" : "no")
-                     .arg(limitMs)
-                     .arg(defaultTimeoutMs)
-                     .arg(elapsedMs)
-                     .arg(error)
-                     .arg(profileDiag(profile)));
         const auto detail = downloadFailureDetail(fallShort, limitMs, defaultTimeoutMs, error, elapsedMs);
         if (fallShort && (canceled || usedFallShortLimit(fallShort, limitMs, defaultTimeoutMs))) {
             profile->MarkPerformanceSkipped(detail);
@@ -622,13 +560,6 @@ void TestRunner::applyDownloadResult(const std::shared_ptr<Configs::Profile>& pr
         if (skipped) ++*skipped;
         return;
     }
-
-    DIAG_LOG(QStringLiteral("DL_OK speed=%1 rxMbps=%2 connectionTime=%3 elapsedMs=%4 %5")
-                 .arg(speed)
-                 .arg(rxMbps, 0, 'f', 3)
-                 .arg(connectionTime)
-                 .arg(elapsedMs)
-                 .arg(profileDiag(profile)));
     profile->SetPerformanceResult(connectionTime, rxMbps, speed);
     noteFasterMs(bestConnectionMs, connectionTime);
     noteFasterMs(bestDownloadMs, elapsedMs);
@@ -656,13 +587,6 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
         req.fall_short_best_download_ms = static_cast<int32_t>(
             std::max<qint64>(0, bestDownloadMs ? bestDownloadMs->load() : 0));
     }
-    DIAG_LOG(QStringLiteral("DL_RPC tags=%1 mapped=%2 timeoutMs=%3 fallShort=%4 bestConn=%5 bestDl=%6")
-                 .arg(target.outboundTags.size())
-                 .arg(target.tag2entID.size())
-                 .arg(timeoutMs)
-                 .arg(fallShort ? "yes" : "no")
-                 .arg(bestConnectionMs ? bestConnectionMs->load() : 0)
-                 .arg(bestDownloadMs ? bestDownloadMs->load() : 0));
 
     bool rpcOK = false;
     QString coreError;
@@ -671,12 +595,6 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
     auto markUnresolved = [&](int id) {
         auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
         if (!profile || downloadAlreadyResolved(*profile)) return;
-        DIAG_LOG(QStringLiteral("DL_UNRESOLVED rpcOK=%1 coreError=%2 fallShort=%3 timeoutMs=%4 %5")
-                     .arg(rpcOK ? "yes" : "no")
-                     .arg(coreError)
-                     .arg(fallShort ? "yes" : "no")
-                     .arg(timeoutMs)
-                     .arg(profileDiag(profile)));
         const auto detail = downloadFailureDetail(fallShort, timeoutMs, defaultTimeoutMs,
                                                   !rpcOK ? coreError : QString());
         if (fallShort && (isCanceledProbeError(coreError)
@@ -710,8 +628,10 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
             }
             if (updated.isEmpty()) return;
             persistProfileIDs(updated);
-            mw_->UpdateDataView(true);
-            runOnUiThread([this, updated] { mw_->refresh_proxy_list(updated); });
+            postUi([updated](MainWindow* mw) {
+                mw->UpdateDataView(true);
+                mw->refresh_proxy_list(updated);
+            });
         }, kSpeedPollIntervalMs);
 
         result = defaultClient->SpeedTest(&rpcOK, req, &coreError);
@@ -725,16 +645,11 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
     };
 
     if (!rpcOK) {
-        DIAG_LOG(QStringLiteral("DL_RPC_EMPTY rpcOK=no results=%1 coreError=%2 tags=%3 mapped=%4")
-                     .arg(result.results.size())
-                     .arg(coreError)
-                     .arg(target.outboundTags.size())
-                     .arg(target.tag2entID.size()));
         mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
         const auto ids = targetIDs();
         for (int id : ids) markUnresolved(id);
         persistProfileIDs(ids);
-        mw_->dataViewHtmlGenerator_.addTestProgress(ids.size());
+        postUi([n = ids.size()](MainWindow* mw) { mw->dataViewHtmlGenerator_.addTestProgress(n); });
         return true;
     }
 
@@ -752,7 +667,7 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
             persistProfiles(dirty);
             return false;
         }
-        runOnUiThread([this, id = profile->id] { mw_->refresh_proxy_list({id}); });
+        postUi([id = profile->id](MainWindow* mw) { mw->refresh_proxy_list({id}); });
     }
     for (int id : targetIDs()) {
         auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
@@ -761,16 +676,17 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
         dirty.append(profile);
     }
     persistProfiles(dirty);
-    mw_->dataViewHtmlGenerator_.addTestProgress(dirty.size());
+    postUi([n = dirty.size()](MainWindow* mw) { mw->dataViewHtmlGenerator_.addTestProgress(n); });
     return !stopRequested_.load();
 }
 
 void TestRunner::updateRankedProgress(const QString& stage, const std::shared_ptr<Configs::Profile>& profile,
                                       int tested, int skipped, int total) {
     if (!profile) return;
-    runOnUiThread([this, stage, name = profile->outbound->name, tested, skipped, total] {
-        mw_->dataViewHtmlGenerator_.setRankedSpeedtestProgress(stage, name, tested, skipped, total);
-        mw_->UpdateDataView(true);
+    const QString name = profile->outbound ? profile->outbound->name : profile->name;
+    postUi([stage, name, tested, skipped, total](MainWindow* mw) {
+        mw->dataViewHtmlGenerator_.setRankedSpeedtestProgress(stage, name, tested, skipped, total);
+        mw->UpdateDataView(true);
     });
 }
 
@@ -799,29 +715,21 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
     sessionGen_.fetch_add(1);
 
     runOnNewThread([this, profileIDs, mode, connectBestSiteScore, fallShort] {
-        DiagLog::ResetSession(QStringLiteral("ranked speedtest"));
-        DIAG_LOG(QStringLiteral("RANKED_START count=%1 mode=%2 connectBest=%3 fallShort=%4 concurrency=%5 batch=%6 urlTimeout=%7 dlTimeout=%8")
-                     .arg(profileIDs.size())
-                     .arg(mode == RankedStartMode::ByConnectionTime ? "connection" : "site_score")
-                     .arg(connectBestSiteScore ? "yes" : "no")
-                     .arg(fallShort ? "yes" : "no")
-                     .arg(configuredTestConcurrency())
-                     .arg(configuredTestBatchSize())
-                     .arg(Configs::dataManager->settingsRepo->url_test_timeout_ms)
-                     .arg(Configs::dataManager->settingsRepo->speed_test_timeout_ms));
         stopRequested_.store(false);
         { QMutexLocker lock(&creditMu_); credited_.clear(); }
 
-        runOnUiThread([this] {
-            mw_->ui->pushButton_cancel_speedtest->setVisible(true);
-            mw_->ui->pushButton_cancel_speedtest->setEnabled(true);
+        postUi([](MainWindow* mw) {
+            mw->ui->pushButton_cancel_speedtest->setVisible(true);
+            mw->ui->pushButton_cancel_speedtest->setEnabled(true);
         });
 
         QElapsedTimer elapsed;
         elapsed.start();
 
-        mw_->dataViewHtmlGenerator_.seedSpeedTest(profileIDs.size());
-        runOnUiThread([this] { mw_->UpdateDataView(); });
+        postUi([count = profileIDs.size()](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.seedSpeedTest(count);
+            mw->UpdateDataView();
+        });
 
         // Snapshot last-run metrics before clearing. Ordering after a clear is a
         // no-op for saved-site-score mode.
@@ -848,7 +756,7 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
         const auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
         for (const auto& profile : profiles) profile->ClearPerformanceTestResults();
         Configs::dataManager->profilesRepo->SaveBatch(profiles);
-        runOnUiThread([this, profileIDs] { mw_->refresh_proxy_list(profileIDs); });
+        postUi([profileIDs](MainWindow* mw) { mw->refresh_proxy_list(profileIDs); });
 
         int tested = 0;
         int skipped = 0;
@@ -917,7 +825,7 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
                         profile->MarkPerformanceError(speedTestBuildError(buildError));
                     }
                     persistProfiles(sliceProfiles);
-                    mw_->dataViewHtmlGenerator_.addTestProgress(slice.size());
+                    postUi([n = slice.size()](MainWindow* mw) { mw->dataViewHtmlGenerator_.addTestProgress(n); });
                     continue;
                 }
                 for (const auto& target : targets) {
@@ -933,7 +841,7 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
                     }
                 }
                 if (!completed) break;
-                runOnUiThread([this, slice] { mw_->refresh_proxy_list(slice); });
+                postUi([slice](MainWindow* mw) { mw->refresh_proxy_list(slice); });
             }
         } else if (stopRequested_.load()) {
             completed = false;
@@ -946,29 +854,28 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
         const int bestID = canChooseProfile && connectBestSiteScore
             ? bestSiteScoreProfile(profileIDs) : -1;
         const qint64 elapsedMs = elapsed.elapsed();
-        DIAG_LOG(QStringLiteral("RANKED_END completed=%1 tested=%2 skipped=%3 hadErrors=%4 bestConn=%5 bestDl=%6 elapsedMs=%7 bestID=%8")
-                     .arg(completed ? "yes" : "no")
-                     .arg(tested)
-                     .arg(skipped)
-                     .arg(hadErrors ? "yes" : "no")
-                     .arg(bestConnectionMs)
-                     .arg(bestDownloadMs)
-                     .arg(elapsedMs)
-                     .arg(bestID));
         session_.unlock();
-        runOnUiThread([this, profileIDs, bestID, canChooseProfile, elapsedMs] {
-            mw_->dataViewHtmlGenerator_.clearTestSections();
-            mw_->UpdateDataView(true);
-            mw_->refresh_proxy_list(profileIDs);
-            mw_->ui->pushButton_cancel_speedtest->setVisible(false);
-            mw_->ui->pushButton_cancel_speedtest->setEnabled(false);
+        postUi([this, profileIDs, bestID, canChooseProfile, elapsedMs](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.clearTestSections();
+            mw->UpdateDataView(true);
+            mw->refresh_proxy_list(profileIDs);
+            mw->ui->pushButton_cancel_speedtest->setVisible(false);
+            mw->ui->pushButton_cancel_speedtest->setEnabled(false);
             MW_show_log(testFinishLog(
                 canChooseProfile ? MainWindow::tr("Speedtest finished!") : MainWindow::tr("Speedtest interrupted."),
                 elapsedMs));
-            if (bestID >= 0 && (!mw_->running || mw_->running->id != bestID)) {
-                mw_->profile_start(bestID);
+            if (bestID >= 0 && (!mw->running || mw->running->id != bestID)) {
+                mw->profile_start(bestID);
             }
         });
+    });
+}
+
+
+void TestRunner::postUi(const std::function<void(MainWindow*)>& fn) const {
+    QPointer<MainWindow> guard(mw_);
+    runOnUiThread([guard, fn] {
+        if (guard) fn(guard.data());
     });
 }
 
@@ -1022,7 +929,7 @@ void TestRunner::applyIpResult(const std::shared_ptr<Configs::Profile>& ent, con
         ent->test_country.clear();
     }
     Configs::dataManager->profilesRepo->Save(ent);
-    runOnUiThread([this] { mw_->refresh_status(); });
+    postUi([this](MainWindow* mw) { mw->refresh_status(); });
 }
 
 void TestRunner::runUrlProbe(const Target& target) {
@@ -1050,8 +957,6 @@ void TestRunner::runUrlProbe(const Target& target) {
 
             QList<int> updated;
             for (const auto& res : resp.results) {
-                mw_->dataViewHtmlGenerator_.addTestProgress();
-                mw_->UpdateDataView();
                 const int entid = resolveEntID(tag2entID, res.outbound_tag.value(), -1);
                 if (entid == -1) continue;
                 auto ent = Configs::dataManager->profilesRepo->GetProfile(entid);
@@ -1060,8 +965,11 @@ void TestRunner::runUrlProbe(const Target& target) {
                 updated << entid;
             }
             if (updated.isEmpty()) return;
-            mw_->UpdateDataView(true);
-            runOnUiThread([=, this] { mw_->refresh_proxy_list(updated); });
+            postUi([updated](MainWindow* mw) {
+                mw->dataViewHtmlGenerator_.addTestProgress(updated.size());
+                mw->UpdateDataView(true);
+                mw->refresh_proxy_list(updated);
+            });
         }, kLatencyPollIntervalMs);
 
         result = defaultClient->Test(&rpcOK, req, &coreError);
@@ -1113,8 +1021,6 @@ bool TestRunner::runIpProbe(const Target& target) {
 
             QList<int> updated;
             for (const auto& res : resp.results) {
-                mw_->dataViewHtmlGenerator_.addTestProgress();
-                mw_->UpdateDataView();
                 const int entid = resolveEntID(tag2entID, res.outbound_tag.value(), -1);
                 if (entid == -1) continue;
                 auto ent = Configs::dataManager->profilesRepo->GetProfile(entid);
@@ -1123,8 +1029,11 @@ bool TestRunner::runIpProbe(const Target& target) {
                 updated << entid;
             }
             if (updated.isEmpty()) return;
-            mw_->UpdateDataView(true);
-            runOnUiThread([=, this] { mw_->refresh_proxy_list(updated); });
+            postUi([updated](MainWindow* mw) {
+                mw->dataViewHtmlGenerator_.addTestProgress(updated.size());
+                mw->UpdateDataView(true);
+                mw->refresh_proxy_list(updated);
+            });
         }, kLatencyPollIntervalMs);
 
         result = defaultClient->IPTest(&rpcOK, req, &coreError);
@@ -1168,26 +1077,21 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
     sessionGen_.fetch_add(1);
 
     runOnNewThread([this, profileIDs, fallShort] {
-        DiagLog::ResetSession(QStringLiteral("connection test"));
-        DIAG_LOG(QStringLiteral("CONNTEST_START count=%1 fallShort=%2 concurrency=%3 batch=%4 timeout=%5")
-                     .arg(profileIDs.size())
-                     .arg(fallShort ? "yes" : "no")
-                     .arg(configuredTestConcurrency())
-                     .arg(configuredTestBatchSize())
-                     .arg(Configs::dataManager->settingsRepo->url_test_timeout_ms));
         stopRequested_.store(false);
         { QMutexLocker lock(&creditMu_); credited_.clear(); }
 
-        runOnUiThread([this] {
-            mw_->ui->pushButton_cancel_speedtest->setVisible(true);
-            mw_->ui->pushButton_cancel_speedtest->setEnabled(true);
+        postUi([](MainWindow* mw) {
+            mw->ui->pushButton_cancel_speedtest->setVisible(true);
+            mw->ui->pushButton_cancel_speedtest->setEnabled(true);
         });
 
         QElapsedTimer elapsed;
         elapsed.start();
 
-        mw_->dataViewHtmlGenerator_.seedSpeedTest(profileIDs.size());
-        runOnUiThread([this] { mw_->UpdateDataView(); });
+        postUi([count = profileIDs.size()](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.seedSpeedTest(count);
+            mw->UpdateDataView();
+        });
 
         QList<Configs::RankedScheduleRow> snapshot;
         snapshot.reserve(profileIDs.size());
@@ -1205,7 +1109,7 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
         auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
         for (const auto& profile : profiles) profile->connect_time_ms = 0;
         Configs::dataManager->profilesRepo->SaveBatch(profiles);
-        runOnUiThread([this, profileIDs] { mw_->refresh_proxy_list(profileIDs); });
+        postUi([profileIDs](MainWindow* mw) { mw->refresh_proxy_list(profileIDs); });
 
         qint64 bestConnectionMs = -1;
         if (fallShort) {
@@ -1226,12 +1130,12 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
 
         const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
-        runOnUiThread([this, profileIDs, completed, elapsedMs] {
-            mw_->dataViewHtmlGenerator_.clearTestSections();
-            mw_->UpdateDataView(true);
-            mw_->refresh_proxy_list(profileIDs);
-            mw_->ui->pushButton_cancel_speedtest->setVisible(false);
-            mw_->ui->pushButton_cancel_speedtest->setEnabled(false);
+        postUi([profileIDs, completed, elapsedMs](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.clearTestSections();
+            mw->UpdateDataView(true);
+            mw->refresh_proxy_list(profileIDs);
+            mw->ui->pushButton_cancel_speedtest->setVisible(false);
+            mw->ui->pushButton_cancel_speedtest->setEnabled(false);
             MW_show_log(testFinishLog(
                 completed ? MainWindow::tr("Connection test finished!") : MainWindow::tr("Connection test interrupted."),
                 elapsedMs));
@@ -1275,7 +1179,7 @@ void TestRunner::runCurrentIpTest(int profileID, const std::function<void(bool)>
         }
         testingCurrent_.store(false);
         session_.unlock();
-        runOnUiThread([this, profileID] { mw_->refresh_proxy_list({profileID}); });
+        postUi([this, profileID](MainWindow* mw) { mw->refresh_proxy_list({profileID}); });
         if (finished) {
             runOnUiThread([finished, success] { finished(success); });
         }
@@ -1306,8 +1210,10 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
 
     runOnNewThread([this, profileIDs, panelKind, isUrl, finish]() {
         stopRequested_.store(false);
-        mw_->dataViewHtmlGenerator_.seedLatencyTest(panelKind, profileIDs.size());
-        mw_->UpdateDataView(true);
+        postUi([panelKind, count = profileIDs.size()](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.seedLatencyTest(panelKind, count);
+            mw->UpdateDataView(true);
+        });
 
         auto runBatch = [this, isUrl](const QList<std::shared_ptr<Configs::Profile>>& profileSlice, const QList<int>& ids) {
             auto buildObject = Configs::BuildTestConfig(profileSlice);
@@ -1366,8 +1272,10 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
             runBatch(profiles, profileIDsSlice);
         }
 
-        mw_->dataViewHtmlGenerator_.clearTestSections();
-        mw_->UpdateDataView(true);
+        postUi([](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.clearTestSections();
+            mw->UpdateDataView(true);
+        });
         session_.unlock();
         // Signalled with the session free so a waiter can start work of its own.
         finish();
@@ -1402,14 +1310,6 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
     testingCurrent_.store(testCurrent);
 
     runOnNewThread([this, profileIDs, testCurrent]() {
-        DiagLog::ResetSession(QStringLiteral("speedtest"));
-        DIAG_LOG(QStringLiteral("SPEED_START count=%1 testCurrent=%2 concurrency=%3 batch=%4 timeout=%5 mode=%6")
-                     .arg(profileIDs.size())
-                     .arg(testCurrent ? "yes" : "no")
-                     .arg(configuredTestConcurrency())
-                     .arg(configuredTestBatchSize())
-                     .arg(Configs::dataManager->settingsRepo->speed_test_timeout_ms)
-                     .arg(static_cast<int>(Configs::dataManager->settingsRepo->speed_test_mode)));
         stopRequested_.store(false);
         QElapsedTimer elapsed;
         elapsed.start();
@@ -1417,8 +1317,10 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
         { QMutexLocker lk(&creditMu_); credited_.clear(); }
         if (!testCurrent)
         {
-            mw_->dataViewHtmlGenerator_.seedSpeedTest(profileIDs.size());
-            mw_->UpdateDataView(true);
+            postUi([count = profileIDs.size()](MainWindow* mw) {
+                mw->dataViewHtmlGenerator_.seedSpeedTest(count);
+                mw->UpdateDataView(true);
+            });
             auto runBatch = [this](const QList<std::shared_ptr<Configs::Profile>>& profileSlice) {
                 auto buildObject = Configs::BuildTestConfig(profileSlice);
                 if (!buildObject->error.isEmpty()) {
@@ -1454,19 +1356,21 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
             }
         } else
         {
-            mw_->dataViewHtmlGenerator_.seedSpeedTest(1);
+            postUi([](MainWindow* mw) { mw->dataViewHtmlGenerator_.seedSpeedTest(1); });
             Target target;
             target.testCurrent = true;
             runSpeedProbe(target);
             testingCurrent_.store(false);
         }
-        mw_->dataViewHtmlGenerator_.clearTestSections();
-        mw_->UpdateDataView(true);
         const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
-        runOnUiThread([=,this]{
-            mw_->refresh_proxy_list(profileIDs);
-            MW_show_log(testFinishLog(MainWindow::tr("Speedtest finished!"), elapsedMs));
+        postUi([=, this, profileIDs, elapsedMs, cancelled = stopRequested_.load()](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.clearTestSections();
+            mw->UpdateDataView(true);
+            mw->refresh_proxy_list(profileIDs);
+            MW_show_log(testFinishLog(
+                cancelled ? MainWindow::tr("Speedtest interrupted.") : MainWindow::tr("Speedtest finished!"),
+                elapsedMs));
         });
     });
 }
@@ -1508,10 +1412,8 @@ void TestRunner::pollSpeedTest(const QMap<QString, int>& tag2entID, bool testCur
         return;
     }
     creditTraffic(profile, tag, result.ul_bytes.value(), result.dl_bytes.value());
-    runOnUiThread([this, profile, result]
-    {
-        if (result.error.value().empty() && !result.cancelled.value())
-        {
+    postUi([profile, result](MainWindow* mw) {
+        if (result.error.value().empty() && !result.cancelled.value()) {
             if (!result.dl_speed.value().empty()) {
                 const QString speed = QString::fromStdString(result.dl_speed.value());
                 const int connectionTime = result.latency.value() > 0
@@ -1520,8 +1422,10 @@ void TestRunner::pollSpeedTest(const QMap<QString, int>& tag2entID, bool testCur
             }
             if (!result.ul_speed.value().empty()) profile->ul_speed = QString::fromStdString(result.ul_speed.value());
             if (profile->latency <= 0 && result.latency.value() > 0) profile->SetLatency(result.latency.value());
-            if (!result.server_country.value().empty()) profile->test_country = CountryNameToCode(QString::fromStdString(result.server_country.value()));
-            mw_->refresh_proxy_list({profile->id});
+            if (!result.server_country.value().empty()) {
+                profile->test_country = CountryNameToCode(QString::fromStdString(result.server_country.value()));
+            }
+            mw->refresh_proxy_list({profile->id});
         }
     });
 }
@@ -1536,8 +1440,6 @@ void TestRunner::pollCountryTest(const QMap<QString, int>& tag2entID, bool testC
     }
     for (const auto& result : res.results)
     {
-        mw_->dataViewHtmlGenerator_.addTestProgress();
-        mw_->UpdateDataView();
         const auto tag = QString::fromStdString(result.outbound_tag.value());
         auto profile = testCurrent ? mw_->running
                                    : Configs::dataManager->profilesRepo->GetProfile(tag2entID.value(tag, -1));
@@ -1546,17 +1448,20 @@ void TestRunner::pollCountryTest(const QMap<QString, int>& tag2entID, bool testC
         {
             continue;
         }
-        runOnUiThread([this, profile, result]
-        {
-            if (result.error.value().empty() && !result.cancelled.value())
-            {
+        postUi([profile, result](MainWindow* mw) {
+            if (result.error.value().empty() && !result.cancelled.value()) {
                 if (profile->latency <= 0 && result.latency.value() > 0) profile->SetLatency(result.latency.value());
-                if (!result.server_country.value().empty()) profile->test_country = CountryNameToCode(QString::fromStdString(result.server_country.value()));
-                mw_->refresh_proxy_list({profile->id});
+                if (!result.server_country.value().empty()) {
+                    profile->test_country = CountryNameToCode(QString::fromStdString(result.server_country.value()));
+                }
+                mw->refresh_proxy_list({profile->id});
             }
         });
     }
-    mw_->UpdateDataView(true);
+    postUi([](MainWindow* mw) {
+        mw->dataViewHtmlGenerator_.addTestProgress();
+        mw->UpdateDataView(true);
+    });
 }
 
 void TestRunner::runSpeedProbe(const Target& target)
@@ -1581,8 +1486,10 @@ void TestRunner::runSpeedProbe(const Target& target)
     // Country sweep ticks per landed result instead; see pollCountryTest.
     if (speedtestConf != Configs::TestConfig::COUNTRY) {
         const int profileCount = target.tag2entID.isEmpty() ? 1 : target.tag2entID.size();
-        mw_->dataViewHtmlGenerator_.addTestProgress(profileCount);
-        mw_->UpdateDataView();
+        postUi([profileCount](MainWindow* mw) {
+            mw->dataViewHtmlGenerator_.addTestProgress(profileCount);
+            mw->UpdateDataView();
+        });
     }
 
     const int contextID = target.testCurrent ? (mw_->running ? mw_->running->id : -1) : target.entID;

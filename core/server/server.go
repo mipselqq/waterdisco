@@ -248,14 +248,9 @@ type testEnv struct {
 // `current` measures the running instance instead of building one, and owns nothing.
 func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConfigs []string,
 	coreConfig string, tags []string, useDefaultOutbound bool) (*testEnv, error) {
-	start := time.Now()
-	test_utils.Diag("PREPARE_ENV current=%v needXray=%v xrayBytes=%d xrayFull=%d tags=%d defaultOut=%v coreBytes=%d",
-		current, needXray, len(xrayConfig), len(xrayFullConfigs), len(tags), useDefaultOutbound, len(coreConfig))
-
 	if current {
 		box := currentBox()
 		if box == nil {
-			test_utils.Diag("PREPARE_ENV_FAIL current instance not running")
 			return nil, errInstanceNotRunning
 		}
 		// Without a "proxy" outbound there is nothing named to measure.
@@ -281,7 +276,6 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 	if needXray {
 		instance, err := xray.CreateXrayInstance(xrayConfig)
 		if err != nil {
-			test_utils.Diag("PREPARE_ENV_FAIL xray create err=%v elapsedMs=%d", err, time.Since(start).Milliseconds())
 			unwind()
 			return nil, err
 		}
@@ -290,7 +284,6 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 		// in regardless of route. See Start().
 		instance.SetEgress(currentEgress())
 		if err = instance.Start(); err != nil {
-			test_utils.Diag("PREPARE_ENV_FAIL xray start err=%v elapsedMs=%d", err, time.Since(start).Milliseconds())
 			_ = instance.Close()
 			unwind()
 			return nil, err
@@ -307,7 +300,6 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 
 	box, cancel, err := boxmain.Create([]byte(applyHostEgress(coreConfig)))
 	if err != nil {
-		test_utils.Diag("PREPARE_ENV_FAIL box create err=%v elapsedMs=%d", err, time.Since(start).Milliseconds())
 		unwind()
 		return nil, err
 	}
@@ -319,7 +311,6 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 	if useDefaultOutbound {
 		outTags = []string{box.Outbound().Default().Tag()}
 	}
-	test_utils.Diag("PREPARE_ENV_OK tags=%d elapsedMs=%d needXray=%v", len(outTags), time.Since(start).Milliseconds(), needXray)
 	return &testEnv{box: box, tags: outTags, close: unwind}, nil
 }
 

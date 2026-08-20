@@ -28,8 +28,6 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 	// Drop results a previous poller did not drain; tags like proxy-1-0 repeat
 	// every ranked chunk and would otherwise be applied to the wrong profiles.
 	_ = URLReporter.Results()
-	Diag("URL_BATCH start tags=%d concurrency=%d timeout=%s twice=%v fallShort=%v globalBestMs=%d url=%s",
-		len(outboundTags), normalizeConcurrency(maxConcurrency), timeout, twice, dynamicFallShort, globalBestMs, url)
 
 	bestSuccessfulMs := globalBestMs
 	results := runBatch(ctx, i, outboundTags, maxConcurrency, batchProbe[URLTestResult]{
@@ -56,8 +54,6 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 								}
 								threshold := fallShortConnectionTimeoutMs(timeout.Milliseconds(), bestMs)
 								if time.Since(startAt) > time.Duration(threshold)*time.Millisecond {
-									Diag("URL_FALLSHORT_CANCEL tag=%s elapsedMs=%d bestMs=%d thresholdMs=%d",
-										tag, time.Since(startAt).Milliseconds(), bestMs, threshold)
 									cancel()
 									return
 								}
@@ -69,21 +65,14 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 			}
 
 			duration, err := runProbe()
-			Diag("URL_PROBE1 tag=%s durMs=%d err=%v", tag, duration.Milliseconds(), err)
 			if err == nil {
 				noteFasterMs(&bestSuccessfulMs, duration.Milliseconds())
 			}
 			if err == nil && twice {
 				duration, err = runProbe()
-				Diag("URL_PROBE2 tag=%s durMs=%d err=%v", tag, duration.Milliseconds(), err)
 				if err == nil {
 					noteFasterMs(&bestSuccessfulMs, duration.Milliseconds())
 				}
-			}
-			if err != nil {
-				Diag("URL_FAIL tag=%s probeErr=%v", tag, err)
-			} else {
-				Diag("URL_OK tag=%s measuredMs=%d", tag, duration.Milliseconds())
 			}
 			return &URLTestResult{Duration: duration, Tag: tag, Error: err}
 		},
@@ -93,15 +82,6 @@ func BatchURLTest(ctx context.Context, i *boxbox.Box, outboundTags []string, url
 		publish: URLReporter.AddResult,
 	})
 	URLReporter.Reclaim(results)
-	ok, fail := 0, 0
-	for _, r := range results {
-		if r != nil && r.Error == nil {
-			ok++
-		} else {
-			fail++
-		}
-	}
-	Diag("URL_BATCH_DONE tags=%d ok=%d fail=%d bestMs=%d", len(results), ok, fail, atomic.LoadInt64(&bestSuccessfulMs))
 	return results
 }
 

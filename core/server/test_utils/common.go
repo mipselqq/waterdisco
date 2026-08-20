@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"ThroneCore/internal/boxbox"
@@ -122,7 +121,6 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 	var resAccess sync.Mutex
 	conc := normalizeConcurrency(maxConcurrency)
 	limiter := make(chan struct{}, conc)
-	Diag("RUN_BATCH tags=%d concurrency=%d ctxErr=%v", len(outboundTags), conc, ctx.Err())
 
 	store := func(tag string, res *T) {
 		resAccess.Lock()
@@ -132,43 +130,29 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(outboundTags))
-	startedAt := time.Now()
-	var started atomic.Int32
-	var abortedBeforeStart atomic.Int32
 	for _, tag := range outboundTags {
 		select {
 		case <-ctx.Done():
-			Diag("RUN_BATCH_ABORT_BEFORE_START tag=%s elapsedMs=%d", tag, time.Since(startedAt).Milliseconds())
 			store(tag, probe.fail(tag, ErrTestAborted))
 			wg.Done()
-			abortedBeforeStart.Add(1)
 			continue
 		default:
 		}
 
-		waitLimiter := time.Now()
 		limiter <- struct{}{}
-		waitMs := time.Since(waitLimiter).Milliseconds()
-		if waitMs > 5 {
-			Diag("RUN_BATCH_LIMITER_WAIT tag=%s waitMs=%d", tag, waitMs)
-		}
-		started.Add(1)
 		go func(t string) {
 			defer wg.Done()
 			defer func() { <-limiter }()
 
 			outbound, found := outbounds.Outbound(t)
 			if !found {
-				Diag("RUN_BATCH_NO_OUTBOUND tag=%s", t)
 				res := probe.fail(t, fmt.Errorf("no outbound with tag %s found", t))
 				store(t, res)
 				probe.publish(res)
 				return
 			}
-			probeStart := time.Now()
 			res := probe.run(ctx, t, outbound)
 			if ctx.Err() != nil {
-				Diag("RUN_BATCH_CTX_CANCEL_AFTER tag=%s probeMs=%d ctxErr=%v", t, time.Since(probeStart).Milliseconds(), ctx.Err())
 				res = probe.fail(t, ErrTestAborted)
 			}
 			store(t, res)
@@ -179,8 +163,6 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 	}
 
 	wg.Wait()
-	Diag("RUN_BATCH_DONE tags=%d started=%d abortedBeforeStart=%d elapsedMs=%d",
-		len(outboundTags), started.Load(), abortedBeforeStart.Load(), time.Since(startedAt).Milliseconds())
 
 	res := make([]*T, 0, len(outboundTags))
 	for _, tag := range outboundTags {
@@ -221,10 +203,7 @@ func dialerHTTPClient(dial func(ctx context.Context, network, address string) (n
 // the request context is a child of the batch context.
 func outboundHTTPClient(_ context.Context, outbound adapter.Outbound, timeout time.Duration) *http.Client {
 	return dialerHTTPClient(func(reqCtx context.Context, network, addr string) (net.Conn, error) {
-		dialStart := time.Now()
 		conn, err := outbound.DialContext(reqCtx, "tcp", metadata.ParseSocksaddr(addr))
-		Diag("DIAL tag=%s addr=%s durMs=%d reqCtxErr=%v err=%v",
-			outbound.Tag(), addr, time.Since(dialStart).Milliseconds(), reqCtx.Err(), err)
 		return conn, err
 	}, timeout)
 }

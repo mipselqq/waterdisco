@@ -7,7 +7,6 @@
 
 #include "include/database/GroupsRepo.h"
 #include "include/global/Configs.hpp"
-#include "include/global/DiagLog.h"
 
 namespace Configs
 {
@@ -59,16 +58,6 @@ namespace Configs
         performance_status_detail = detail;
         dl_speed = QStringLiteral("Skipped");
         ul_speed = detail.reason;
-        DIAG_LOG(QStringLiteral("MARK_SKIP id=%1 name=%2 type=%3 reasonEmpty=%4 reason=%5 measuredMs=%6 measuredMbps=%7 thresholdMs=%8 tooltip=%9")
-                     .arg(id)
-                     .arg(outbound ? outbound->name : name)
-                     .arg(type)
-                     .arg(detail.reason.isEmpty() ? "yes" : "no")
-                     .arg(detail.reason)
-                     .arg(detail.measuredMs)
-                     .arg(detail.measuredMbps)
-                     .arg(detail.thresholdMs)
-                     .arg(DisplayRxSpeedTooltip().isEmpty() ? "EMPTY" : DisplayRxSpeedTooltip()));
     }
 
     void Profile::MarkPerformanceError(const PerformanceStatusDetail& detail) {
@@ -79,16 +68,6 @@ namespace Configs
         performance_status_detail = detail;
         dl_speed = QStringLiteral("Error");
         ul_speed = detail.reason;
-        DIAG_LOG(QStringLiteral("MARK_ERROR id=%1 name=%2 type=%3 reasonEmpty=%4 reason=%5 measuredMs=%6 measuredMbps=%7 thresholdMs=%8 tooltip=%9")
-                     .arg(id)
-                     .arg(outbound ? outbound->name : name)
-                     .arg(type)
-                     .arg(detail.reason.isEmpty() ? "yes" : "no")
-                     .arg(detail.reason)
-                     .arg(detail.measuredMs)
-                     .arg(detail.measuredMbps)
-                     .arg(detail.thresholdMs)
-                     .arg(DisplayRxSpeedTooltip().isEmpty() ? "EMPTY" : DisplayRxSpeedTooltip()));
     }
 
     void Profile::SetLatency(int ms) {

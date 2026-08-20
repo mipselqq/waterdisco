@@ -123,6 +123,8 @@ private:
     void creditTraffic(const std::shared_ptr<Configs::Profile>& profile, const QString& tag,
                        qint64 curUp, qint64 curDown);
 
+    void postUi(const std::function<void(MainWindow*)>& fn) const;
+
     MainWindow* mw_;
 
     // Held for a whole sweep, so it must never double as a per-batch latch.
