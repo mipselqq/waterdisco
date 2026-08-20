@@ -4,6 +4,7 @@
 // Full definition: MainWindow's destructor lives here and destroys the unique_ptr.
 #include "include/ui/mainWindow/TestRunner.h"
 
+#include <QCursor>
 #include <QMenu>
 
 #include "include/configs/sub/GroupUpdater.hpp"
@@ -1075,11 +1076,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         }
     });
     tray->setVisible(!Configs::dataManager->settingsRepo->disable_tray);
+#if defined(Q_OS_MACOS)
+    // HACK: Do not use setContextMenu on macOS. Qt 6.11 attaches trayMenu to NSStatusItem.menu and
+    // registers an NSMenuDidBeginTracking observer; on macOS 27 (Tahoe) status-item clicks are handled
+    // out-of-process (MenuBarAgent), so when Qt's observer calls emitActivated() NSApp.currentEvent is
+    // no longer a mouse event and -[NSEvent clickCount] aborts inside libqcocoa. Manual QMenu::popup
+    // avoids that native menu path until Qt 6.11.3+ ships the qt_mac_isMouseEvent guard upstream.
+    // tray->setContextMenu(trayMenu);
+#else
     tray->setContextMenu(trayMenu);
+#endif
     connect(tray, &QSystemTrayIcon::activated, qApp, [=, this](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Trigger && getOS() != Darwin) {
+#if defined(Q_OS_MACOS)
+        if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::Context) {
+            const QRect trayGeom = tray->geometry();
+            trayMenu->popup(trayGeom.isValid() ? trayGeom.bottomLeft() : QCursor::pos());
+        }
+#else
+        if (reason == QSystemTrayIcon::Trigger) {
             trayClickEvent();
         }
+#endif
     });
 
     // Misc menu
