@@ -1185,9 +1185,6 @@ void TestRunner::pollSpeedTest(const QMap<QString, int>& tag2entID, bool testCur
     creditTraffic(profile, tag, result.ul_bytes.value(), result.dl_bytes.value());
     runOnUiThread([this, profile, result]
     {
-        mw_->dataViewHtmlGenerator_.setSpeedtestProgress(profile->outbound->name, result);
-        mw_->UpdateDataView();
-
         if (result.error.value().empty() && !result.cancelled.value())
         {
             if (!result.dl_speed.value().empty()) {

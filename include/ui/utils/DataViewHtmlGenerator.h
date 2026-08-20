@@ -3,9 +3,6 @@
 #include <QString>
 #include <QMutex>
 #include "include/global/HTTPRequestHelper.hpp"
-#ifndef Q_MOC_RUN
-#include <core/server/gen/libcore.pb.h>
-#endif
 
 class DataViewHtmlGenerator {
 public:
@@ -19,11 +16,6 @@ public:
         bool visible = false;
         Kind kind = Kind::Speed;
         QString profileName;
-        QString dlSpeed;
-        QString ulSpeed;
-        QString serverCountryFlag;
-        QString serverCountry;
-        QString serverName;
         QString stage;
         int totalProfiles = 0;
         int tested = 0;
@@ -49,8 +41,6 @@ public:
     void setDownloadReport(const DownloadProgressReport &report, bool show);
 
     void seedSpeedTest(int totalProfiles);
-
-    void setSpeedtestProgress(const QString &profileName, const libcore::SpeedTestResult &result);
 
     void setRankedSpeedtestProgress(const QString &stage, const QString &profileName,
                                     int tested, int skipped, int totalProfiles);
