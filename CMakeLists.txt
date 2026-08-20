@@ -86,6 +86,8 @@ set(PROJECT_SOURCES
         src/main.cpp
         src/global/Configs.cpp
         src/global/Utils.cpp
+        include/global/DiagLog.h
+        src/global/DiagLog.cpp
         include/global/Logger.hpp
         src/global/Logger.cpp
         include/global/AppStateArchive.hpp

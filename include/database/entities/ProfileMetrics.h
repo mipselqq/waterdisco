@@ -59,8 +59,11 @@ namespace Configs {
     // was measured last time.
     [[nodiscard]] QList<int> OrderRankedConnectionPretest(const QList<RankedScheduleRow>& rows);
 
-    // Fall-short caps: 3x best TTFB for connection probes, and
-    // min(2x best download wall time, 3x best TTFB) for the 2 MiB download.
+    inline constexpr int kRankedFallShortConnectionMultiplier = 4;
+    inline constexpr int kRankedFallShortDownloadMultiplier = 3;
+
+    // Fall-short caps: 4x best TTFB for connection probes, and
+    // min(3x best download wall time, 4x best TTFB) for the 2 MiB download.
     [[nodiscard]] int RankedFallShortConnectionTimeoutMs(int configuredTimeoutMs, qint64 bestConnectionMs);
     [[nodiscard]] int RankedFallShortDownloadTimeoutMs(int configuredTimeoutMs, qint64 bestDownloadElapsedMs,
                                                        qint64 bestConnectionMs);

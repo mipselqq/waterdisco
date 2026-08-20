@@ -85,22 +85,12 @@ private:
 
     void runSpeedProbe(const Target& target);
 
-    struct RankedProbeResult {
-        bool completed = false;
-        bool success = false;
-        bool skipped = false;
-        int connectionTimeMs = 0;
-        qint64 elapsedMs = 0;
-        QString error;
-    };
-
     Target buildTarget(const std::shared_ptr<Configs::Profile>& profile, QString* error) const;
     QList<Target> buildTargets(const QList<std::shared_ptr<Configs::Profile>>& profiles,
                                QString* error) const;
-    RankedProbeResult runDownloadProbe(const std::shared_ptr<Configs::Profile>& profile,
-                                       int timeoutMs, bool fallShort, int defaultTimeoutMs);
     bool runRankedDownloadTarget(const Target& target, int timeoutMs, bool fallShort,
-                                 int defaultTimeoutMs, qint64* elapsedMs,
+                                 int defaultTimeoutMs, std::atomic<qint64>* bestConnectionMs,
+                                 std::atomic<qint64>* bestDownloadMs,
                                  int* tested, int* skipped, bool* hadErrors);
     bool runRankedConnectionPretest(const QList<int>& profileIDs, bool fallShort,
                                     qint64* bestConnectionMs, int* skipped, bool* hadErrors,
@@ -110,6 +100,11 @@ private:
     void applyConnectionResult(const std::shared_ptr<Configs::Profile>& ent,
                                const libcore::URLTestResp& res, std::atomic<qint64>* bestConnectionMs,
                                bool fallShort = false, int limitMs = -1, int defaultTimeoutMs = -1);
+    void applyDownloadResult(const std::shared_ptr<Configs::Profile>& profile,
+                             const libcore::SpeedTestResult& res, bool fallShort, int limitMs,
+                             int defaultTimeoutMs, std::atomic<qint64>* bestConnectionMs,
+                             std::atomic<qint64>* bestDownloadMs,
+                             int* tested, int* skipped, bool* hadErrors);
     void updateRankedProgress(const QString& stage, const std::shared_ptr<Configs::Profile>& profile,
                               int tested, int skipped, int total);
     int bestSiteScoreProfile(const QList<int>& profileIDs) const;
@@ -141,4 +136,5 @@ private:
     // bytes are counted only here, diffed per tag against the last report.
     QMutex creditMu_;
     QHash<QString, QPair<qint64, qint64>> credited_;
+    QMutex rankedApplyMu_;
 };

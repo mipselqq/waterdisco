@@ -121,6 +121,13 @@ namespace Configs {
             && profile->performance_test_status == PerformanceTestStatus::Success) {
             profile->rx_speed_mbps = ParseSpeedMbps(profile->dl_speed);
         }
+        if ((profile->performance_test_status == PerformanceTestStatus::Skipped
+             || profile->performance_test_status == PerformanceTestStatus::Error)
+            && profile->performance_status_detail.reason.isEmpty()
+            && !profile->ul_speed.isEmpty()
+            && profile->ul_speed != QLatin1String("N/A")) {
+            profile->performance_status_detail.reason = profile->ul_speed;
+        }
         
         // Reconstruct outbound (bean is not needed in new implementation)
         QString type = profile->type;

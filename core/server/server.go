@@ -248,10 +248,14 @@ type testEnv struct {
 // `current` measures the running instance instead of building one, and owns nothing.
 func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConfigs []string,
 	coreConfig string, tags []string, useDefaultOutbound bool) (*testEnv, error) {
+	start := time.Now()
+	test_utils.Diag("PREPARE_ENV current=%v needXray=%v xrayBytes=%d xrayFull=%d tags=%d defaultOut=%v coreBytes=%d",
+		current, needXray, len(xrayConfig), len(xrayFullConfigs), len(tags), useDefaultOutbound, len(coreConfig))
 
 	if current {
 		box := currentBox()
 		if box == nil {
+			test_utils.Diag("PREPARE_ENV_FAIL current instance not running")
 			return nil, errInstanceNotRunning
 		}
 		// Without a "proxy" outbound there is nothing named to measure.
@@ -277,6 +281,7 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 	if needXray {
 		instance, err := xray.CreateXrayInstance(xrayConfig)
 		if err != nil {
+			test_utils.Diag("PREPARE_ENV_FAIL xray create err=%v elapsedMs=%d", err, time.Since(start).Milliseconds())
 			unwind()
 			return nil, err
 		}
@@ -285,6 +290,7 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 		// in regardless of route. See Start().
 		instance.SetEgress(currentEgress())
 		if err = instance.Start(); err != nil {
+			test_utils.Diag("PREPARE_ENV_FAIL xray start err=%v elapsedMs=%d", err, time.Since(start).Milliseconds())
 			_ = instance.Close()
 			unwind()
 			return nil, err
@@ -301,6 +307,7 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 
 	box, cancel, err := boxmain.Create([]byte(applyHostEgress(coreConfig)))
 	if err != nil {
+		test_utils.Diag("PREPARE_ENV_FAIL box create err=%v elapsedMs=%d", err, time.Since(start).Milliseconds())
 		unwind()
 		return nil, err
 	}
@@ -312,6 +319,7 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 	if useDefaultOutbound {
 		outTags = []string{box.Outbound().Default().Tag()}
 	}
+	test_utils.Diag("PREPARE_ENV_OK tags=%d elapsedMs=%d needXray=%v", len(outTags), time.Since(start).Milliseconds(), needXray)
 	return &testEnv{box: box, tags: outTags, close: unwind}, nil
 }
 
@@ -331,6 +339,7 @@ func speedTestResultToProto(res test_utils.SpeedTestResult) *gen.SpeedTestResult
 		Cancelled:     To(res.Cancelled),
 		DlBytes:       To(res.DlBytes),
 		UlBytes:       To(res.UlBytes),
+		ElapsedMs:     To(int32(res.ElapsedMs)),
 	}
 }
 
@@ -585,7 +594,7 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 	twice := !in.GetTestCurrent()
 	results := test_utils.BatchURLTest(test_utils.TestContext(), env.box, env.tags, in.GetUrl(),
 		int(in.GetMaxConcurrency()), twice, time.Duration(in.GetTestTimeoutMs())*time.Millisecond,
-		in.GetDynamicFallShort())
+		in.GetDynamicFallShort(), int64(in.GetFallShortBestMs()))
 
 	res := make([]*gen.URLTestResp, 0, len(results))
 	for idx, data := range results {
@@ -793,7 +802,8 @@ func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.
 
 	results := test_utils.BatchSpeedTest(test_utils.TestContext(), env.box, env.tags,
 		*in.TestDownload, *in.TestUpload, *in.SimpleDownload, *in.SimpleDownloadAddr,
-		time.Duration(*in.TimeoutMs)*time.Millisecond, *in.OnlyCountry, *in.CountryConcurrency)
+		time.Duration(*in.TimeoutMs)*time.Millisecond, *in.OnlyCountry, *in.CountryConcurrency,
+		in.GetDynamicFallShort(), int64(in.GetFallShortBestMs()), int64(in.GetFallShortBestDownloadMs()))
 
 	res := make([]*gen.SpeedTestResult, 0, len(results))
 	for _, data := range results {
@@ -805,10 +815,14 @@ func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.
 
 func (s *server) QuerySpeedTest(context.Context, *gen.EmptyReq) (*gen.QuerySpeedTestResponse, error) {
 	res, isRunning := test_utils.SpTQuerier.Result()
-	return &gen.QuerySpeedTestResponse{
+	out := &gen.QuerySpeedTestResponse{
 		Result:    speedTestResultToProto(res),
 		IsRunning: To(isRunning),
-	}, nil
+	}
+	for _, completed := range test_utils.SpeedReporter.Results() {
+		out.Completed = append(out.Completed, speedTestResultToProto(*completed))
+	}
+	return out, nil
 }
 
 func (s *server) QueryCountryTest(ctx context.Context, _ *gen.EmptyReq) (out *gen.QueryCountryTestResponse, _ error) {

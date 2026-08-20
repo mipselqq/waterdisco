@@ -66,7 +66,7 @@ int main() {
 
     // Speedtest by connection time, second run (times already saved):
     // Pretest order uses last-run times: fastest third, then unknowns, then
-    // the slower known rows. New TTFB timeout is 3x the last-run fastest, so
+    // the slower known rows. New TTFB timeout is 4x the last-run fastest, so
     // a previously slow profile is cut off instead of waiting the full 3s.
     const QList<RankedScheduleRow> savedTimes = {
         {1, 180, 0},
@@ -83,7 +83,7 @@ int main() {
         }
     }
     assert(lastRunFastest == 40);
-    assert(RankedFallShortConnectionTimeoutMs(3000, lastRunFastest) == 120);
+    assert(RankedFallShortConnectionTimeoutMs(3000, lastRunFastest) == 160);
 
     // All known, no unknowns: pretest order is already rising connect time,
     // which is also the download order after a clean pretest.
@@ -112,13 +112,13 @@ int main() {
     assert(OrderRankedConnectionPretest(cleared) == RankedScheduleIds(cleared));
     assert(OrderRankedByConnectionTime(QList<RankedScheduleRow>{{11, 0, 0}}) == (QList<int>{11}));
 
-    // Download fall-short: 2x fastest finished download, and never slower than
-    // 3x best TTFB. That is what lets thousands of rows finish in about a minute.
+    // Download fall-short: 3x fastest finished download, and never slower than
+    // 4x best TTFB. That is what lets thousands of rows finish in about a minute.
     assert(RankedFallShortConnectionTimeoutMs(3000, 0) == 3000);
-    assert(RankedFallShortConnectionTimeoutMs(3000, 100) == 300);
+    assert(RankedFallShortConnectionTimeoutMs(3000, 100) == 400);
     assert(RankedFallShortConnectionTimeoutMs(200, 100) == 200);
     assert(RankedFallShortDownloadTimeoutMs(5000, 0, 0) == 5000);
-    assert(RankedFallShortDownloadTimeoutMs(5000, 400, 0) == 800);
-    assert(RankedFallShortDownloadTimeoutMs(5000, 400, 100) == 300);
+    assert(RankedFallShortDownloadTimeoutMs(5000, 400, 0) == 1200);
+    assert(RankedFallShortDownloadTimeoutMs(5000, 400, 100) == 400);
     assert(RankedFallShortDownloadTimeoutMs(250, 400, 100) == 250);
 }

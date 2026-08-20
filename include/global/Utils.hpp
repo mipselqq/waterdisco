@@ -263,6 +263,17 @@ QList<int> MkManyPorts(int num, const QString &address = "127.0.0.1");
 
 QString DisplayTime(long long time, int formatType = 0);
 
+inline QString FormatElapsedHms(qint64 elapsedMs) {
+    const int totalSeconds = static_cast<int>(elapsedMs / 1000);
+    const int hours = totalSeconds / 3600;
+    const int minutes = (totalSeconds % 3600) / 60;
+    const int seconds = totalSeconds % 60;
+    return QStringLiteral("%1:%2:%3")
+        .arg(hours, 2, 10, QLatin1Char('0'))
+        .arg(minutes, 2, 10, QLatin1Char('0'))
+        .arg(seconds, 2, 10, QLatin1Char('0'));
+}
+
 QString ReadableSize(const qint64 &size);
 
 inline bool InRange(unsigned x, unsigned low, unsigned high) {

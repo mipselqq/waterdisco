@@ -1,10 +1,14 @@
 package test_utils
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"ThroneCore/internal/boxbox"
@@ -20,10 +24,14 @@ type IPInfo struct {
 var IPReporter resultBuffer[IPTestResult]
 
 const IPTestTimeout = 3 * time.Second
+
+// speed.cloudflare.com already answers the ranked TTFB probe on this VPN.
+// 1.1.1.1 skips DNS. ipify is JSON fallback. ip2location/ip.sb are omitted:
+// they are what produced the live-probe EOF while the tunnel still carried traffic.
 var ipInfoAPIs = []string{
+	"https://speed.cloudflare.com/cdn-cgi/trace",
+	"https://1.1.1.1/cdn-cgi/trace",
 	"https://api.ipify.org?format=json",
-	"https://api.ip.sb/geoip",
-	"https://api.ip2location.io/",
 }
 
 type IPTestResult struct {
@@ -53,34 +61,124 @@ func BatchIPTest(ctx context.Context, i *boxbox.Box, outboundTags []string, maxC
 }
 
 func ipTest(ctx context.Context, client *http.Client) (IPInfo, error) {
-	var res IPInfo
 	var lastErr error
 	for _, endpoint := range ipInfoAPIs {
-		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
-		if err != nil {
-			lastErr = err
-			continue
+		info, err := fetchIPInfo(ctx, client, endpoint)
+		if err == nil && info.IP != "" {
+			Diag("IP_OK endpoint=%s ip=%s country=%s", endpoint, info.IP, info.CountryCode)
+			return info, nil
 		}
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
+		if err == nil {
+			err = errors.New("empty IP in response")
 		}
-		data, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			lastErr = readErr
-			continue
+		Diag("IP_FAIL endpoint=%s err=%v", endpoint, err)
+		lastErr = err
+		if ctx.Err() != nil {
+			break
 		}
-		var candidate IPInfo
-		if err := json.Unmarshal(data, &candidate); err != nil {
-			lastErr = err
-			continue
+		if isTransientHTTPErr(err) {
+			info, err = fetchIPInfo(ctx, client, endpoint)
+			if err == nil && info.IP != "" {
+				Diag("IP_OK_RETRY endpoint=%s ip=%s country=%s", endpoint, info.IP, info.CountryCode)
+				return info, nil
+			}
+			if err != nil {
+				Diag("IP_FAIL_RETRY endpoint=%s err=%v", endpoint, err)
+				lastErr = err
+			}
 		}
-		if candidate.IP != "" {
-			return candidate, nil
-		}
-		lastErr = io.EOF
 	}
-	return res, lastErr
+	if lastErr == nil {
+		lastErr = errors.New("all IP endpoints failed")
+	}
+	return IPInfo{}, lastErr
+}
+
+func isTransientHTTPErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "EOF") || strings.Contains(msg, "connection reset")
+}
+
+func fetchIPInfo(ctx context.Context, client *http.Client, endpoint string) (IPInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return IPInfo{}, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "*/*")
+	resp, err := client.Do(req)
+	if err != nil {
+		return IPInfo{}, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return IPInfo{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return IPInfo{}, errors.New(resp.Status)
+	}
+	if info, ok := parseCloudflareTrace(data); ok {
+		return info, nil
+	}
+	info, err := parseIPJSON(data)
+	if err != nil {
+		return IPInfo{}, err
+	}
+	if info.IP == "" {
+		return IPInfo{}, errors.New("empty IP in response")
+	}
+	return info, nil
+}
+
+func parseCloudflareTrace(data []byte) (IPInfo, bool) {
+	if !bytes.Contains(data, []byte("ip=")) {
+		return IPInfo{}, false
+	}
+	var info IPInfo
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		key, val, ok := strings.Cut(strings.TrimSpace(scanner.Text()), "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "ip":
+			info.IP = val
+		case "loc":
+			info.CountryCode = val
+		}
+	}
+	return info, info.IP != ""
+}
+
+func parseIPJSON(data []byte) (IPInfo, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return IPInfo{}, err
+	}
+	var info IPInfo
+	info.IP = jsonString(raw, "ip", "query", "origin")
+	info.CountryCode = jsonString(raw, "country_code", "countryCode", "country_iso", "country")
+	if len(info.CountryCode) > 2 {
+		info.CountryCode = ""
+	}
+	return info, nil
+}
+
+func jsonString(raw map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if v, ok := raw[key]; ok {
+			if s, ok := v.(string); ok {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	return ""
 }

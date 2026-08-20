@@ -20,6 +20,7 @@ import (
 
 var SpTQuerier SpeedTestResultQuerier
 var CountryResults resultBuffer[SpeedTestResult]
+var SpeedReporter resultBuffer[SpeedTestResult]
 
 // How often a running speed test republishes its partial numbers for the GUI.
 const speedtestSampleInterval = 50 * time.Millisecond
@@ -35,6 +36,7 @@ type SpeedTestResult struct {
 	Cancelled     bool
 	DlBytes       int64 // total bytes moved by the test, credited to per-config stats
 	UlBytes       int64
+	ElapsedMs     int64
 }
 
 type SpeedTestResultQuerier struct {
@@ -81,14 +83,19 @@ func countryTest(ctx context.Context, dialer func(ctx context.Context, network s
 	return nil
 }
 
-func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, testDl, testUl bool, simpleDL bool, simpleAddress string, timeout time.Duration, countryOnly bool, concurrency int32) []*SpeedTestResult {
+func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, testDl, testUl bool, simpleDL bool, simpleAddress string, timeout time.Duration, countryOnly bool, concurrency int32, dynamicFallShort bool, globalBestConnMs, globalBestDlMs int64) []*SpeedTestResult {
 	outbounds := service.FromContext[adapter.OutboundManager](i.Context())
 	results := make([]*SpeedTestResult, 0, len(outboundTags))
 	if concurrency <= 0 {
 		concurrency = 5
 	}
+	_ = SpeedReporter.Results()
+	Diag("SPEED_BATCH start tags=%d concurrency=%d timeout=%s simpleDL=%v countryOnly=%v testDl=%v testUl=%v fallShort=%v bestConn=%d bestDl=%d",
+		len(outboundTags), concurrency, timeout, simpleDL, countryOnly, testDl, testUl, dynamicFallShort, globalBestConnMs, globalBestDlMs)
 	queuer := make(chan struct{}, concurrency)
 	wg := &sync.WaitGroup{}
+	bestConnMs := globalBestConnMs
+	bestDlMs := globalBestDlMs
 
 	for _, tag := range outboundTags {
 		// A plain `break` here would leave the select, not the loop.
@@ -106,6 +113,8 @@ func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, t
 			res.Error = fmt.Errorf("no outbound with tag %s found", tag)
 			if countryOnly {
 				CountryResults.AddResult(res)
+			} else {
+				SpeedReporter.AddResult(res)
 			}
 			continue
 		}
@@ -126,13 +135,32 @@ func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, t
 			}
 			var err error
 			if simpleDL {
-				err = simpleDownloadTest(ctx, getNetDialer(outbound.DialContext), res, simpleAddress, timeout)
+				probeTimeout := timeout
+				if dynamicFallShort {
+					probeTimeout = time.Duration(fallShortDownloadTimeoutMs(
+						timeout.Milliseconds(), atomic.LoadInt64(&bestDlMs), atomic.LoadInt64(&bestConnMs))) * time.Millisecond
+				}
+				err = simpleDownloadTest(ctx, getNetDialer(outbound.DialContext), res, simpleAddress, probeTimeout,
+					dynamicFallShort, timeout.Milliseconds(), &bestConnMs, &bestDlMs)
 			} else {
 				err = speedTestWithDialer(ctx, getNetDialer(outbound.DialContext), res, testDl, testUl, timeout)
 			}
-			if err != nil && !errors.Is(err, context.Canceled) {
-				res.Error = err
-				fmt.Println("Failed to speedtest with err:", err)
+			if err == nil {
+				noteFasterMs(&bestConnMs, int64(res.Latency))
+				noteFasterMs(&bestDlMs, res.ElapsedMs)
+			}
+			Diag("SPEED_ONE tag=%s err=%v cancelled=%v latency=%d elapsedMs=%d dl=%s bytes=%d bestConn=%d bestDl=%d",
+				res.Tag, err, res.Cancelled, res.Latency, res.ElapsedMs, res.DlSpeed, res.DlBytes,
+				atomic.LoadInt64(&bestConnMs), atomic.LoadInt64(&bestDlMs))
+			if err != nil {
+				if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+					res.Cancelled = true
+				} else {
+					res.Error = err
+					if !errors.Is(err, context.Canceled) {
+						fmt.Println("Failed to speedtest with err:", err)
+					}
+				}
 			}
 			if !testDl && !simpleDL {
 				res.DlSpeed = ""
@@ -140,15 +168,17 @@ func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, t
 			if !testUl {
 				res.UlSpeed = ""
 			}
+			SpeedReporter.AddResult(res)
 		}(res, outbound)
 	}
 	wg.Wait()
 	CountryResults.Reclaim(results)
+	SpeedReporter.Reclaim(results)
 
 	return results
 }
 
-func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, network string, address string) (net.Conn, error), res *SpeedTestResult, testURL string, timeout time.Duration) error {
+func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, network string, address string) (net.Conn, error), res *SpeedTestResult, testURL string, timeout time.Duration, dynamicFallShort bool, configuredMs int64, bestConnMs, bestDlMs *int64) error {
 	if timeout <= 0 {
 		timeout = URLTestTimeout
 	}
@@ -157,7 +187,14 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 	res.ServerName = "N/A"
 	res.ServerCountry = "N/A"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", testURL, nil)
+	probeCtx := ctx
+	var cancel context.CancelFunc
+	if dynamicFallShort {
+		probeCtx, cancel = context.WithCancel(ctx)
+		defer cancel()
+	}
+
+	req, err := http.NewRequestWithContext(probeCtx, "GET", testURL, nil)
 	if err != nil {
 		return err
 	}
@@ -167,21 +204,54 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 	var counted countingWriter
 	var startNs atomic.Int64
 	var latencyMs atomic.Int32
+	var elapsedMs atomic.Int64
 	// Only read after <-done, which orders it against the goroutine's write.
 	var downloadErr error
+	reqStart := time.Now()
+
+	if dynamicFallShort && cancel != nil {
+		go func() {
+			ticker := time.NewTicker(2 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-probeCtx.Done():
+					return
+				case <-ticker.C:
+					limit := fallShortDownloadTimeoutMs(configuredMs, atomic.LoadInt64(bestDlMs), atomic.LoadInt64(bestConnMs))
+					if time.Since(reqStart) > time.Duration(limit)*time.Millisecond {
+						Diag("SPEED_FALLSHORT_CANCEL tag=%s elapsedMs=%d limitMs=%d bestConn=%d bestDl=%d",
+							res.Tag, time.Since(reqStart).Milliseconds(), limit,
+							atomic.LoadInt64(bestConnMs), atomic.LoadInt64(bestDlMs))
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+	}
 
 	go func() {
 		defer close(done)
-		reqStart := time.Now()
 		resp, err := client.Do(req)
 		if err != nil {
+			elapsedMs.Store(time.Since(reqStart).Milliseconds())
+			Diag("SIMPLEDL_DO_FAIL tag=%s err=%v elapsedMs=%d", res.Tag, err, elapsedMs.Load())
 			downloadErr = err
 			return
 		}
 		defer resp.Body.Close()
-		latencyMs.Store(int32(time.Since(reqStart).Milliseconds()))
+		ttfb := time.Since(reqStart).Milliseconds()
+		latencyMs.Store(int32(ttfb))
+		noteFasterMs(bestConnMs, ttfb)
 		startNs.Store(time.Now().UnixNano())
-		_, _ = io.Copy(&counted, resp.Body)
+		n, copyErr := io.Copy(&counted, resp.Body)
+		elapsedMs.Store(time.Since(reqStart).Milliseconds())
+		if copyErr != nil {
+			downloadErr = copyErr
+		}
+		Diag("SIMPLEDL_BODY tag=%s status=%d ttfbMs=%d bytes=%d elapsedMs=%d copyErr=%v",
+			res.Tag, resp.StatusCode, latencyMs.Load(), n, elapsedMs.Load(), copyErr)
 	}()
 
 	ticker := time.NewTicker(speedtestSampleInterval)
@@ -198,6 +268,7 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 		}
 		res.DlBytes = n
 		res.Latency = latencyMs.Load()
+		res.ElapsedMs = elapsedMs.Load()
 		SpTQuerier.storeResult(res)
 	}
 
@@ -208,10 +279,21 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 				res.Error = downloadErr
 			}
 			sample()
+			if res.ElapsedMs <= 0 {
+				res.ElapsedMs = time.Since(reqStart).Milliseconds()
+			}
+			if downloadErr == nil {
+				noteFasterMs(bestDlMs, res.ElapsedMs)
+				noteFasterMs(bestConnMs, int64(res.Latency))
+			}
 			return downloadErr
-		case <-ctx.Done():
-			res.Cancelled = true
-			return ctx.Err()
+		case <-probeCtx.Done():
+			res.ElapsedMs = time.Since(reqStart).Milliseconds()
+			if ctx.Err() != nil {
+				res.Cancelled = true
+				return ctx.Err()
+			}
+			return probeCtx.Err()
 		case <-ticker.C:
 			sample()
 		}

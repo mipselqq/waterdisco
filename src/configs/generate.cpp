@@ -3,6 +3,7 @@
 #include "include/configs/AutoSelectorPlan.h"
 #include "include/configs/common/utils.h"
 #include "include/global/Configs.hpp"
+#include "include/global/DiagLog.h"
 
 #include <QApplication>
 #include <QFileInfo>
@@ -2139,6 +2140,12 @@ namespace Configs {
             && isCoreUnsupportedTransport(ent->type, ent->outbound->GetTLS().get(),
                                           ent->outbound->GetTransport().get())) {
             MW_show_log(coreUnsupportedTransportSkipReason());
+            DIAG_LOG(QStringLiteral("ISVALID_FAIL unsupported_transport id=%1 name=%2 type=%3 transport=%4")
+                         .arg(ent->id)
+                         .arg(ent->outbound ? ent->outbound->name : ent->name)
+                         .arg(ent->type)
+                         .arg(ent->outbound && ent->outbound->HasTransport()
+                                  ? ent->outbound->GetTransport()->type : QString()));
             return false;
         }
         if (ent->type == "custom") {
@@ -2217,6 +2224,7 @@ namespace Configs {
             if (!err.isEmpty())
             {
                 MW_show_log("Invalid Xray ent " + ent->outbound->name + ": " + err);
+                DIAG_LOG(QStringLiteral("ISVALID_FAIL xray_build id=%1 name=%2 err=%3").arg(ent->id).arg(ent->outbound->name).arg(err));
                 return false;
             }
             QJsonObject xrayConf{
@@ -2232,6 +2240,7 @@ namespace Configs {
             if (resp.isEmpty()) return true;
             // else
             MW_show_log("Invalid Xray ent " + ent->outbound->name + ": " + resp);
+            DIAG_LOG(QStringLiteral("ISVALID_FAIL xray_check id=%1 name=%2 err=%3").arg(ent->id).arg(ent->outbound->name).arg(resp));
             return false;
         }
         if (!fullConf)
@@ -2256,6 +2265,8 @@ namespace Configs {
         if (resp.isEmpty()) return true;
         // else
         MW_show_log("Invalid ent " + ent->outbound->name + ": " + resp);
+        DIAG_LOG(QStringLiteral("ISVALID_FAIL singbox_check id=%1 name=%2 type=%3 err=%4")
+                     .arg(ent->id).arg(ent->outbound->name).arg(ent->type).arg(resp));
         return false;
     }
 
@@ -2277,8 +2288,6 @@ namespace Configs {
         buildLogSection(ctx);
         buildCertificateSection(ctx);
         buildNTPSection(ctx);
-        int suffix = 1;
-
         int xrayPortIdx=0;
         int xrayCount=0;
         int chainCount=0;
@@ -2294,12 +2303,18 @@ namespace Configs {
             if (candidate.kind == testCandidate::Skip)
             {
                 MW_show_log(candidate.skipReason);
+                DIAG_LOG(QStringLiteral("BUILD_SKIP classify id=%1 name=%2 type=%3 reason=%4")
+                             .arg(item->id)
+                             .arg(item->outbound ? item->outbound->name : item->name)
+                             .arg(item->type)
+                             .arg(QString::fromUtf8(candidate.skipReason ? candidate.skipReason : "")));
                 continue;
             }
             if (candidate.kind == testCandidate::XrayFullConfig)
             {
                 if (!IsValid(item)) {
                     MW_show_log("Skipping invalid custom Xray full config: " + item->outbound->name);
+                    DIAG_LOG(QStringLiteral("BUILD_SKIP invalid_xray_full id=%1 name=%2").arg(item->id).arg(item->outbound->name));
                     item->SetLatency(-1);
                     continue;
                 }
@@ -2333,6 +2348,11 @@ namespace Configs {
             }
             if (!IsValid(item)) {
                 MW_show_log("Skipping invalid config: " + item->outbound->name);
+                DIAG_LOG(QStringLiteral("BUILD_SKIP invalid_config id=%1 name=%2 type=%3 xray=%4")
+                             .arg(item->id)
+                             .arg(item->outbound->name)
+                             .arg(item->type)
+                             .arg(item->outbound->IsXray() ? "yes" : "no"));
                 item->SetLatency(-1);
                 continue;
             }
@@ -2370,7 +2390,7 @@ namespace Configs {
             }
             auto tag = buildOutboundChain(ctx, {
                 .hopIDs = IDs,
-                .prefix = hopTag(tags::testChainPrefix, suffix),
+                .prefix = hopTag(tags::testChainPrefix, item->id),
                 .singToXrayPort = singToXrayPort,
                 .xrayToSingPort = xrayToSingPort,
             });
@@ -2380,7 +2400,6 @@ namespace Configs {
             }
             res->outboundTags << tag;
             res->tag2entID.insert(tag, item->id);
-            suffix++;
         }
         buildXrayConfig(ctx);
         if (!ctx.error.isEmpty()) {
@@ -2408,6 +2427,13 @@ namespace Configs {
         res->xrayConfig = ctx.result->xrayConfig;
         res->isXrayNeeded = ctx.result->isXrayNeeded;
 
+        DIAG_LOG(QStringLiteral("BUILD_DONE requested=%1 tags=%2 fullConfigs=%3 xrayNeeded=%4 xrayFull=%5 error=%6")
+                     .arg(profiles.size())
+                     .arg(res->outboundTags.size())
+                     .arg(res->fullConfigs.size())
+                     .arg(res->isXrayNeeded ? "yes" : "no")
+                     .arg(res->xrayFullConfigs.size())
+                     .arg(res->error));
         return res;
     }
 }

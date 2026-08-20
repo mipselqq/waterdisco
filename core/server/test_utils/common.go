@@ -2,12 +2,14 @@ package test_utils
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"ThroneCore/internal/boxbox"
@@ -118,7 +120,9 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 	outbounds := service.FromContext[adapter.OutboundManager](i.Context())
 	resMap := make(map[string]*T, len(outboundTags))
 	var resAccess sync.Mutex
-	limiter := make(chan struct{}, normalizeConcurrency(maxConcurrency))
+	conc := normalizeConcurrency(maxConcurrency)
+	limiter := make(chan struct{}, conc)
+	Diag("RUN_BATCH tags=%d concurrency=%d ctxErr=%v", len(outboundTags), conc, ctx.Err())
 
 	store := func(tag string, res *T) {
 		resAccess.Lock()
@@ -128,32 +132,43 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(outboundTags))
+	startedAt := time.Now()
+	var started atomic.Int32
+	var abortedBeforeStart atomic.Int32
 	for _, tag := range outboundTags {
 		select {
 		case <-ctx.Done():
-			// Not published: an aborted tag is not a measurement.
+			Diag("RUN_BATCH_ABORT_BEFORE_START tag=%s elapsedMs=%d", tag, time.Since(startedAt).Milliseconds())
 			store(tag, probe.fail(tag, ErrTestAborted))
 			wg.Done()
+			abortedBeforeStart.Add(1)
 			continue
 		default:
 		}
 
+		waitLimiter := time.Now()
 		limiter <- struct{}{}
+		waitMs := time.Since(waitLimiter).Milliseconds()
+		if waitMs > 5 {
+			Diag("RUN_BATCH_LIMITER_WAIT tag=%s waitMs=%d", tag, waitMs)
+		}
+		started.Add(1)
 		go func(t string) {
 			defer wg.Done()
 			defer func() { <-limiter }()
 
 			outbound, found := outbounds.Outbound(t)
 			if !found {
-				// A tag can vanish between building the box and probing it. Panicking in a spawned
-				// goroutine is out of reach of the dispatcher's recover and would kill the core.
+				Diag("RUN_BATCH_NO_OUTBOUND tag=%s", t)
 				res := probe.fail(t, fmt.Errorf("no outbound with tag %s found", t))
 				store(t, res)
 				probe.publish(res)
 				return
 			}
+			probeStart := time.Now()
 			res := probe.run(ctx, t, outbound)
 			if ctx.Err() != nil {
+				Diag("RUN_BATCH_CTX_CANCEL_AFTER tag=%s probeMs=%d ctxErr=%v", t, time.Since(probeStart).Milliseconds(), ctx.Err())
 				res = probe.fail(t, ErrTestAborted)
 			}
 			store(t, res)
@@ -164,6 +179,8 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 	}
 
 	wg.Wait()
+	Diag("RUN_BATCH_DONE tags=%d started=%d abortedBeforeStart=%d elapsedMs=%d",
+		len(outboundTags), started.Load(), abortedBeforeStart.Load(), time.Since(startedAt).Milliseconds())
 
 	res := make([]*T, 0, len(outboundTags))
 	for _, tag := range outboundTags {
@@ -182,18 +199,33 @@ func dialerHTTPClient(dial func(ctx context.Context, network, address string) (n
 		Transport: &http.Transport{
 			// nil URL disables HTTP_PROXY; ProxyNone needs Go 1.23+.
 			Proxy: func(*http.Request) (*url.URL, error) { return nil, nil },
-			DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				return dial(ctx, network, addr)
 			},
+			// Parallel URL tests must not leave idle tunnels around: 100 keep-alives
+			// on a shared box inflate later TTFBs and trip fall-short.
+			DisableKeepAlives: true,
+			// HTTP/2 + DisableKeepAlives closes the connection under the first
+			// response and surfaces as `Get "...": EOF` through Hysteria/QUIC even
+			// when the tunnel is fine. Force HTTP/1.1 for every test probe.
+			ForceAttemptHTTP2: false,
+			TLSNextProto:      map[string]func(authority string, c *tls.Conn) http.RoundTripper{},
+			TLSClientConfig:   &tls.Config{NextProtos: []string{"http/1.1"}},
 		},
 		Timeout: timeout,
 	}
 }
 
-// Measures one outbound. Dials carry the batch context, so cancelling it tears them down.
-func outboundHTTPClient(ctx context.Context, outbound adapter.Outbound, timeout time.Duration) *http.Client {
-	return dialerHTTPClient(func(_ context.Context, network, addr string) (net.Conn, error) {
-		return outbound.DialContext(ctx, "tcp", metadata.ParseSocksaddr(addr))
+// Measures one outbound. Dial follows the HTTP request context so Client.Timeout
+// and fall-short actually tear the proxy dial down; StopTest still wins because
+// the request context is a child of the batch context.
+func outboundHTTPClient(_ context.Context, outbound adapter.Outbound, timeout time.Duration) *http.Client {
+	return dialerHTTPClient(func(reqCtx context.Context, network, addr string) (net.Conn, error) {
+		dialStart := time.Now()
+		conn, err := outbound.DialContext(reqCtx, "tcp", metadata.ParseSocksaddr(addr))
+		Diag("DIAL tag=%s addr=%s durMs=%d reqCtxErr=%v err=%v",
+			outbound.Tag(), addr, time.Since(dialStart).Milliseconds(), reqCtx.Err(), err)
+		return conn, err
 	}, timeout)
 }
 

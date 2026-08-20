@@ -169,17 +169,20 @@ namespace Configs {
     int RankedFallShortConnectionTimeoutMs(int configuredTimeoutMs, qint64 bestConnectionMs) {
         const int configured = std::max(1, configuredTimeoutMs);
         if (bestConnectionMs <= 0) return configured;
-        return static_cast<int>(std::min<qint64>(configured, std::max<qint64>(1, bestConnectionMs * 3)));
+        return static_cast<int>(std::min<qint64>(
+            configured, std::max<qint64>(1, bestConnectionMs * kRankedFallShortConnectionMultiplier)));
     }
 
     int RankedFallShortDownloadTimeoutMs(int configuredTimeoutMs, qint64 bestDownloadElapsedMs,
                                          qint64 bestConnectionMs) {
         int timeout = std::max(1, configuredTimeoutMs);
         if (bestDownloadElapsedMs > 0) {
-            timeout = static_cast<int>(std::min<qint64>(timeout, std::max<qint64>(1, bestDownloadElapsedMs * 2)));
+            timeout = static_cast<int>(std::min<qint64>(
+                timeout, std::max<qint64>(1, bestDownloadElapsedMs * kRankedFallShortDownloadMultiplier)));
         }
         if (bestConnectionMs > 0) {
-            timeout = static_cast<int>(std::min<qint64>(timeout, std::max<qint64>(1, bestConnectionMs * 3)));
+            timeout = static_cast<int>(std::min<qint64>(
+                timeout, std::max<qint64>(1, bestConnectionMs * kRankedFallShortConnectionMultiplier)));
         }
         return timeout;
     }

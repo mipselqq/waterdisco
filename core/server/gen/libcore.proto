@@ -91,9 +91,13 @@ message TestReq {
   // Opaque full configs, each its own instance backing a socks outbound already
   // in `config`. Never merged into `xray_config`.
   repeated string xray_full_configs = 10;
-  // Cancel a URL probe once it has taken more than 3x the best success in this
-  // batch. Used by ranked connection-time pretest under fall-short.
+  // Cancel a URL probe once it has taken more than 4x the best success seen in
+  // this test run. Used by ranked connection-time pretest under fall-short.
   optional bool dynamic_fall_short = 11 [default = false];
+  // Best successful connection probe latency (ms) from earlier in this test run.
+  // Seeds in-batch fall-short cancellation so each chunk uses global, not local,
+  // best measurements.
+  optional int32 fall_short_best_ms = 12 [default = 0];
 }
 
 message TestResp {
@@ -159,6 +163,11 @@ message SpeedTestRequest {
   optional string xray_config = 13 [default = ""];
   // See TestReq.xray_full_configs.
   repeated string xray_full_configs = 14;
+  // Same contract as TestReq.dynamic_fall_short: remaining downloads in this
+  // batch read the current best connection and download times.
+  optional bool dynamic_fall_short = 15 [default = false];
+  optional int32 fall_short_best_ms = 16 [default = 0];
+  optional int32 fall_short_best_download_ms = 17 [default = 0];
 }
 
 message SpeedTestResult {
@@ -172,6 +181,8 @@ message SpeedTestResult {
   optional bool cancelled = 8 [default = false];
   optional int64 dl_bytes = 9 [default = 0];  // bytes moved by the test, for traffic stats
   optional int64 ul_bytes = 10 [default = 0];
+  // Wall time of this probe (TTFB through body), used for download fall-short.
+  optional int32 elapsed_ms = 11 [default = 0];
 }
 
 message SpeedTestResponse {
@@ -181,6 +192,9 @@ message SpeedTestResponse {
 message QuerySpeedTestResponse {
   optional SpeedTestResult result = 1;
   optional bool is_running = 2 [default = false];
+  // Completed probes drained since the last query; ranked fall-short applies
+  // each one to the global best connection and download times.
+  repeated SpeedTestResult completed = 3;
 }
 
 message QueryCountryTestResponse {

@@ -1,5 +1,6 @@
 #include "include/sys/Process.hpp"
 #include "include/global/Configs.hpp"
+#include "include/global/DiagLog.h"
 #include "include/global/Logger.hpp"
 
 #include <QTimer>
@@ -110,6 +111,7 @@ namespace Configs_sys {
         // later on-demand download lands in this same dir and is picked up on the
         // next profile start with no core restart.
         env.insert("XRAY_LOCATION_ASSET", Configs::GetBasePath());
+        env.insert("THRONE_DIAG_LOG", DiagLog::FilePath());
         setProcessEnvironment(env);
         start(program, {});
     }

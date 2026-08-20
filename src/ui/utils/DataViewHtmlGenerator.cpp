@@ -7,22 +7,11 @@
 namespace {
     constexpr auto kPanelLineStyle = "text-align:left;margin:0;padding-left:12px;";
 
-    QString formatElapsedHms(qint64 elapsedMs) {
-        const int totalSeconds = static_cast<int>(elapsedMs / 1000);
-        const int hours = totalSeconds / 3600;
-        const int minutes = (totalSeconds % 3600) / 60;
-        const int seconds = totalSeconds % 60;
-        return QStringLiteral("%1:%2:%3")
-            .arg(hours, 2, 10, QLatin1Char('0'))
-            .arg(minutes, 2, 10, QLatin1Char('0'))
-            .arg(seconds, 2, 10, QLatin1Char('0'));
-    }
-
     QString elapsedPanelLine(qint64 startedAtMs) {
         if (startedAtMs <= 0) return {};
         const qint64 elapsedMs = QDateTime::currentMSecsSinceEpoch() - startedAtMs;
         return QStringLiteral("<p style='%1opacity:0.75;'>%2</p>")
-            .arg(QLatin1String(kPanelLineStyle), formatElapsedHms(elapsedMs));
+            .arg(QLatin1String(kPanelLineStyle), FormatElapsedHms(elapsedMs));
     }
 }
 

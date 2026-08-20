@@ -7,6 +7,7 @@
 
 #include "include/database/GroupsRepo.h"
 #include "include/global/Configs.hpp"
+#include "include/global/DiagLog.h"
 
 namespace Configs
 {
@@ -48,6 +49,7 @@ namespace Configs
         dl_speed = displaySpeed.isEmpty()
             ? QStringLiteral("%1 Mbps").arg(rx_speed_mbps, 0, 'f', 2)
             : displaySpeed;
+        ul_speed.clear();
     }
 
     void Profile::MarkPerformanceSkipped(const PerformanceStatusDetail& detail) {
@@ -56,7 +58,17 @@ namespace Configs
         performance_test_status = PerformanceTestStatus::Skipped;
         performance_status_detail = detail;
         dl_speed = QStringLiteral("Skipped");
-        ul_speed.clear();
+        ul_speed = detail.reason;
+        DIAG_LOG(QStringLiteral("MARK_SKIP id=%1 name=%2 type=%3 reasonEmpty=%4 reason=%5 measuredMs=%6 measuredMbps=%7 thresholdMs=%8 tooltip=%9")
+                     .arg(id)
+                     .arg(outbound ? outbound->name : name)
+                     .arg(type)
+                     .arg(detail.reason.isEmpty() ? "yes" : "no")
+                     .arg(detail.reason)
+                     .arg(detail.measuredMs)
+                     .arg(detail.measuredMbps)
+                     .arg(detail.thresholdMs)
+                     .arg(DisplayRxSpeedTooltip().isEmpty() ? "EMPTY" : DisplayRxSpeedTooltip()));
     }
 
     void Profile::MarkPerformanceError(const PerformanceStatusDetail& detail) {
@@ -66,7 +78,17 @@ namespace Configs
         performance_test_status = PerformanceTestStatus::Error;
         performance_status_detail = detail;
         dl_speed = QStringLiteral("Error");
-        ul_speed.clear();
+        ul_speed = detail.reason;
+        DIAG_LOG(QStringLiteral("MARK_ERROR id=%1 name=%2 type=%3 reasonEmpty=%4 reason=%5 measuredMs=%6 measuredMbps=%7 thresholdMs=%8 tooltip=%9")
+                     .arg(id)
+                     .arg(outbound ? outbound->name : name)
+                     .arg(type)
+                     .arg(detail.reason.isEmpty() ? "yes" : "no")
+                     .arg(detail.reason)
+                     .arg(detail.measuredMs)
+                     .arg(detail.measuredMbps)
+                     .arg(detail.thresholdMs)
+                     .arg(DisplayRxSpeedTooltip().isEmpty() ? "EMPTY" : DisplayRxSpeedTooltip()));
     }
 
     void Profile::SetLatency(int ms) {
@@ -90,7 +112,10 @@ namespace Configs
         bool showSpeed = group->test_items_to_show == testShowItems::all || group->test_items_to_show == testShowItems::speedOnly;
         bool showIP = group->test_items_to_show == testShowItems::all || group->test_items_to_show == testShowItems::ipOnly;
         if (!dl_speed.isEmpty() && dl_speed != "N/A" && showSpeed) result += " ↓" + dl_speed;
-        if (!ul_speed.isEmpty() && ul_speed != "N/A" && showSpeed) result += " ↑" + ul_speed;
+        if (performance_test_status == PerformanceTestStatus::Success
+            && !ul_speed.isEmpty() && ul_speed != "N/A" && showSpeed) {
+            result += " ↑" + ul_speed;
+        }
         if (!ip_out.isEmpty() && showIP) result += " 🌐" + ip_out;
         return result;
     }
@@ -114,7 +139,14 @@ namespace Configs
     }
 
     QString Profile::DisplayRxSpeedTooltip() const {
-        return FormatPerformanceStatusTooltip(performance_test_status, performance_status_detail);
+        const QString tip = FormatPerformanceStatusTooltip(performance_test_status, performance_status_detail);
+        if (!tip.isEmpty()) return tip;
+        if ((performance_test_status == PerformanceTestStatus::Skipped
+             || performance_test_status == PerformanceTestStatus::Error)
+            && !ul_speed.isEmpty() && ul_speed != QLatin1String("N/A")) {
+            return ul_speed;
+        }
+        return {};
     }
 
     QString Profile::DisplayConnectionTime() const {

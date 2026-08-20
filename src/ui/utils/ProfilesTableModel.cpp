@@ -201,7 +201,7 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
             && profile->outbound && profile->outbound->GetSecurity().isDangerous()) {
             return tr("This config's traffic is not properly protected.");
         }
-        if (index.column() == ColRxSpeed) {
+        if (index.column() == ColRxSpeed || index.column() == ColConnectionTime) {
             const QString tip = profile->DisplayRxSpeedTooltip();
             if (!tip.isEmpty()) return tip;
         }
