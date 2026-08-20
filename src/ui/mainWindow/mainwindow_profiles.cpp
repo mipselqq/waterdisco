@@ -54,6 +54,10 @@ namespace {
 
 void MainWindow::on_profilesTableView_doubleClicked(const QModelIndex &index) {
     if (!index.isValid() || !profilesTableModel) return;
+    if (index.data(ProfilesTableModel::GroupHeaderRole).toBool()) {
+        edit_group(index.data(ProfilesTableModel::GroupIdRole).toInt());
+        return;
+    }
     int id = index.data(ProfilesTableModel::ProfileIdRole).toInt();
     if (id < 0) return;
     if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) return;

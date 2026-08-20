@@ -253,7 +253,7 @@ namespace API {
             std::lock_guard<std::mutex> g(call->mu);
             if (!ok || call->status != 0) {
                 if (ok && call->status != 0) {
-                    MW_show_log("[Core error] " + QString::fromUtf8(call->data));
+                    MW_show_core_log("[Core error] " + QString::fromUtf8(call->data));
                     // Surface the core's error payload to the caller too, so it can be
                     // inspected instead of just logged (e.g. detecting missing Xray geo
                     // assets when a Test/IPTest/SpeedTest RPC fails). Callers only read

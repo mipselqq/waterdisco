@@ -66,7 +66,11 @@
 #include <QStyleHints>
 #endif
 #include <QFileDialog>
+#include <QHBoxLayout>
 #include <QToolButton>
+#include <QTabBar>
+#include <QTextBrowser>
+#include <QVBoxLayout>
 #include <QStyledItemDelegate>
 #include <QStyleOptionButton>
 #include <QPainter>
@@ -238,6 +242,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     }
     themeManager->ApplyTheme(Configs::dataManager->settingsRepo->theme);
     ui->setupUi(this);
+    // The right-hand pane currently has exactly one page. Hiding the tab bar
+    // makes the Proxy and Host cards start at the same height as the lower
+    // tools instead of wasting a row on a non-actionable "Info" tab.
+    ui->info_widget->tabBar()->hide();
+    ui->infoLayout->setContentsMargins(8, 8, 8, 8);
+
+    // Keep application diagnostics separate from the extremely chatty core.
+    // The existing browser becomes App logs so all existing UI call sites keep
+    // their simple MW_show_log() API; core stdout/stderr use the inserted page.
+    ui->stats_widget->setTabText(ui->stats_widget->indexOf(ui->Logs), tr("App logs"));
+    auto *coreLogPage = new QWidget(ui->stats_widget);
+    auto *coreLogLayout = new QHBoxLayout(coreLogPage);
+    coreLogLayout->setContentsMargins(1, 0, 1, 0);
+    coreLogLayout->setSpacing(0);
+    coreLogBrowser = new QTextBrowser(coreLogPage);
+    coreLogBrowser->setObjectName(QStringLiteral("coreLogBrowser"));
+    coreLogBrowser->setContextMenuPolicy(Qt::CustomContextMenu);
+    coreLogBrowser->setOpenLinks(false);
+    coreLogLayout->addWidget(coreLogBrowser);
+    ui->stats_widget->insertTab(0, coreLogPage, tr("Core logs"));
 
     // init shortcuts
     setActionsData();
@@ -255,9 +279,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->splitter->restoreState(DecodeB64IfValid(Configs::dataManager->settingsRepo->splitter_state));
     setLogHighlighter(themeUsesDarkLog(Configs::dataManager->settingsRepo->theme));
     qvLogDocument->setUndoRedoEnabled(false);
-    qvLogDocument->setMaximumBlockCount(Configs::dataManager->settingsRepo->max_log_line);
+    const int maxUiLogLines = qMax(1, Configs::dataManager->settingsRepo->max_log_line);
+    qvLogDocument->setMaximumBlockCount(maxUiLogLines);
+    coreLogDocument->setUndoRedoEnabled(false);
+    coreLogDocument->setMaximumBlockCount(maxUiLogLines);
     ui->masterLogBrowser->setUndoRedoEnabled(false);
     ui->masterLogBrowser->setDocument(qvLogDocument);
+    coreLogBrowser->setUndoRedoEnabled(false);
+    coreLogBrowser->setDocument(coreLogDocument);
     applyLogBrowserFont();
     updateLogFilterFields();
     runOnThread([=, this] {
@@ -278,6 +307,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         append_log(log);
         Logging::WriteUserLog(log);
     };
+    MW_show_core_log = [=,this](const QString &log) {
+        append_core_log(log);
+        Logging::WriteUserLog(log);
+    };
+
+    connect(coreLogBrowser, &QTextBrowser::customContextMenuRequested, this, [this](const QPoint &pos) {
+        QMenu *menu = coreLogBrowser->createStandardContextMenu();
+        auto *separator = new QAction(this);
+        separator->setSeparator(true);
+        menu->addAction(separator);
+        auto *clear = new QAction(tr("Clear"), menu);
+        connect(clear, &QAction::triggered, this, [this] {
+            QMutexLocker lock(&logPendingMutex);
+            coreLogPendingText.clear();
+            coreLogDocument->clear();
+        });
+        menu->addAction(clear);
+        menu->exec(coreLogBrowser->viewport()->mapToGlobal(pos));
+    });
 
     // Listen port if random
     if (Configs::dataManager->settingsRepo->random_inbound_port)
@@ -354,14 +402,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // A profile can stay up for hours while its egress changes or disappears.
     // Re-test the real one-profile egress regularly; never interrupt a manual
     // test session just to refresh the Info panel.
-    auto *connectionProbeTimer = new QTimer(this);
-    connectionProbeTimer->setInterval(10'000);
-    connect(connectionProbeTimer, &QTimer::timeout, this, [this] {
-        if (running != nullptr && !testRunner->isRunning()) {
-            testRunner->runIpTests({running->id});
-        }
-    });
-    connectionProbeTimer->start();
+    connectionProbeTimer = new QTimer(this);
+    connectionProbeTimer->setSingleShot(true);
+    connect(connectionProbeTimer, &QTimer::timeout, this, &MainWindow::runCurrentConnectionProbe);
+    connectionProbeTimer->start(10'000);
     //
     // The .ui carries Return; numpad Enter is the same gesture.
     ui->menu_start->setShortcuts({QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)});
@@ -385,7 +429,34 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // the table edge instead of underneath the sidebar.
     mainContentSplitter = new QSplitter(Qt::Horizontal, ui->centralwidget);
     mainContentSplitter->setChildrenCollapsible(false);
-    groupSidebar = new QListWidget(mainContentSplitter);
+    auto *sidebarPane = new QWidget(mainContentSplitter);
+    auto *sidebarLayout = new QVBoxLayout(sidebarPane);
+    // The central layout already supplies the left gutter. Mirror it on the
+    // table side so both the group list and its Update button do not touch the
+    // splitter while still sharing the sidebar's full usable width.
+    sidebarLayout->setContentsMargins(0, 0, 6, 0);
+    sidebarLayout->setSpacing(3);
+    auto *sidebarActions = new QHBoxLayout;
+    sidebarActions->setContentsMargins(0, 0, 0, 0);
+    sidebarActions->setSpacing(3);
+    auto *newGroupButton = new QToolButton(sidebarPane);
+    newGroupButton->setText(tr("New group"));
+    newGroupButton->setToolTip(tr("Create a new group"));
+    newGroupButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    connect(newGroupButton, &QToolButton::clicked,
+            ui->actionAdd_New_Group, &QAction::trigger);
+    sidebarActions->addWidget(newGroupButton, 1);
+
+    auto *updateAllButton = new QToolButton(sidebarPane);
+    updateAllButton->setText(tr("Update"));
+    updateAllButton->setToolTip(tr("Update all subscriptions"));
+    updateAllButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    connect(updateAllButton, &QToolButton::clicked,
+            ui->actionUpdate_All_Subscriptions, &QAction::trigger);
+    sidebarActions->addWidget(updateAllButton, 1);
+    sidebarLayout->addLayout(sidebarActions);
+
+    groupSidebar = new QListWidget(sidebarPane);
     groupSidebar->setSelectionMode(QAbstractItemView::SingleSelection);
     groupSidebar->setDragDropMode(QAbstractItemView::InternalMove);
     groupSidebar->setDefaultDropAction(Qt::MoveAction);
@@ -398,11 +469,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     groupSidebar->setSpacing(1);
     groupSidebar->setToolTip(tr("Drag groups to reorder"));
     groupSidebar->setMinimumWidth(150);
+    sidebarLayout->addWidget(groupSidebar, 1);
 
     auto *rootLayout = qobject_cast<QVBoxLayout *>(ui->centralwidget->layout());
     const int splitterIndex = rootLayout->indexOf(ui->splitter);
     rootLayout->removeWidget(ui->splitter);
-    mainContentSplitter->addWidget(groupSidebar);
+    mainContentSplitter->addWidget(sidebarPane);
     mainContentSplitter->addWidget(ui->splitter);
     rootLayout->insertWidget(splitterIndex, mainContentSplitter, 1);
     mainContentSplitter->setStretchFactor(0, 0);
@@ -412,17 +484,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     auto *profileLayout = new QVBoxLayout(profilePane);
     profileLayout->setContentsMargins({1, 0, 1, 0});
     profileLayout->setSpacing(0);
-    auto *updateAllButton = new QToolButton(profilePane);
-    updateAllButton->setText(tr("Update"));
-    updateAllButton->setToolTip(tr("Update all subscriptions"));
-    connect(updateAllButton, &QToolButton::clicked,
-            ui->actionUpdate_All_Subscriptions, &QAction::trigger);
-    profileLayout->addWidget(updateAllButton, 0, Qt::AlignLeft);
     ui->profilesTableView->setParent(profilePane);
     profileLayout->addWidget(ui->profilesTableView);
     ui->tabWidget->setParent(nullptr);
     ui->tabWidget->deleteLater();
     ui->splitter->insertWidget(0, profilePane);
+
+    // On a fresh installation start the lower tools at their smallest useful
+    // height. The splitter remains collapsible, so dragging farther down still
+    // hides the pane exactly as before; an existing user splitter state wins.
+    if (Configs::dataManager->settingsRepo->splitter_state.isEmpty()) {
+        QTimer::singleShot(0, this, [this] {
+            auto *lowerTools = ui->aaaaaaaaaaaaaaaaaa;
+            const int lowerHeight = lowerTools->minimumSizeHint().height();
+            const int availableHeight = ui->splitter->height();
+            if (availableHeight > lowerHeight) {
+                ui->splitter->setSizes({availableHeight - lowerHeight, lowerHeight});
+            }
+        });
+    }
 
     ui->splitter->installEventFilter(this);
     //
@@ -545,12 +625,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     profilesFilterModel = new ProfilesFilterProxyModel(this);
     profilesFilterModel->setSourceModel(profilesTableModel);
     ui->profilesTableView->setModel(profilesFilterModel);
+    // Row numbers are a real compact column, not a detached vertical header.
+    // This gives them the same horizontal separators and selection background
+    // as every other cell.
+    ui->profilesTableView->verticalHeader()->hide();
     ui->profilesTableView->selectAllRequested = [this] { selectAllProfiles(); };
     connect(profilesFilterModel, &QAbstractItemModel::modelReset, this,
             [this] { QTimer::singleShot(0, this, [this] { applyGroupSectionSpans(); }); });
     connect(groupSidebar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
         if (refreshingGroupSidebar || !item) return;
         show_group(item->data(Qt::UserRole).toInt());
+    });
+    connect(groupSidebar, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
+        if (refreshingGroupSidebar || !item) return;
+        edit_group(item->data(Qt::UserRole).toInt());
     });
     connect(groupSidebar->model(), &QAbstractItemModel::rowsMoved, this, [this] {
         if (refreshingGroupSidebar) return;
@@ -746,7 +834,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     });
     connect(ui->profilesTableView->horizontalHeader(), &QHeaderView::sectionResized, this, [=, this](int, int, int) {
         updateImproveMoodGeometry();
-        if (Configs::dataManager->settingsRepo->refreshing_group) return;
+        if (Configs::dataManager->settingsRepo->refreshing_group || m_adjustingColumns) return;
+        m_columnWidthsAutoSized = false;
         QList<int> widths;
         for (int i = 0; i < ui->profilesTableView->horizontalHeader()->count(); i++)
             widths.push_back(ui->profilesTableView->horizontalHeader()->sectionSize(i));
@@ -923,11 +1012,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->profilesTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     ui->profilesTableView->setTabKeyNavigation(false);
     ui->profilesTableView->horizontalHeader()->setResizeContentsPrecision(0);
-
-    connect(ui->profilesTableView->verticalScrollBar(), &QScrollBar::valueChanged, ui->profilesTableView, [=, this] {
-        if (!ui->profilesTableView->isVisible()) return;
-        refresh_proxy_list_column_size();
-    });
 
     // search box
     auto *filterHeader = static_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
@@ -1217,16 +1301,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     });
 
     connect(ui->actionUpdate_All_Subscriptions, &QAction::triggered, this, [=,this]{
-        if (QMessageBox::question(this, tr("Confirmation"), tr("Update all subscriptions?")) == QMessageBox::StandardButton::Yes) {
-            UI_update_all_groups();
-        }
+        UI_update_all_groups();
     });
 
     connect(ui->actionRefresh_Column_Widths, &QAction::triggered, this, [=, this] {
-        auto ent = Configs::dataManager->groupsRepo->CurrentGroup();
-        ent->column_width.clear();
-        Configs::dataManager->groupsRepo->Save(ent);
-        show_group(ent->id);
+        for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+            const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+            if (!group) continue;
+            group->column_width.clear();
+            group->clearCalculatedColumnWidth();
+            Configs::dataManager->groupsRepo->Save(group);
+        }
+        m_columnWidthsAutoSized = true;
+        refresh_proxy_list_column_size();
     });
 
     connect(ui->menuRouting_Menu, &QMenu::aboutToShow, this, [=,this]()

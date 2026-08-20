@@ -22,8 +22,10 @@ protected:
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
+    void updateChromeMasks();
     class ProfilesTableVerticalHeader *m_verticalHeader = nullptr;
     class ProfilesTableFilterHeader *m_filterHeader = nullptr;
     class ProfilesFilterProxyModel *m_filterProxy = nullptr;

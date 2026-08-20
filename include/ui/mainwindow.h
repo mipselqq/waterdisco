@@ -57,6 +57,7 @@ class QMediaPlayer;
 class QVideoSink;
 class QListWidget;
 class QSplitter;
+class QTextBrowser;
 
 namespace Qv2ray::ui { class SyntaxHighlighter; }
 
@@ -96,6 +97,8 @@ public:
                             RefreshAnchor anchor = RefreshAnchor::KeepPlace);
 
     void show_group(int gid);
+
+    void edit_group(int gid);
 
     void refresh_groups();
 
@@ -221,6 +224,8 @@ private:
     QSplitter *mainContentSplitter = nullptr;
     bool refreshingGroupSidebar = false;
     bool handlingSelectAll = false;
+    bool m_columnWidthsAutoSized = false;
+    bool m_profileStructureChanged = false;
     int selectAllGroupId = -1;
     bool selectAllIsGlobal = false;
     QSystemTrayIcon *tray;
@@ -242,6 +247,7 @@ private:
     //
     QThreadPool *parallelCoreCallPool = new QThreadPool(this);
     std::unique_ptr<TestRunner> testRunner;
+    QTimer *connectionProbeTimer = nullptr;
     //
     Configs_sys::CoreProcess *core_process = nullptr;
     QMutex coreProcessMutex;
@@ -250,6 +256,8 @@ private:
     qint64 vpn_pid = 0;
     //
     QTextDocument *qvLogDocument = new QTextDocument(this);
+    QTextDocument *coreLogDocument = new QTextDocument(this);
+    QTextBrowser *coreLogBrowser = nullptr;
     //
     QString title_error;
     int icon_status = -1;
@@ -261,6 +269,9 @@ private:
     QString traffic_update_cache;
     QString hostInfoIp;
     bool hostInfoProbeInFlight = false;
+    // A generation rejects a late egress-probe callback from a profile that was
+    // stopped or replaced while its request was in flight.
+    quint64 connectionProbeGeneration = 0;
     qint64 last_test_time = 0;
     //
     int proxy_last_order = -1;
@@ -305,12 +316,18 @@ private:
     QRegularExpression includeCombined;
     QRegularExpression excludeCombined;
     QMutex logMutex;
-    QQueue<QString> logQueue;
+    struct LogEntry {
+        QString text;
+        bool core = false;
+    };
+    QQueue<LogEntry> logQueue;
     QWaitCondition logWaiter;
     Qv2ray::ui::SyntaxHighlighter *logHighlighter = nullptr;
+    Qv2ray::ui::SyntaxHighlighter *coreLogHighlighter = nullptr;
 
     QMutex logPendingMutex;
     QString logPendingText;
+    QString coreLogPendingText;
     bool logFlushScheduled = false;
 
     struct LogFilter {
@@ -323,6 +340,7 @@ private:
     };
 
     void append_log(const QString &log);
+    void append_core_log(const QString &log);
 
     void log_process_loop();
 
@@ -342,6 +360,7 @@ private:
 
     void refreshInfoPanel();
     void refreshHostInfoIp();
+    void runCurrentConnectionProbe();
 
     QList<int> get_selected_or_group();
 

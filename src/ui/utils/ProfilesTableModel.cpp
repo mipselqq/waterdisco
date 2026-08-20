@@ -3,6 +3,7 @@
 #include "include/database/entities/Profile.h"
 #include "include/configs/common/Outbound.h"
 #include <QApplication>
+#include <QFontMetrics>
 #include <QMimeData>
 #include <QPalette>
 
@@ -66,15 +67,11 @@ QMimeData* ProfilesTableModel::mimeData(const QModelIndexList &indexes) const {
 }
 
 void ProfilesTableModel::ensureCached(int profileId) const {
-    if (m_cache.contains(profileId)) {
-        for (int i = 0; i < m_lruOrder.size(); ++i) {
-            if (m_lruOrder[i] == profileId) {
-                m_lruOrder.move(i, m_lruOrder.size() - 1);
-                break;
-            }
-        }
-        return;
-    }
+    // This method is called for every role of every visible cell. Moving an
+    // entry through a QList on a cache hit made scrolling O(cache-size) per
+    // paint. FIFO eviction is sufficient for the bounded viewport cache and
+    // keeps the hot path O(1).
+    if (m_cache.contains(profileId)) return;
 
     auto profile = Configs::dataManager->profilesRepo->GetProfile(profileId);
     if (!profile) return;
@@ -101,10 +98,10 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
     if (role == GroupIdRole) return row.groupId;
     if (role == GroupHeaderRole) return row.profileId < 0;
     if (row.profileId < 0) {
-        if (role == Qt::DisplayRole && index.column() == ColStartup) {
+        if (role == Qt::DisplayRole && index.column() == ColNumber) {
             const auto group = Configs::dataManager->groupsRepo->GetGroup(row.groupId);
             const QString name = group ? group->name : tr("Unknown group");
-            return tr("%1 (%2)").arg(name).arg(row.profileCount);
+            return name;
         }
         if (role == Qt::BackgroundRole) return QApplication::palette().color(QPalette::Button);
         if (role == Qt::FontRole) {
@@ -128,20 +125,55 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
                 ? Qt::Checked : Qt::Unchecked;
         }
     }
+
+    // These roles are independent of profile data. Returning before the cache
+    // lookup keeps painting the number and checkbox columns free of repository
+    // work, which matters for a virtual table during a fast scroll.
+    if (role == Qt::TextAlignmentRole) {
+        switch (index.column()) {
+        case ColNumber:
+        case ColStartup:
+        case ColDisabled:
+        case ColLatency:
+        case ColRxSpeed:
+        case ColConnectionTime:
+        case ColSiteScore:
+        case ColRxTraffic:
+        case ColTxTraffic:
+            return static_cast<int>(Qt::AlignCenter);
+        default:
+            return static_cast<int>(Qt::AlignVCenter | Qt::AlignLeft);
+        }
+    }
+    if (role == Qt::DisplayRole) {
+        if (index.column() == ColNumber) return QString::number(row.displayNumber);
+        if (index.column() == ColStartup || index.column() == ColDisabled) return QString();
+    }
+    if (role == Qt::FontRole || role == Qt::DecorationRole || role == Qt::SizeHintRole) {
+        return {};
+    }
+
     ensureCached(profileId);
     auto it = m_cache.constFind(profileId);
     if (it == m_cache.constEnd()) return {};
     const std::shared_ptr<Configs::Profile> &profile = it.value();
     if (!profile) return {};
 
-    const int startedId = Configs::dataManager->settingsRepo->started_id;
-    const bool isRunning = (profile->id == startedId);
-    QColor linkColor = isRunning ? QApplication::palette().link().color() : QColor();
+    if (role == Qt::BackgroundRole) {
+        switch (profile->connection_test_status) {
+        case Configs::ConnectionTestStatus::Pending:
+            return QColor(QStringLiteral("#73552f"));
+        case Configs::ConnectionTestStatus::Success:
+            return QColor(QStringLiteral("#315f42"));
+        case Configs::ConnectionTestStatus::Error:
+            return QColor(QStringLiteral("#713d3d"));
+        case Configs::ConnectionTestStatus::Idle:
+            break;
+        }
+    }
 
     if (role == Qt::DisplayRole) {
         switch (index.column()) {
-        case ColStartup:
-        case ColDisabled: return QString();
         case ColType: {
             if (!profile->outbound) return QString();
             auto type = profile->outbound->DisplayType();
@@ -160,21 +192,6 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
         case ColRxTraffic: return profile->DisplayTrafficRx();
         case ColTxTraffic: return profile->DisplayTrafficTx();
         default: return {};
-        }
-    }
-    if (role == Qt::TextAlignmentRole) {
-        switch (index.column()) {
-        case ColStartup:
-        case ColDisabled:
-        case ColLatency:
-        case ColRxSpeed:
-        case ColConnectionTime:
-        case ColSiteScore:
-        case ColRxTraffic:
-        case ColTxTraffic:
-            return static_cast<int>(Qt::AlignCenter);
-        default:
-            return static_cast<int>(Qt::AlignVCenter | Qt::AlignLeft);
         }
     }
     if (role == Qt::ToolTipRole) {
@@ -197,7 +214,9 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
                 return QColor(Qt::red);
             }
             if (profile->performance_test_status == Configs::PerformanceTestStatus::Skipped) {
-                return QApplication::palette().color(QPalette::Disabled, QPalette::Text);
+                // Skipped is intentionally muted, but must remain readable in
+                // the dense table (the disabled palette is too faint here).
+                return QColor(QStringLiteral("#c5cbd2"));
             }
         }
         if (index.column() == ColConnectionTime && profile->connect_time_ms > 0) {
@@ -211,7 +230,6 @@ QVariant ProfilesTableModel::data(const QModelIndex &index, int role) const {
             if (profile->site_score >= 55) return QColor(Qt::darkYellow);
             return QColor(Qt::red);
         }
-        if (isRunning && linkColor.isValid()) return linkColor;
         return {};
     }
     return {};
@@ -249,6 +267,7 @@ QVariant ProfilesTableModel::headerData(int section, Qt::Orientation orientation
     if (role != Qt::DisplayRole) return {};
     if (orientation == Qt::Horizontal) {
         switch (section) {
+        case ColNumber: return tr("№");
         case ColStartup: return tr("Speedtest\non startup");
         case ColDisabled: return tr("Off");
         case ColType: return tr("Type");
@@ -271,37 +290,66 @@ void ProfilesTableModel::setProfileIds(const QList<int> &ids) {
     m_profileIds = ids;
     m_rows.clear();
     m_rows.reserve(ids.size());
-    id2row.clear();
-    int idx=0;
     for (const auto &id : ids) {
         m_rows.append({id, -1, 0});
-        id2row.insert(id, idx++);
     }
+    rebuildRowIndexesAndNumbers();
     m_cache.clear();
     m_lruOrder.clear();
     m_filterKeys.clear();
     m_filterIndexBuilt = false;
+    invalidatePreferredColumnWidths();
     endResetModel();
 }
 
-void ProfilesTableModel::setGroupSections(const QList<GroupSection> &sections) {
+bool ProfilesTableModel::setGroupSections(const QList<GroupSection> &sections, bool forceRefresh) {
+    int expectedRows = 0;
+    for (const GroupSection &section : sections) expectedRows += 1 + section.profileIds.size();
+    bool sameStructure = expectedRows == m_rows.size();
+    if (sameStructure) {
+        int row = 0;
+        for (const GroupSection &section : sections) {
+            if (m_rows[row].profileId != -1 || m_rows[row].groupId != section.groupId
+                || m_rows[row].profileCount != section.profileIds.size()) {
+                sameStructure = false;
+                break;
+            }
+            ++row;
+            for (int id : section.profileIds) {
+                if (m_rows[row].profileId != id || m_rows[row].groupId != section.groupId) {
+                    sameStructure = false;
+                    break;
+                }
+                ++row;
+            }
+            if (!sameStructure) break;
+        }
+    }
+    if (sameStructure) {
+        if (forceRefresh && !m_rows.isEmpty()) {
+            emit dataChanged(index(0, 0), index(m_rows.size() - 1, ColumnCount - 1));
+        }
+        return false;
+    }
+
     beginResetModel();
     m_profileIds.clear();
     m_rows.clear();
-    id2row.clear();
     for (const GroupSection &section : sections) {
         m_rows.append({-1, section.groupId, static_cast<int>(section.profileIds.size())});
         for (int id : section.profileIds) {
-            id2row.insert(id, m_rows.size());
             m_profileIds.append(id);
             m_rows.append({id, section.groupId, 0});
         }
     }
+    rebuildRowIndexesAndNumbers();
     m_cache.clear();
     m_lruOrder.clear();
     m_filterKeys.clear();
     m_filterIndexBuilt = false;
+    invalidatePreferredColumnWidths();
     endResetModel();
+    return true;
 }
 
 namespace {
@@ -383,14 +431,7 @@ void ProfilesTableModel::emplaceProfiles(int row1, int row2) {
     const int insertAt = row1 < row2 ? row2 : row2 + 1;
     m_rows.insert(insertAt, moved);
 
-    m_profileIds.clear();
-    for (const Row &row : m_rows) if (row.profileId >= 0) m_profileIds.append(row.profileId);
-
-    // Every row between the two shifted by one; id2row has to follow.
-    id2row.clear();
-    for (int i = 0; i < m_rows.size(); ++i) {
-        if (m_rows[i].profileId >= 0) id2row[m_rows[i].profileId] = i;
-    }
+    rebuildRowIndexesAndNumbers();
     emit dataChanged(index(0, 0), index(m_rows.size() - 1, columnCount() - 1));
 }
 
@@ -407,14 +448,7 @@ void ProfilesTableModel::reorderProfiles(const QList<int> &ids) {
         m_rows.insert(currentRow < targetRow ? targetRow : targetRow + 1, moved);
         current = profileIdsForGroup(groupId);
     }
-    id2row.clear();
-    m_profileIds.clear();
-    for (int row = 0; row < m_rows.size(); ++row) {
-        if (m_rows[row].profileId >= 0) {
-            id2row.insert(m_rows[row].profileId, row);
-            m_profileIds.append(m_rows[row].profileId);
-        }
-    }
+    rebuildRowIndexesAndNumbers();
     emit layoutChanged();
 }
 
@@ -425,14 +459,85 @@ int ProfilesTableModel::indexOfProfile(int id) {
 
 QString ProfilesTableModel::rowLabel(int sourceRow, int displayRow) const {
     if (sourceRow < 0 || sourceRow >= m_rows.size() || isGroupHeader(sourceRow)) return {};
-    int id = m_rows[sourceRow].profileId;
-    if (Configs::dataManager->settingsRepo->started_id == id) {
-        return QStringLiteral("✓");
-    }
-    int profileNumber = 0;
-    for (int row = 0; row <= sourceRow; ++row) if (!isGroupHeader(row)) ++profileNumber;
     Q_UNUSED(displayRow)
-    return QString::number(profileNumber) + QStringLiteral("  ");
+    return QString::number(m_rows[sourceRow].displayNumber) + QStringLiteral("  ");
+}
+
+void ProfilesTableModel::rebuildRowIndexesAndNumbers() {
+    id2row.clear();
+    m_profileIds.clear();
+    int displayNumber = 0;
+    for (int row = 0; row < m_rows.size(); ++row) {
+        Row &entry = m_rows[row];
+        if (entry.profileId < 0) {
+            entry.displayNumber = 0;
+            continue;
+        }
+        entry.displayNumber = ++displayNumber;
+        id2row.insert(entry.profileId, row);
+        m_profileIds.append(entry.profileId);
+    }
+}
+
+void ProfilesTableModel::invalidatePreferredColumnWidths() {
+    m_preferredColumnWidths.clear();
+    m_preferredWidthsFont = {};
+}
+
+QList<int> ProfilesTableModel::preferredColumnWidths(const QFont &font) const {
+    if (m_preferredColumnWidths.size() == ColumnCount && m_preferredWidthsFont == font) {
+        return m_preferredColumnWidths;
+    }
+
+    const QFontMetrics metrics(font);
+    constexpr int cellPadding = 16;
+    QList<int> widths(ColumnCount, 0);
+    const auto addText = [&widths, &metrics, cellPadding](int column, const QString &text) {
+        int width = 0;
+        for (const QString &line : text.split('\n')) {
+            width = qMax(width, metrics.horizontalAdvance(line));
+        }
+        widths[column] = qMax(widths[column], width + cellPadding);
+    };
+
+    for (int column = 0; column < ColumnCount; ++column) {
+        addText(column, headerData(column, Qt::Horizontal, Qt::DisplayRole).toString());
+    }
+    widths[ColNumber] = qMax(widths[ColNumber], metrics.horizontalAdvance(QString::number(m_profileIds.size())) + cellPadding);
+    widths[ColStartup] = qMax(widths[ColStartup], 48);
+    widths[ColDisabled] = qMax(widths[ColDisabled], 42);
+
+    for (const auto &profile : Configs::dataManager->profilesRepo->GetProfileBatch(m_profileIds)) {
+        if (!profile) continue;
+        if (profile->outbound) {
+            QString type = profile->outbound->DisplayType();
+            if (Configs::dataManager->settingsRepo->show_config_security) {
+                const QString security = profile->outbound->DisplaySecurity();
+                if (!security.isEmpty()) type += QStringLiteral(" (%1)").arg(security);
+            }
+            addText(ColType, type);
+            addText(ColAddress, profile->outbound->DisplayAddress());
+            addText(ColName, profile->outbound->name);
+        }
+        addText(ColLatency, profile->DisplayLatency());
+        addText(ColRxSpeed, profile->DisplayRxSpeed());
+        addText(ColConnectionTime, profile->DisplayConnectionTime());
+        addText(ColSiteScore, profile->DisplaySiteScore());
+        addText(ColRxTraffic, profile->DisplayTrafficRx());
+        addText(ColTxTraffic, profile->DisplayTrafficTx());
+    }
+
+    // Test/traffic values can grow after the first render. Keep those columns
+    // stable without rescanning them on every live update.
+    addText(ColRxSpeed, QStringLiteral("9999.99 MB/s"));
+    addText(ColConnectionTime, QStringLiteral("00:00:00"));
+    addText(ColSiteScore, QStringLiteral("100.0"));
+    addText(ColRxTraffic, QStringLiteral("999.99 GB"));
+    addText(ColTxTraffic, QStringLiteral("999.99 GB"));
+
+    m_preferredWidthsFont = font;
+    m_preferredColumnWidths = widths;
+    return m_preferredColumnWidths;
 }
 
 bool ProfilesTableModel::isGroupHeader(int row) const {

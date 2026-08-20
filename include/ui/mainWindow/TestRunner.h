@@ -36,6 +36,10 @@ public:
 
     void runIpTests(const QList<int>& profileIDs);
 
+    // Probe the egress of the currently running core. `finished` runs on the
+    // UI thread and reports whether the active profile produced a real IP.
+    void runCurrentIpTest(int profileID, const std::function<void(bool)>& finished = {});
+
     void runSpeedTests(const QList<int>& profileIDs, bool testCurrent = false);
 
     // Waterdisco's ranked test measures a connection probe and a fixed 2 MiB
@@ -72,7 +76,7 @@ private:
 
     void runUrlProbe(const Target& target);
 
-    void runIpProbe(const Target& target);
+    bool runIpProbe(const Target& target);
 
     void runSpeedProbe(const Target& target);
 

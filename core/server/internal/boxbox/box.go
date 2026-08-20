@@ -236,12 +236,14 @@ func New(options Options) (*Box, error) {
 	if err != nil {
 		return nil, E.Cause(err, "initialize router")
 	}
-	if needClashAPI || needAPIService {
-		trafficManager := trafficcontrol.NewManager(outboundManager)
-		service.MustRegisterPtr(ctx, trafficManager)
-		router.AppendTracker(trafficManager)
-		internalServices = append(internalServices, trafficManager)
-	}
+	// Waterdisco reads per-outbound counters through its local RPC regardless of
+	// whether the user exposes the Clash API or the Connections view is enabled.
+	// Tying the tracker to either optional feature left the Info panel permanently
+	// at zero while the proxy itself kept working.
+	trafficManager := trafficcontrol.NewManager(outboundManager)
+	service.MustRegisterPtr(ctx, trafficManager)
+	router.AppendTracker(trafficManager)
+	internalServices = append(internalServices, trafficManager)
 	ntpOptions := common.PtrValueOrDefault(options.NTP)
 	var timeService *tls.TimeServiceWrapper
 	if ntpOptions.Enabled {

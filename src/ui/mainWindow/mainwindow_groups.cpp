@@ -7,6 +7,7 @@
 #include <QTimer>
 
 #include "include/database/GroupsRepo.h"
+#include "include/ui/group/dialog_edit_group.h"
 
 void MainWindow::show_group(int gid) {
     const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
@@ -15,6 +16,21 @@ void MainWindow::show_group(int gid) {
     Configs::dataManager->settingsRepo->current_group = gid;
     Configs::dataManager->settingsRepo->Save();
     scrollToGroup(gid);
+}
+
+void MainWindow::edit_group(int gid) {
+    const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+    if (!group) return;
+
+    auto *dialog = new DialogEditGroup(group, this);
+    connect(dialog, &QDialog::finished, this, [this, dialog, group] {
+        if (dialog->result() == QDialog::Accepted) {
+            Configs::dataManager->groupsRepo->Save(group);
+            MW_dialog_message(MwMessage::GroupsChanged, {});
+        }
+        dialog->deleteLater();
+    });
+    dialog->show();
 }
 
 void MainWindow::rebuildGroupSidebar() {

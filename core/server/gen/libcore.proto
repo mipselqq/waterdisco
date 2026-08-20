@@ -205,6 +205,10 @@ message IPTestRequest {
   optional string xray_config = 7 [default = ""];
   // See TestReq.xray_full_configs.
   repeated string xray_full_configs = 8;
+  // Probe the already-running profile instead of constructing an isolated test
+  // core. This is required for the live connection indicator: it must observe
+  // the exact egress that is currently carrying traffic.
+  optional bool test_current = 9 [default = false];
 }
 
 message IPTestResp {

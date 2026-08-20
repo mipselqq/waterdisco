@@ -24,9 +24,10 @@ namespace Stats {
     }
 
     void TrafficLooper::UpdateAll() {
-        if (Configs::dataManager->settingsRepo->disable_traffic_stats) {
-            return;
-        }
+        // Runtime counters feed the status area, graph and Info pane.  They must
+        // remain available even when the user disables *persistent* traffic
+        // history; otherwise a working tunnel is displayed as 0 B / 0 Mbps.
+        const bool persistTraffic = !Configs::dataManager->settingsRepo->disable_traffic_stats;
 
         auto resp = API::defaultClient->QueryStats();
         const auto now = elapsedTimer.elapsed();
@@ -49,7 +50,7 @@ namespace Stats {
             // An auto-selector contributes one group per pool member, all but
             // one of them idle at any moment. Skipping the zero deltas keeps a
             // 300-member pool from doing 300 no-op stat writes every second.
-            if (up != 0 || down != 0) {
+            if (persistTraffic && (up != 0 || down != 0)) {
                 for (auto& profile : group.profiles) {
                     profile->traffic_uplink += up;
                     profile->traffic_downlink += down;
@@ -87,7 +88,9 @@ namespace Stats {
                 direct->downlink_rate = static_cast<double>(down) * 1000.0 / static_cast<double>(interval);
                 direct->uplink_total += up;
                 direct->downlink_total += down;
-                trafficStatsManager->AddConfigDelta(DIRECT_STAT_PROFILE_ID, up, down);
+                if (persistTraffic) {
+                    trafficStatsManager->AddConfigDelta(DIRECT_STAT_PROFILE_ID, up, down);
+                }
             }
         }
         proxy->max_rate = qMax(proxy->max_rate, proxy->uplink_rate + proxy->downlink_rate);
@@ -99,10 +102,6 @@ namespace Stats {
         int secs_since_save = 0;
         while (true) {
             QThread::msleep(1000); // refresh every one second
-
-            if (Configs::dataManager->settingsRepo->disable_traffic_stats) {
-                continue;
-            }
 
             // profile start and stop
             if (!loop_enabled) {

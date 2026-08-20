@@ -284,11 +284,8 @@ void MainWindow::refresh_status(const QString &traffic_update) {
 }
 
 void MainWindow::refreshInfoPanel() {
-    const bool trulyConnected = running && !running->ip_out.trimmed().isEmpty();
-    ui->proxy_connected_value->setText(trulyConnected ? tr("Success") : tr("Fail"));
-    ui->proxy_connected_value->setStyleSheet(
-        trulyConnected ? "color: #2eaf57; font-weight: 600;" : "color: #d9534f; font-weight: 600;");
-    ui->proxy_ip_value->setText(trulyConnected ? running->ip_out : QStringLiteral("—"));
+    const bool hasProxyIp = running != nullptr && !running->ip_out.trimmed().isEmpty();
+    ui->proxy_ip_value->setText(hasProxyIp ? running->ip_out : QStringLiteral("—"));
     ui->host_ip_value->setText(hostInfoIp.isEmpty() ? QStringLiteral("—") : hostInfoIp);
 
     qint64 proxyDown = 0, proxyUp = 0, directDown = 0, directUp = 0;
@@ -336,6 +333,30 @@ void MainWindow::refreshHostInfoIp() {
     });
 }
 
+void MainWindow::runCurrentConnectionProbe() {
+    if (running == nullptr || testRunner == nullptr || connectionProbeTimer == nullptr) return;
+
+    const int profileID = running->id;
+    const quint64 generation = connectionProbeGeneration;
+    if (testRunner->isRunning()) {
+        // A manual measurement owns the core test session. Retry shortly rather
+        // than constructing a second test environment or interrupting it.
+        connectionProbeTimer->start(1'000);
+        return;
+    }
+
+    QPointer<MainWindow> self(this);
+    testRunner->runCurrentIpTest(profileID, [self, profileID, generation](bool success) {
+        if (!self || self->running == nullptr || self->running->id != profileID
+            || self->connectionProbeTimer == nullptr
+            || self->connectionProbeGeneration != generation) {
+            return;
+        }
+        self->refresh_status();
+        self->connectionProbeTimer->start(success ? 10'000 : 1'000);
+    });
+}
+
 void MainWindow::refresh_startstop_button() {
     auto *btn = ui->toolButton_startstop;
     if (btn == nullptr) return;
@@ -377,67 +398,58 @@ void MainWindow::update_traffic_graph(int proxyDl, int proxyUp, int directDl, in
 }
 
 void MainWindow::refresh_proxy_list_column_size() {
-    const auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-    if (!group || !ui->profilesTableView->isVisible()) return;
+    if (!profilesTableModel || !ui->profilesTableView->isVisible()) return;
 
     auto *hHeader = dynamic_cast<ProfilesTableFilterHeader*>(ui->profilesTableView->horizontalHeader());
-    QTimer::singleShot(0, ui->profilesTableView, [=, this]() {
-        // Stop the resizeSection / scrollbar-policy changes below from re-entering
-        // this routine via the vertical scrollbar's valueChanged signal.
-        if (m_adjustingColumns) return;
-        m_adjustingColumns = true;
-        QScrollBar *vBar = ui->profilesTableView->verticalScrollBar();
-        const bool vBarBlocked = vBar->blockSignals(true);
-        hHeader->blockSignals(true);
-        constexpr int columnCount = ProfilesTableModel::ColumnCount;
-        // Widths saved before the column set last changed no longer line up with
-        // the header, so fall back to auto-sizing instead of indexing past the end.
-        if (!group->column_width.isEmpty() && group->column_width.size() != columnCount) {
-            group->column_width.clear();
+    if (!hHeader || m_adjustingColumns) return;
+
+    constexpr int columnCount = ProfilesTableModel::ColumnCount;
+    QList<int> widths;
+    for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+        if (!group) continue;
+        if (group->column_width.size() == columnCount) {
+            widths = group->column_width;
+            break;
         }
-        if (group->column_width.isEmpty()) {
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColType, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColAddress, QHeaderView::Stretch);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColName, QHeaderView::Stretch);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColLatency, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColRxSpeed, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColConnectionTime, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColSiteScore, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColRxTraffic, QHeaderView::ResizeToContents);
-            hHeader->setSectionResizeMode(ProfilesTableModel::ColTxTraffic, QHeaderView::ResizeToContents);
-            // ResizeToContents only measures on-screen rows, so pin these columns to the
-            // widest seen for this group or they jitter while scrolling.
-            for (int col : {ProfilesTableModel::ColType, ProfilesTableModel::ColLatency,
-                            ProfilesTableModel::ColRxSpeed, ProfilesTableModel::ColConnectionTime,
-                            ProfilesTableModel::ColSiteScore, ProfilesTableModel::ColRxTraffic,
-                            ProfilesTableModel::ColTxTraffic}) {
-                if (group->calculated_column_width.size() > col &&
-                    group->calculated_column_width[col] > hHeader->sectionSize(col)) {
-                    hHeader->setSectionResizeMode(col, QHeaderView::Fixed);
-                    hHeader->resizeSection(col, group->calculated_column_width[col]);
-                }
-            }
-            ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    }
+
+    const bool needsAutoWidths = widths.size() != columnCount
+        || (m_columnWidthsAutoSized && m_profileStructureChanged);
+    if (needsAutoWidths) {
+        widths = profilesTableModel->preferredColumnWidths(ui->profilesTableView->font());
+        m_columnWidthsAutoSized = true;
+        // A single unified table has a single width set. Persist the automatic
+        // baseline once, so a later redraw never falls back to visible-row
+        // measurements.
+        for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+            const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+            if (!group) continue;
+            group->column_width = widths;
             group->clearCalculatedColumnWidth();
-            for (int i = 0; i < columnCount; i++) {
-                auto size = hHeader->sectionSize(i);
-                hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-                hHeader->resizeSection(i, size);
-                group->calculated_column_width << size;
-            }
-        } else {
-            group->clearCalculatedColumnWidth();
-            for (int i = 0; i < columnCount; i++) {
-                hHeader->setSectionResizeMode(i, QHeaderView::Interactive);
-                hHeader->resizeSection(i, group->column_width.at(i));
-            }
-            ui->profilesTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+            Configs::dataManager->groupsRepo->Save(group);
         }
-        hHeader->adjustPositions();
-        hHeader->blockSignals(false);
-        vBar->blockSignals(vBarBlocked);
-        m_adjustingColumns = false;
-    });
+    }
+    m_profileStructureChanged = false;
+
+    bool differs = false;
+    for (int column = 0; column < columnCount; ++column) {
+        if (hHeader->sectionSize(column) != widths[column]) {
+            differs = true;
+            break;
+        }
+    }
+    if (!differs) return;
+
+    m_adjustingColumns = true;
+    hHeader->blockSignals(true);
+    for (int column = 0; column < columnCount; ++column) {
+        hHeader->setSectionResizeMode(column, QHeaderView::Interactive);
+        hHeader->resizeSection(column, widths[column]);
+    }
+    hHeader->adjustPositions();
+    hHeader->blockSignals(false);
+    m_adjustingColumns = false;
 }
 
 void MainWindow::refresh_proxy_list(const QList<int>& ids, bool mayNeedReset, RefreshAnchor anchor) {
@@ -462,8 +474,10 @@ void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, boo
             const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
             if (group) sections.append({gid, group->Profiles()});
         }
-        profilesTableModel->setGroupSections(sections);
-        QTimer::singleShot(0, this, [this] { applyGroupSectionSpans(); });
+        if (profilesTableModel->setGroupSections(sections, mayNeedReset)) {
+            m_profileStructureChanged = true;
+            QTimer::singleShot(0, this, [this] { applyGroupSectionSpans(); });
+        }
     }
 }
 

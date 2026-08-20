@@ -7,6 +7,10 @@
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QMimeData>
+#include <QPainterPath>
+#include <QRegion>
+#include <QResizeEvent>
+#include <QScrollBar>
 
 ProfilesTableView::ProfilesTableView(QWidget *parent)
     : QTableView(parent) {
@@ -40,6 +44,47 @@ int ProfilesTableView::firstVisibleRow() {
 
     int startRow = topIndex.row();
     return startRow;
+}
+
+void ProfilesTableView::resizeEvent(QResizeEvent *event) {
+    QTableView::resizeEvent(event);
+    updateChromeMasks();
+}
+
+void ProfilesTableView::updateChromeMasks() {
+    constexpr qreal radius = 4.0;
+
+    // The viewport is a child of QAbstractScrollArea, so a stylesheet radius
+    // on the view alone cannot clip its lower-left corner. This mask is only
+    // recomputed on resize, never while scrolling.
+    if (auto *area = viewport(); area && area->width() > radius && area->height() > radius) {
+        const QRectF rect = area->rect();
+        QPainterPath path;
+        path.moveTo(rect.topLeft());
+        path.lineTo(rect.topRight());
+        path.lineTo(rect.bottomRight());
+        path.lineTo(rect.left() + radius, rect.bottom());
+        path.quadTo(rect.bottomLeft(), QPointF(rect.left(), rect.bottom() - radius));
+        path.lineTo(rect.topLeft());
+        path.closeSubpath();
+        area->setMask(QRegion(path.toFillPolygon().toPolygon()));
+    }
+
+    // The right edge belongs visually to the scrollbar, not the table body.
+    // Clip only its two outer-right corners; the left side stays flush with
+    // the viewport and header.
+    auto *bar = verticalScrollBar();
+    if (!bar || bar->width() <= radius || bar->height() <= radius) return;
+    const QRectF rect = bar->rect();
+    QPainterPath path;
+    path.moveTo(rect.topLeft());
+    path.lineTo(rect.right() - radius, rect.top());
+    path.quadTo(rect.topRight(), QPointF(rect.right(), rect.top() + radius));
+    path.lineTo(rect.right(), rect.bottom() - radius);
+    path.quadTo(rect.bottomRight(), QPointF(rect.right() - radius, rect.bottom()));
+    path.lineTo(rect.bottomLeft());
+    path.closeSubpath();
+    bar->setMask(QRegion(path.toFillPolygon().toPolygon()));
 }
 
 

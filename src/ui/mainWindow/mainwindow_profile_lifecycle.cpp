@@ -345,20 +345,26 @@ void MainWindow::profile_start(int _id) {
         // its actual egress address.
         ent->ip_out.clear();
         ent->test_country.clear();
+        ent->connection_test_status = Configs::ConnectionTestStatus::Pending;
         running = ent;
         if (Configs::dataManager->settingsRepo->spmode_system_proxy) set_system_proxy(true);
 
         runOnUiThread([=, this] {
             refresh_status();
             refresh_proxy_list({ent->id});
-            // This test builds a one-profile test core, so its result is the
-            // profile's real egress IP even when the application's split route
-            // would send a normal HTTP lookup directly.
-            // A previous manual test may be completing while the profile is
-            // brought up. Its session is unrelated to a successful connect,
-            // so do not show the misleading "last test did not exit" warning;
-            // the periodic Info probe will retry on its next tick.
-            if (!testRunner->isRunning()) testRunner->runIpTests({ent->id});
+            // Starting a profile should not leave the clicked row selected:
+            // selection blue would hide the connection-state background.
+            if (auto *selection = ui->profilesTableView->selectionModel()) {
+                selection->clearSelection();
+                selection->clearCurrentIndex();
+            }
+            ++connectionProbeGeneration;
+            if (connectionProbeTimer != nullptr) connectionProbeTimer->stop();
+            refreshInfoPanel();
+            // Probe the active core immediately. Unlike a one-profile throwaway
+            // config this measures the exact Hysteria/Xray path that is already
+            // carrying traffic and cannot be redirected by split routing.
+            runCurrentConnectionProbe();
             // Reveals the Tools entry and seeds the data-view panel before the
             // first poll lands, so a selector never starts up invisibly.
             refresh_auto_selector_view();
@@ -449,9 +455,7 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
 
     auto profile_stop_stage2 = [=,this] {
         if (testRunner->isTestingCurrent()) {
-            bool ok;
-            defaultClient->StopTests(&ok);
-            if (!ok) MW_show_log("Failed to stop profile tests!");
+            testRunner->stop();
         }
         if (!crash) {
             bool rpcOK;
@@ -475,6 +479,9 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
 
     // Show a "Disconnecting" spinner immediately; the stop itself can lag.
     runOnUiThread([this] {
+        ++connectionProbeGeneration;
+        if (connectionProbeTimer != nullptr) connectionProbeTimer->stop();
+        refreshInfoPanel();
         m_profileDisconnecting = true;
         refresh_startstop_button();
     });
@@ -515,6 +522,7 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
         }
 
         if (manual) Configs::dataManager->settingsRepo->UpdateStartedId(Configs::NoProfileId);
+        if (stopping != nullptr) stopping->connection_test_status = Configs::ConnectionTestStatus::Idle;
         running = nullptr;
 
         runOnUiThread([=, this, &restartMsgboxTimer, &restartMsgbox] {

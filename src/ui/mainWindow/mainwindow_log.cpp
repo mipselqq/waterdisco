@@ -33,13 +33,16 @@ void MainWindow::applyLogBrowserFont() {
     if (pt <= 0) pt = Configs::dataManager->settingsRepo->font_size;
     if (pt > 0) logFont.setPointSize(pt);
     ui->masterLogBrowser->setFont(logFont);
+    if (coreLogBrowser != nullptr) coreLogBrowser->setFont(logFont);
 }
 
 void MainWindow::setLogHighlighter(bool darkMode) {
     // A QSyntaxHighlighter attaches to the document and is never evicted by
     // constructing another, so the old one must be deleted or they stack up.
     delete logHighlighter;
+    delete coreLogHighlighter;
     logHighlighter = new SyntaxHighlighter(darkMode, qvLogDocument);
+    coreLogHighlighter = new SyntaxHighlighter(darkMode, coreLogDocument);
 }
 
 void MainWindow::append_log(const QString &log) {
@@ -48,11 +51,19 @@ void MainWindow::append_log(const QString &log) {
         return;
     }
     QMutexLocker locker(&logMutex);
-    if (logQueue.size() > 1000) {
-        // log is overloaded, just discard it
+    if (logQueue.size() > 1000) return;
+    logQueue.enqueue({log, false});
+    if (logQueue.size() == 1) logWaiter.wakeOne();
+}
+
+void MainWindow::append_core_log(const QString &log) {
+    if (log.size() > 20000) {
+        append_core_log(QString("TRUNCATED LONG LOG: ") + log.first(1000) + "...");
         return;
     }
-    logQueue.enqueue(log);
+    QMutexLocker locker(&logMutex);
+    if (logQueue.size() > 1000) return;
+    logQueue.enqueue({log, true});
     if (logQueue.size() == 1) logWaiter.wakeOne();
 }
 
@@ -64,7 +75,7 @@ void MainWindow::log_process_loop() {
         }
         // Drain and snapshot under one lock, then filter unlocked: a burst becomes a
         // single UI append and producers never block on the regex work.
-        QQueue<QString> pending;
+        QQueue<LogEntry> pending;
         pending.swap(logQueue);
         const LogFilter filter{
             Configs::dataManager->settingsRepo->log_enable_include,
@@ -73,9 +84,11 @@ void MainWindow::log_process_loop() {
         };
         logMutex.unlock();
 
-        QString batchToPrint;
+        QString appBatch;
+        QString coreBatch;
         for (const auto& entry : pending) {
-            for (const auto& logLine : entry.split('\n')) {
+            QString &batchToPrint = entry.core ? coreBatch : appBatch;
+            for (const auto& logLine : entry.text.split('\n')) {
                 if (should_print_log(logLine, filter)) {
                     batchToPrint += logLine;
                     batchToPrint += '\n';
@@ -83,18 +96,22 @@ void MainWindow::log_process_loop() {
             }
         }
 
-        const QString trimmedBatch = batchToPrint.trimmed();
-        if (trimmedBatch.isEmpty()) continue;
-
         bool needsPost;
         {
             QMutexLocker pendingLocker(&logPendingMutex);
-            if (!logPendingText.isEmpty()) logPendingText += '\n';
-            logPendingText += trimmedBatch;
-            if (logPendingText.size() > MAX_PENDING_LOG_CHARS) {
-                const auto cut = logPendingText.indexOf('\n', logPendingText.size() - MAX_PENDING_LOG_CHARS);
-                logPendingText = cut < 0 ? QString() : logPendingText.mid(cut + 1);
-            }
+            const auto appendBatch = [](QString &destination, const QString &batch) {
+                const QString trimmed = batch.trimmed();
+                if (trimmed.isEmpty()) return;
+                if (!destination.isEmpty()) destination += '\n';
+                destination += trimmed;
+                if (destination.size() > MAX_PENDING_LOG_CHARS) {
+                    const auto cut = destination.indexOf('\n', destination.size() - MAX_PENDING_LOG_CHARS);
+                    destination = cut < 0 ? QString() : destination.mid(cut + 1);
+                }
+            };
+            appendBatch(logPendingText, appBatch);
+            appendBatch(coreLogPendingText, coreBatch);
+            if (logPendingText.isEmpty() && coreLogPendingText.isEmpty()) continue;
             needsPost = !logFlushScheduled;
             logFlushScheduled = true;
         }
@@ -105,30 +122,35 @@ void MainWindow::log_process_loop() {
 }
 
 void MainWindow::flush_log_batch() {
-    QString batch;
+    QString appBatch;
+    QString coreBatch;
     {
         QMutexLocker pendingLocker(&logPendingMutex);
-        batch.swap(logPendingText);
+        appBatch.swap(logPendingText);
+        coreBatch.swap(coreLogPendingText);
         logFlushScheduled = false;
     }
-    if (batch.isEmpty()) return;
-
-    auto bar = ui->masterLogBrowser->verticalScrollBar();
-    if (Configs::dataManager->settingsRepo->log_auto_scroll) {
-        FastAppendTextDocument(batch, qvLogDocument);
-        bar->setValue(bar->maximum());
-    } else {
-        auto layout = qvLogDocument->documentLayout();
-        // Anchor to the block at the top of the viewport; if the append
-        // shifts its document-Y, replay the original sub-block offset.
-        QTextBlock anchorBlock = ui->masterLogBrowser->cursorForPosition(QPoint(0, 0)).block();
-        int viewportOffset = bar->value() - static_cast<int>(layout->blockBoundingRect(anchorBlock).y());
-        FastAppendTextDocument(batch, qvLogDocument);
-        if (anchorBlock.isValid()) {
-            int newY = static_cast<int>(layout->blockBoundingRect(anchorBlock).y());
+    const auto appendPreservingPosition = [this](QTextBrowser *browser, QTextDocument *document,
+                                                  const QString &batch) {
+        if (batch.isEmpty() || browser == nullptr) return;
+        auto *bar = browser->verticalScrollBar();
+        const bool followTail = Configs::dataManager->settingsRepo->log_auto_scroll
+            && bar->value() >= bar->maximum() - 1;
+        auto *layout = document->documentLayout();
+        QTextBlock anchorBlock = browser->cursorForPosition(QPoint(0, 0)).block();
+        const int viewportOffset = anchorBlock.isValid()
+            ? bar->value() - static_cast<int>(layout->blockBoundingRect(anchorBlock).y())
+            : 0;
+        FastAppendTextDocument(batch, document);
+        if (followTail) {
+            bar->setValue(bar->maximum());
+        } else if (anchorBlock.isValid()) {
+            const int newY = static_cast<int>(layout->blockBoundingRect(anchorBlock).y());
             bar->setValue(newY + viewportOffset);
         }
-    }
+    };
+    appendPreservingPosition(ui->masterLogBrowser, qvLogDocument, appBatch);
+    appendPreservingPosition(coreLogBrowser, coreLogDocument, coreBatch);
 }
 
 bool MainWindow::should_print_log(const QString &log, const LogFilter &filter) {

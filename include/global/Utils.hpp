@@ -66,6 +66,7 @@ inline qint64 appStartEpoch = 0;
 class QWidget;
 inline QWidget *mainwindow;
 inline std::function<void(QString)> MW_show_log;
+inline std::function<void(QString)> MW_show_core_log;
 
 // Commands delivered to the main window from anywhere in the app via
 // MW_dialog_message. The accompanying QStringList carries command-specific

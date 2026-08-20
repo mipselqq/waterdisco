@@ -39,12 +39,12 @@ namespace Configs_sys {
             }
             if (IsIgnorableRouterLog(log)) return;
             if (logCounter.fetchAndAddRelaxed(log.count("\n")) > Configs::dataManager->settingsRepo->max_log_line) return;
-            MW_show_log(log);
+            MW_show_core_log(log);
         });
         connect(this, &QProcess::readyReadStandardError, this, [&]() {
             auto log = readAllStandardError().trimmed();
             if (IsIgnorableRouterLog(log)) return;
-            MW_show_log(log);
+            MW_show_core_log(log);
         });
         connect(this, &QProcess::errorOccurred, this, [&](ProcessError error) {
             if (error == FailedToStart) {

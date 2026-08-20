@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractTableModel>
+#include <QFont>
 #include <QList>
 #include <QHash>
 #include <QColor>
@@ -10,7 +11,7 @@ namespace Configs {
     class Profile;
 }
 
-// On-demand profile list model with configurable LRU cache.
+// On-demand profile list model with a bounded viewport cache.
 // Holds only profile IDs; cell data is loaded via ProfilesRepo when requested.
 class ProfilesTableModel : public QAbstractTableModel {
     Q_OBJECT
@@ -30,7 +31,8 @@ public:
     // column (sorting, header menus, saved widths, the filter header) refers to
     // these instead of raw numbers.
     enum Column {
-        ColStartup = 0,
+        ColNumber = 0,
+        ColStartup,
         ColDisabled,
         ColType,
         ColAddress,
@@ -70,7 +72,9 @@ public:
     // Rebuild the flat table as named group separators plus the profiles under
     // each group. The view still sees one continuous model, which lets Qt keep
     // normal Ctrl/Shift selection semantics across group boundaries.
-    void setGroupSections(const QList<GroupSection> &sections);
+    // Returns true when profile order/section membership changed. A forced
+    // refresh updates group captions without invalidating the display caches.
+    bool setGroupSections(const QList<GroupSection> &sections, bool forceRefresh = false);
 
     // Legacy single-section refresh kept for callers that only change one
     // group. New main-window code uses setGroupSections().
@@ -94,23 +98,31 @@ public:
     int groupIdAt(int row) const;
     QList<int> profileIdsForGroup(int groupId) const;
 
-    // Vertical header label: "✓" for the running profile, else displayRow + 1.
-    // A filter makes the two rows disagree, hence both arguments.
+    // Legacy vertical-header label. The main table now renders a dedicated
+    // number column, but this remains for compatibility with old callers.
     QString rowLabel(int sourceRow, int displayRow) const;
 
     // Null if the profile could not be loaded; valid until the next model change.
     const FilterKey *filterKeyAt(int row) const;
+
+    // Global content widths are measured once per table data/font revision.
+    // The view must never ask QHeaderView to inspect only visible rows while
+    // scrolling, or widths would jump as virtual rows enter the viewport.
+    QList<int> preferredColumnWidths(const QFont &font) const;
 
 private:
     struct Row {
         int profileId = -1;
         int groupId = -1;
         int profileCount = 0;
+        int displayNumber = 0;
     };
     void ensureCached(int profileId) const;
     void evictOne() const;
     void setProfileIds(const QList<int> &ids);
     void ensureFilterIndex() const;
+    void rebuildRowIndexesAndNumbers();
+    void invalidatePreferredColumnWidths();
 
     QList<int> m_profileIds;
     QList<Row> m_rows;
@@ -123,4 +135,6 @@ private:
 
     mutable QHash<int, FilterKey> m_filterKeys;
     mutable bool m_filterIndexBuilt = false;
+    mutable QList<int> m_preferredColumnWidths;
+    mutable QFont m_preferredWidthsFont;
 };

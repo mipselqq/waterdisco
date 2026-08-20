@@ -327,7 +327,9 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
             icon_status = -1;
         }
         if (changed(MwArg::MaxLogLines)) {
-            qvLogDocument->setMaximumBlockCount(settings->max_log_line);
+            const int maxUiLogLines = qMax(1, settings->max_log_line);
+            qvLogDocument->setMaximumBlockCount(maxUiLogLines);
+            coreLogDocument->setMaximumBlockCount(maxUiLogLines);
         }
         if (changed(MwArg::DisableTray)) {
             tray->setVisible(!settings->disable_tray);

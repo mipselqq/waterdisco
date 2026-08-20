@@ -388,7 +388,7 @@ void DialogBasicSettings::accept() {
     Configs::dataManager->settingsRepo->show_system_dns = ui->show_sys_dns->isChecked();
 
     if (Configs::dataManager->settingsRepo->max_log_line <= 0) {
-        Configs::dataManager->settingsRepo->max_log_line = 200;
+        Configs::dataManager->settingsRepo->max_log_line = 800;
     }
 
     // Subscription

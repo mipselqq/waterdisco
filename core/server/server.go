@@ -626,8 +626,10 @@ func (s *server) QueryURLTest(ctx context.Context, in *gen.EmptyReq) (out *gen.Q
 }
 
 func (s *server) IPTest(ctx context.Context, in *gen.IPTestRequest) (*gen.IPTestResp, error) {
-	// Always builds its own box: there is no test-current variant of an IP test.
-	env, err := prepareTestEnv(false, in.GetNeedXray(), in.GetXrayConfig(),
+	// The Info panel probes the already-running proxy. This avoids testing a
+	// second, isolated Hysteria instance whose lifecycle is unrelated to the
+	// active tunnel and guarantees that split routing cannot leak the host IP.
+	env, err := prepareTestEnv(in.GetTestCurrent(), in.GetNeedXray(), in.GetXrayConfig(),
 		in.XrayFullConfigs, in.GetConfig(), in.OutboundTags, in.GetUseDefaultOutbound())
 	if err != nil {
 		return nil, err

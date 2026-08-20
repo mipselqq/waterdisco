@@ -30,6 +30,11 @@
 #include "include/database/entities/ProfileMetrics.h"
 
 namespace Configs {
+    // Volatile state of the egress probe for the profile currently being used.
+    // It is deliberately not persisted: a green row describes this core
+    // instance, not a promise about the next launch.
+    enum class ConnectionTestStatus { Idle, Pending, Success, Error };
+
     class Profile {
     public:
         QString type;
@@ -54,6 +59,7 @@ namespace Configs {
         qint64 traffic_uplink = 0;
 
         QString ip_out;
+        ConnectionTestStatus connection_test_status = ConnectionTestStatus::Idle;
 
         QString runningCountryInfo; // volatile, not saved to db
 

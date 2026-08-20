@@ -544,14 +544,15 @@ void TestRunner::runUrlProbe(const Target& target) {
     }
 }
 
-void TestRunner::runIpProbe(const Target& target) {
+bool TestRunner::runIpProbe(const Target& target) {
     if (stopRequested_.load()) {
         MW_show_log(MainWindow::tr("Profile test aborted"));
-        return;
+        return false;
     }
 
     libcore::IPTestRequest req;
     fillCommonTestReq(req, target);
+    req.test_current = target.testCurrent;
     req.max_concurrency = Configs::dataManager->settingsRepo->test_concurrent;
     req.test_timeout_ms = Configs::dataManager->settingsRepo->url_test_timeout_ms;
 
@@ -587,9 +588,10 @@ void TestRunner::runIpProbe(const Target& target) {
     if (!rpcOK || result.results.empty()) {
         // Detect missing Xray geo assets from a failed IPTest RPC (see runUrlProbe).
         if (!rpcOK) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
-        return;
+        return false;
     }
 
+    bool success = false;
     for (const auto& res : result.results) {
         const int entid = resolveEntID(target.tag2entID, res.outbound_tag.value(), target.entID);
         if (entid == -1) {
@@ -602,7 +604,12 @@ void TestRunner::runIpProbe(const Target& target) {
             continue;
         }
         applyIpResult(ent, res);
+        if (QString::fromStdString(res.error.value()).isEmpty()
+            && !QString::fromStdString(res.ip.value()).trimmed().isEmpty()) {
+            success = true;
+        }
     }
+    return success;
 }
 
 void TestRunner::runUrlTests(const QList<int>& profileIDs, const std::function<void()>& onFinished) {
@@ -611,6 +618,41 @@ void TestRunner::runUrlTests(const QList<int>& profileIDs, const std::function<v
 
 void TestRunner::runIpTests(const QList<int>& profileIDs) {
     runLatencyGroup(LatencyKind::Ip, profileIDs, {});
+}
+
+void TestRunner::runCurrentIpTest(int profileID, const std::function<void(bool)>& finished) {
+    if (profileID < 0) {
+        if (finished) finished(false);
+        return;
+    }
+    if (!session_.tryLock()) {
+        if (finished) finished(false);
+        return;
+    }
+    sessionGen_.fetch_add(1);
+    testingCurrent_.store(true);
+
+    runOnNewThread([this, profileID, finished] {
+        stopRequested_.store(false);
+        Target target;
+        target.entID = profileID;
+        target.testCurrent = true;
+        const bool success = runIpProbe(target);
+        const bool cancelled = stopRequested_.load();
+        if (!cancelled) {
+            if (const auto profile = Configs::dataManager->profilesRepo->GetProfile(profileID)) {
+                profile->connection_test_status = success
+                    ? Configs::ConnectionTestStatus::Success
+                    : Configs::ConnectionTestStatus::Error;
+            }
+        }
+        testingCurrent_.store(false);
+        session_.unlock();
+        runOnUiThread([this, profileID] { mw_->refresh_proxy_list({profileID}); });
+        if (finished) {
+            runOnUiThread([finished, success] { finished(success); });
+        }
+    });
 }
 
 void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedIDs,
