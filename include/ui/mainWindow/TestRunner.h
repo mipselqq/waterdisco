@@ -36,6 +36,10 @@ public:
 
     void runIpTests(const QList<int>& profileIDs);
 
+    // Concurrent Cloudflare TTFB probe used by ranked speedtest; same panel and
+    // cancel path as speedtest, honors speed_test_fall_short.
+    void runConnectionTimeTests(const QList<int>& profileIDs);
+
     // Probe the egress of the currently running core. `finished` runs on the
     // UI thread and reports whether the active profile produced a real IP.
     void runCurrentIpTest(int profileID, const std::function<void(bool)>& finished = {});
@@ -98,7 +102,8 @@ private:
                                  int defaultTimeoutMs, qint64* elapsedMs,
                                  int* tested, int* skipped, bool* hadErrors);
     bool runRankedConnectionPretest(const QList<int>& profileIDs, bool fallShort,
-                                    qint64* bestConnectionMs, int* skipped, bool* hadErrors);
+                                    qint64* bestConnectionMs, int* skipped, bool* hadErrors,
+                                    const QString& stage = QString());
     void runRankedUrlProbe(const Target& target, bool fallShort, int timeoutMs,
                            std::atomic<qint64>* bestConnectionMs);
     void applyConnectionResult(const std::shared_ptr<Configs::Profile>& ent,

@@ -230,7 +230,11 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int tim
 }
 
 bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool fallShort,
-                                            qint64* bestConnectionMs, int* skipped, bool* hadErrors) {
+                                            qint64* bestConnectionMs, int* skipped, bool* hadErrors,
+                                            const QString& stage) {
+    const QString progressStage = stage.isEmpty()
+        ? MainWindow::tr("Connection Test")
+        : stage;
     const int configuredTimeout = std::max(1, Configs::dataManager->settingsRepo->url_test_timeout_ms);
     std::atomic<qint64> best{bestConnectionMs && *bestConnectionMs > 0 ? *bestConnectionMs : 0};
     // One shared box per chunk of kTestBatchSize, probed at test_concurrent.
@@ -243,7 +247,7 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
         const auto slice = profileIDs.mid(i, chunkSize);
         auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(slice);
         if (!profiles.isEmpty()) {
-            updateRankedProgress(MainWindow::tr("Connection Test"), profiles.front(),
+            updateRankedProgress(progressStage, profiles.front(),
                                  0, skipped ? *skipped : 0, profileIDs.size());
         }
 
@@ -516,8 +520,11 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
             : MainWindow::tr("Speedtest");
 
         if (mode == RankedStartMode::ByConnectionTime) {
+            const QString connectionStage = fallShort
+                ? MainWindow::tr("Connection Test (Fall-short)")
+                : MainWindow::tr("Connection Test");
             completed = runRankedConnectionPretest(pretestOrder, fallShort, &bestConnectionMs,
-                                                   &skipped, &hadErrors);
+                                                   &skipped, &hadErrors, connectionStage);
             if (!completed) {
                 // Fall through to the shared restore path.
             } else {
@@ -806,6 +813,86 @@ bool TestRunner::runIpProbe(const Target& target) {
         }
     }
     return success;
+}
+
+void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
+    const auto profileIDs = withoutAutoSelectors(withoutDisabled(requestedIDs));
+    if (profileIDs.isEmpty()) return;
+    if (!session_.tryLock()) {
+        MessageBoxWarning(software_name, MainWindow::tr("The last test did not finish completely, please wait. If it persists, please restart the program."));
+        return;
+    }
+    const bool fallShort = Configs::dataManager->settingsRepo->speed_test_fall_short;
+    sessionGen_.fetch_add(1);
+
+    runOnNewThread([this, profileIDs, fallShort] {
+        stopRequested_.store(false);
+        { QMutexLocker lock(&creditMu_); credited_.clear(); }
+
+        runOnUiThread([this] {
+            mw_->ui->pushButton_cancel_speedtest->setVisible(true);
+            mw_->ui->pushButton_cancel_speedtest->setEnabled(true);
+        });
+
+        const int profileToRestore = mw_->running ? mw_->running->id : -1;
+        if (mw_->running) {
+            mw_->profile_stop(false, true, false);
+            if (mw_->running) {
+                MW_show_log(MainWindow::tr("Failed to stop active profile before connection test; test cancelled."));
+                session_.unlock();
+                runOnUiThread([this] { mw_->ui->pushButton_cancel_speedtest->setVisible(false); });
+                return;
+            }
+        }
+
+        QList<Configs::RankedScheduleRow> snapshot;
+        snapshot.reserve(profileIDs.size());
+        for (int id : profileIDs) {
+            Configs::RankedScheduleRow row;
+            row.id = id;
+            if (const auto profile = Configs::dataManager->profilesRepo->GetProfile(id)) {
+                row.connectTimeMs = profile->connect_time_ms;
+                row.siteScore = profile->site_score;
+            }
+            snapshot.append(row);
+        }
+        const QList<int> pretestOrder = Configs::OrderRankedConnectionPretest(snapshot);
+
+        auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
+        for (const auto& profile : profiles) profile->connect_time_ms = 0;
+        Configs::dataManager->profilesRepo->SaveBatch(profiles);
+        runOnUiThread([this, profileIDs] { mw_->refresh_proxy_list(profileIDs); });
+
+        qint64 bestConnectionMs = -1;
+        if (fallShort) {
+            for (const auto& row : snapshot) {
+                if (row.connectTimeMs > 0 && (bestConnectionMs <= 0 || row.connectTimeMs < bestConnectionMs)) {
+                    bestConnectionMs = row.connectTimeMs;
+                }
+            }
+        }
+
+        int skipped = 0;
+        bool hadErrors = false;
+        const QString stage = fallShort
+            ? MainWindow::tr("Connection Test (Fall-short)")
+            : MainWindow::tr("Connection Test");
+        const bool completed = runRankedConnectionPretest(pretestOrder, fallShort, &bestConnectionMs,
+                                                            &skipped, &hadErrors, stage);
+
+        session_.unlock();
+        runOnUiThread([this, profileIDs, profileToRestore, completed] {
+            mw_->dataViewHtmlGenerator_.clearTestSections();
+            mw_->UpdateDataView(true);
+            mw_->refresh_proxy_list(profileIDs);
+            mw_->ui->pushButton_cancel_speedtest->setVisible(false);
+            mw_->ui->pushButton_cancel_speedtest->setEnabled(false);
+            MW_show_log(completed
+                ? MainWindow::tr("Connection test finished!")
+                : MainWindow::tr("Connection test interrupted."));
+            if (profileToRestore >= 0) mw_->profile_start(profileToRestore);
+        });
+    });
 }
 
 void TestRunner::runUrlTests(const QList<int>& profileIDs, const std::function<void()>& onFinished) {
