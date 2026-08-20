@@ -255,6 +255,31 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     infoTabAlignSpacer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     ui->infoLayout->insertWidget(0, infoTabAlignSpacer);
 
+    const auto setupInfoIpCopyButton = [](QToolButton *button, QLabel *valueLabel) {
+        const auto makeCopyIcon = [](const QColor &color) {
+            QPixmap pix(16, 16);
+            pix.fill(Qt::transparent);
+            QPainter painter(&pix);
+            painter.setRenderHint(QPainter::Antialiasing);
+            QPen pen(color, 1.4);
+            pen.setJoinStyle(Qt::MiterJoin);
+            painter.setPen(pen);
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRect(5, 2, 7, 7);
+            painter.drawRect(2, 5, 7, 7);
+            return QIcon(pix);
+        };
+        button->setIcon(makeCopyIcon(button->palette().color(QPalette::ButtonText)));
+        button->setIconSize(QSize(14, 14));
+        QObject::connect(button, &QToolButton::clicked, valueLabel, [valueLabel] {
+            const QString ip = valueLabel->text().trimmed();
+            if (ip.isEmpty() || ip == QStringLiteral("—")) return;
+            QApplication::clipboard()->setText(ip);
+        });
+    };
+    setupInfoIpCopyButton(ui->proxy_ip_copy, ui->proxy_ip_value);
+    setupInfoIpCopyButton(ui->host_ip_copy, ui->host_ip_value);
+
     // Keep application diagnostics separate from the extremely chatty core.
     // The existing browser becomes App logs so all existing UI call sites keep
     // their simple MW_show_log() API; core stdout/stderr use the inserted page.

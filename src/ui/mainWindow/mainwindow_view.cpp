@@ -293,6 +293,8 @@ void MainWindow::refreshInfoPanel() {
     const bool hasProxyIp = running != nullptr && !running->ip_out.trimmed().isEmpty();
     ui->proxy_ip_value->setText(hasProxyIp ? running->ip_out : QStringLiteral("—"));
     ui->host_ip_value->setText(hostInfoIp.isEmpty() ? QStringLiteral("—") : hostInfoIp);
+    ui->proxy_ip_copy->setEnabled(hasProxyIp);
+    ui->host_ip_copy->setEnabled(!hostInfoIp.isEmpty());
 
     qint64 proxyDown = 0, proxyUp = 0, directDown = 0, directUp = 0;
     double proxyMax = 0, directMax = 0;
