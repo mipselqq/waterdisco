@@ -552,7 +552,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     //
     btnProfilesListMode = new QToolButton(this);
     btnProfilesListMode->setCheckable(true);
-    btnProfilesListMode->setAutoRaise(true);
     btnProfilesListMode->setIcon(style()->standardIcon(QStyle::SP_FileDialogListView));
     const bool flatList = Configs::dataManager->settingsRepo->profiles_flat_list;
     btnProfilesListMode->setChecked(flatList);
