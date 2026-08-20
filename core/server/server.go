@@ -638,8 +638,20 @@ func (s *server) IPTest(ctx context.Context, in *gen.IPTestRequest) (*gen.IPTest
 	defer env.close()
 
 	timeout := time.Duration(in.GetTestTimeoutMs()) * time.Millisecond
-	results := test_utils.BatchIPTest(test_utils.TestContext(), env.box, env.tags,
-		int(in.GetMaxConcurrency()), timeout)
+	live := in.GetTestCurrent()
+	probeCtx := test_utils.TestContext()
+	if live {
+		// Health of the running box must not share StopTest's session context,
+		// and must not start a second Hysteria client. Dial the live outbound.
+		if timeout < 5*time.Second {
+			timeout = 5 * time.Second
+		}
+		var cancel context.CancelFunc
+		probeCtx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	}
+	results := test_utils.BatchIPTest(probeCtx, env.box, env.tags,
+		int(in.GetMaxConcurrency()), timeout, live)
 
 	res := make([]*gen.IPTestRes, 0, len(results))
 	for idx, data := range results {

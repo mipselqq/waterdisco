@@ -112,7 +112,8 @@ private:
     // Shared by the live progress poll and the final pass, which must not drift.
     void applyUrlResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::URLTestResp& res);
 
-    void applyIpResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::IPTestRes& res);
+    void applyIpResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::IPTestRes& res,
+                       bool live = false);
 
     QString contextName(int entID) const;
 

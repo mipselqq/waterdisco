@@ -916,17 +916,20 @@ void TestRunner::applyUrlResult(const std::shared_ptr<Configs::Profile>& ent, co
     Configs::dataManager->profilesRepo->Save(ent);
 }
 
-void TestRunner::applyIpResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::IPTestRes& res) {
+void TestRunner::applyIpResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::IPTestRes& res,
+                               bool live) {
     const auto error = QString::fromStdString(res.error.value());
     if (error.isEmpty()) {
         ent->ip_out = QString::fromStdString(res.ip.value());
         ent->test_country = QString::fromStdString(res.country_code.value());
     } else {
-        if (!isTestAborted(error)) {
+        if (!isTestAborted(error) && !live) {
             MW_show_log(MainWindow::tr("[%1] IP test error: %2").arg(ent->outbound->DisplayTypeAndName(), error));
         }
-        ent->ip_out.clear();
-        ent->test_country.clear();
+        if (!live) {
+            ent->ip_out.clear();
+            ent->test_country.clear();
+        }
     }
     Configs::dataManager->profilesRepo->Save(ent);
     postUi([this](MainWindow* mw) { mw->refresh_status(); });
@@ -1007,13 +1010,18 @@ bool TestRunner::runIpProbe(const Target& target) {
     fillCommonTestReq(req, target);
     req.test_current = target.testCurrent;
     req.max_concurrency = configuredTestConcurrency();
-    req.test_timeout_ms = Configs::dataManager->settingsRepo->url_test_timeout_ms;
+    const int timeoutMs = target.testCurrent
+        ? qMax(Configs::dataManager->settingsRepo->url_test_timeout_ms, 5000)
+        : Configs::dataManager->settingsRepo->url_test_timeout_ms;
+    req.test_timeout_ms = timeoutMs;
 
     bool rpcOK = false;
     QString coreError;
     libcore::IPTestResp result;
     {
-        ResultPoller poller([this, gen = sessionGen_.load(), tag2entID = target.tag2entID] {
+        ResultPoller poller([this, gen = sessionGen_.load(), tag2entID = target.tag2entID,
+                             live = target.testCurrent] {
+            if (live) return;
             if (sessionGen_.load() != gen || stopRequested_.load()) return;
             bool ok = false;
             const auto resp = defaultClient->QueryIPTest(&ok);
@@ -1057,7 +1065,7 @@ bool TestRunner::runIpProbe(const Target& target) {
             MW_show_log(MainWindow::tr("Profile manager data is corrupted, try again."));
             continue;
         }
-        applyIpResult(ent, res);
+        applyIpResult(ent, res, target.testCurrent);
         if (QString::fromStdString(res.error.value()).isEmpty()
             && !QString::fromStdString(res.ip.value()).trimmed().isEmpty()) {
             success = true;
@@ -1172,9 +1180,12 @@ void TestRunner::runCurrentIpTest(int profileID, const std::function<void(bool)>
         const bool cancelled = stopRequested_.load();
         if (!cancelled) {
             if (const auto profile = Configs::dataManager->profilesRepo->GetProfile(profileID)) {
-                profile->connection_test_status = success
-                    ? Configs::ConnectionTestStatus::Success
-                    : Configs::ConnectionTestStatus::Error;
+                if (success) {
+                    mw_->connectionProbeFailStreak.store(0);
+                    profile->connection_test_status = Configs::ConnectionTestStatus::Success;
+                } else if (mw_->connectionProbeFailStreak.fetch_add(1) + 1 >= 2) {
+                    profile->connection_test_status = Configs::ConnectionTestStatus::Error;
+                }
             }
         }
         testingCurrent_.store(false);

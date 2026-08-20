@@ -359,6 +359,7 @@ void MainWindow::profile_start(int _id) {
                 selection->clearCurrentIndex();
             }
             ++connectionProbeGeneration;
+            connectionProbeFailStreak.store(0);
             if (connectionProbeTimer != nullptr) connectionProbeTimer->stop();
             refreshInfoPanel();
             // Probe the active core immediately. Unlike a one-profile throwaway
@@ -480,6 +481,7 @@ void MainWindow::profile_stop(bool crash, bool block, bool manual) {
     // Show a "Disconnecting" spinner immediately; the stop itself can lag.
     runOnUiThread([this] {
         ++connectionProbeGeneration;
+        connectionProbeFailStreak.store(0);
         if (connectionProbeTimer != nullptr) connectionProbeTimer->stop();
         refreshInfoPanel();
         m_profileDisconnecting = true;

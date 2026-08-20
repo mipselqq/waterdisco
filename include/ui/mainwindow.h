@@ -34,6 +34,7 @@
 #include <QThreadPool>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <atomic>
 
 #include "group/GroupSort.hpp"
 #include "include/database/entities/Group.h"
@@ -280,6 +281,7 @@ private:
     // A generation rejects a late egress-probe callback from a profile that was
     // stopped or replaced while its request was in flight.
     quint64 connectionProbeGeneration = 0;
+    std::atomic<int> connectionProbeFailStreak{0};
     qint64 last_test_time = 0;
     //
     int proxy_last_order = -1;

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"ThroneCore/internal/boxbox"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing/common/metadata"
 )
 
 type IPInfo struct {
@@ -24,13 +26,15 @@ type IPInfo struct {
 var IPReporter resultBuffer[IPTestResult]
 
 const IPTestTimeout = 3 * time.Second
+const liveIPTestTimeout = 5 * time.Second
+const liveIPRetryDelay = 200 * time.Millisecond
 
-// speed.cloudflare.com already answers the ranked TTFB probe on this VPN.
-// 1.1.1.1 skips DNS. ipify is JSON fallback. ip2location/ip.sb are omitted:
-// they are what produced the live-probe EOF while the tunnel still carried traffic.
+// 1.1.1.1 is an IP literal so the probe needs no DNS. Cloudflare trace is the
+// same family as ranked TTFB. ipify is JSON fallback. ip2location/ip.sb are
+// omitted: they produced live-probe EOF while the tunnel still carried traffic.
 var ipInfoAPIs = []string{
-	"https://speed.cloudflare.com/cdn-cgi/trace",
 	"https://1.1.1.1/cdn-cgi/trace",
+	"https://speed.cloudflare.com/cdn-cgi/trace",
 	"https://api.ipify.org?format=json",
 }
 
@@ -40,15 +44,23 @@ type IPTestResult struct {
 	Error  error
 }
 
-func BatchIPTest(ctx context.Context, i *boxbox.Box, outboundTags []string, maxConcurrency int, timeout time.Duration) []*IPTestResult {
+func BatchIPTest(ctx context.Context, i *boxbox.Box, outboundTags []string, maxConcurrency int, timeout time.Duration, live bool) []*IPTestResult {
 	if timeout <= 0 {
 		timeout = IPTestTimeout
 	}
+	if live && timeout < liveIPTestTimeout {
+		timeout = liveIPTestTimeout
+	}
+	// Drop a previous poller's leftovers; tags repeat on the live probe.
+	_ = IPReporter.Results()
 
 	results := runBatch(ctx, i, outboundTags, maxConcurrency, batchProbe[IPTestResult]{
 		run: func(ctx context.Context, tag string, outbound adapter.Outbound) *IPTestResult {
 			client := outboundHTTPClient(ctx, outbound, timeout)
-			info, err := ipTest(ctx, client)
+			if live {
+				client = liveOutboundHTTPClient(outbound, timeout)
+			}
+			info, err := ipTest(ctx, client, live)
 			return &IPTestResult{Result: info, Tag: tag, Error: err}
 		},
 		fail: func(tag string, err error) *IPTestResult {
@@ -60,27 +72,65 @@ func BatchIPTest(ctx context.Context, i *boxbox.Box, outboundTags []string, maxC
 	return results
 }
 
-func ipTest(ctx context.Context, client *http.Client) (IPInfo, error) {
+// Opens a new TCP stream on the already-running Hysteria/sing-box client.
+// Hop/EOF is retried on that same client instead of building a second tunnel.
+func liveOutboundHTTPClient(outbound adapter.Outbound, timeout time.Duration) *http.Client {
+	return dialerHTTPClient(func(reqCtx context.Context, network, addr string) (net.Conn, error) {
+		var last error
+		for attempt := 0; attempt < 3; attempt++ {
+			if err := reqCtx.Err(); err != nil {
+				return nil, err
+			}
+			conn, err := outbound.DialContext(reqCtx, "tcp", metadata.ParseSocksaddr(addr))
+			if err == nil {
+				return conn, nil
+			}
+			last = err
+			if !isTransientHTTPErr(err) {
+				return nil, err
+			}
+			timer := time.NewTimer(liveIPRetryDelay)
+			select {
+			case <-reqCtx.Done():
+				timer.Stop()
+				return nil, reqCtx.Err()
+			case <-timer.C:
+			}
+		}
+		return nil, last
+	}, timeout)
+}
+
+func ipTest(ctx context.Context, client *http.Client, live bool) (IPInfo, error) {
+	attempts := 1
+	if live {
+		attempts = 3
+	}
 	var lastErr error
-	for _, endpoint := range ipInfoAPIs {
-		info, err := fetchIPInfo(ctx, client, endpoint)
-		if err == nil && info.IP != "" {
-			return info, nil
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 {
+			timer := time.NewTimer(liveIPRetryDelay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				if lastErr == nil {
+					lastErr = ctx.Err()
+				}
+				return IPInfo{}, lastErr
+			case <-timer.C:
+			}
 		}
-		if err == nil {
-			err = errors.New("empty IP in response")
-		}
-		lastErr = err
-		if ctx.Err() != nil {
-			break
-		}
-		if isTransientHTTPErr(err) {
-			info, err = fetchIPInfo(ctx, client, endpoint)
+		for _, endpoint := range ipInfoAPIs {
+			info, err := fetchIPInfo(ctx, client, endpoint)
 			if err == nil && info.IP != "" {
 				return info, nil
 			}
-			if err != nil {
-				lastErr = err
+			if err == nil {
+				err = errors.New("empty IP in response")
+			}
+			lastErr = err
+			if ctx.Err() != nil {
+				return IPInfo{}, lastErr
 			}
 		}
 	}
