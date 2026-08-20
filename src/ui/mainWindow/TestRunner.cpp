@@ -63,6 +63,21 @@ namespace {
         return tag2entID.value(QString::fromStdString(tag), -1);
     }
 
+    QString formatElapsedHms(qint64 elapsedMs) {
+        const int totalSeconds = static_cast<int>(elapsedMs / 1000);
+        const int hours = totalSeconds / 3600;
+        const int minutes = (totalSeconds % 3600) / 60;
+        const int seconds = totalSeconds % 60;
+        return QStringLiteral("%1:%2:%3")
+            .arg(hours, 2, 10, QLatin1Char('0'))
+            .arg(minutes, 2, 10, QLatin1Char('0'))
+            .arg(seconds, 2, 10, QLatin1Char('0'));
+    }
+
+    QString testFinishLog(const QString& message, qint64 elapsedMs) {
+        return QStringLiteral("%1 (%2)").arg(message, formatElapsedHms(elapsedMs));
+    }
+
     // Target is deduced, not named: access control applies to naming a private type.
     template <typename Req, typename Target>
     void fillCommonTestReq(Req& req, const Target& target) {
@@ -474,6 +489,9 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
             }
         }
 
+        QElapsedTimer elapsed;
+        elapsed.start();
+
         // Snapshot last-run metrics before clearing. Ordering after a clear is a
         // no-op for saved-site-score mode.
         QList<Configs::RankedScheduleRow> snapshot;
@@ -614,14 +632,17 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
         // successful auto-connect run: restore the prior connection instead.
         const int bestID = canChooseProfile && !hadErrors && connectBestSiteScore
             ? bestSiteScoreProfile(profileIDs) : -1;
+        const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
-        runOnUiThread([this, profileIDs, bestID, profileToRestore, canChooseProfile] {
+        runOnUiThread([this, profileIDs, bestID, profileToRestore, canChooseProfile, elapsedMs] {
             mw_->dataViewHtmlGenerator_.clearTestSections();
             mw_->UpdateDataView(true);
             mw_->refresh_proxy_list(profileIDs);
             mw_->ui->pushButton_cancel_speedtest->setVisible(false);
             mw_->ui->pushButton_cancel_speedtest->setEnabled(false);
-            MW_show_log(canChooseProfile ? MainWindow::tr("Speedtest finished!") : MainWindow::tr("Speedtest interrupted."));
+            MW_show_log(testFinishLog(
+                canChooseProfile ? MainWindow::tr("Speedtest finished!") : MainWindow::tr("Speedtest interrupted."),
+                elapsedMs));
             if (bestID >= 0) {
                 mw_->profile_start(bestID);
             } else if (profileToRestore >= 0) {
@@ -845,6 +866,9 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
             }
         }
 
+        QElapsedTimer elapsed;
+        elapsed.start();
+
         QList<Configs::RankedScheduleRow> snapshot;
         snapshot.reserve(profileIDs.size());
         for (int id : profileIDs) {
@@ -880,16 +904,17 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
         const bool completed = runRankedConnectionPretest(pretestOrder, fallShort, &bestConnectionMs,
                                                             &skipped, &hadErrors, stage);
 
+        const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
-        runOnUiThread([this, profileIDs, profileToRestore, completed] {
+        runOnUiThread([this, profileIDs, profileToRestore, completed, elapsedMs] {
             mw_->dataViewHtmlGenerator_.clearTestSections();
             mw_->UpdateDataView(true);
             mw_->refresh_proxy_list(profileIDs);
             mw_->ui->pushButton_cancel_speedtest->setVisible(false);
             mw_->ui->pushButton_cancel_speedtest->setEnabled(false);
-            MW_show_log(completed
-                ? MainWindow::tr("Connection test finished!")
-                : MainWindow::tr("Connection test interrupted."));
+            MW_show_log(testFinishLog(
+                completed ? MainWindow::tr("Connection test finished!") : MainWindow::tr("Connection test interrupted."),
+                elapsedMs));
             if (profileToRestore >= 0) mw_->profile_start(profileToRestore);
         });
     });
@@ -1059,6 +1084,8 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
 
     runOnNewThread([this, profileIDs, testCurrent]() {
         stopRequested_.store(false);
+        QElapsedTimer elapsed;
+        elapsed.start();
         // Fresh per-tag byte baselines for this speed-test session.
         { QMutexLocker lk(&creditMu_); credited_.clear(); }
         if (!testCurrent)
@@ -1110,10 +1137,11 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
         }
         mw_->dataViewHtmlGenerator_.clearTestSections();
         mw_->UpdateDataView(true);
+        const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
         runOnUiThread([=,this]{
             mw_->refresh_proxy_list(profileIDs);
-            MW_show_log(MainWindow::tr("Speedtest finished!"));
+            MW_show_log(testFinishLog(MainWindow::tr("Speedtest finished!"), elapsedMs));
         });
     });
 }

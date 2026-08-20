@@ -28,6 +28,7 @@ public:
         int totalProfiles = 0;
         int tested = 0;
         int skipped = 0;
+        qint64 startedAtMs = 0;
     };
 
     struct LatencyTestPanelState {

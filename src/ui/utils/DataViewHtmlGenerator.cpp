@@ -3,6 +3,28 @@
 #include "include/global/CountryHelper.hpp"
 #include "include/global/Configs.hpp"
 
+#include <QDateTime>
+
+namespace {
+    QString formatElapsedHms(qint64 elapsedMs) {
+        const int totalSeconds = static_cast<int>(elapsedMs / 1000);
+        const int hours = totalSeconds / 3600;
+        const int minutes = (totalSeconds % 3600) / 60;
+        const int seconds = totalSeconds % 60;
+        return QStringLiteral("%1:%2:%3")
+            .arg(hours, 2, 10, QLatin1Char('0'))
+            .arg(minutes, 2, 10, QLatin1Char('0'))
+            .arg(seconds, 2, 10, QLatin1Char('0'));
+    }
+
+    QString elapsedPanelLine(qint64 startedAtMs) {
+        if (startedAtMs <= 0) return {};
+        const qint64 elapsedMs = QDateTime::currentMSecsSinceEpoch() - startedAtMs;
+        return QStringLiteral("<p style='text-align:left;margin:0;opacity:0.75;'>%1</p>")
+            .arg(formatElapsedHms(elapsedMs));
+    }
+}
+
 void DataViewHtmlGenerator::setDownloadReport(const DownloadProgressReport &report, bool show) {
     QMutexLocker lk(&mu_);
     download_.visible = show;
@@ -15,6 +37,7 @@ void DataViewHtmlGenerator::seedSpeedTest(int totalProfiles) {
     Configs::dataManager->settingsRepo->speed_test_mode == Configs::TestConfig::COUNTRY ? speedtest_.kind = SpeedtestPanelState::Kind::Country : speedtest_.kind = SpeedtestPanelState::Kind::Speed;
     speedtest_.totalProfiles = totalProfiles;
     speedtest_.visible = true;
+    speedtest_.startedAtMs = QDateTime::currentMSecsSinceEpoch();
 }
 
 void DataViewHtmlGenerator::setSpeedtestProgress(const QString &profileName, const libcore::SpeedTestResult &result) {
@@ -30,6 +53,7 @@ void DataViewHtmlGenerator::setSpeedtestProgress(const QString &profileName, con
 void DataViewHtmlGenerator::setRankedSpeedtestProgress(const QString &stage, const QString &profileName,
                                                         int tested, int skipped, int totalProfiles) {
     QMutexLocker lk(&mu_);
+    if (!speedtest_.visible) speedtest_.startedAtMs = QDateTime::currentMSecsSinceEpoch();
     speedtest_.kind = SpeedtestPanelState::Kind::Speed;
     speedtest_.visible = true;
     speedtest_.stage = stage;
@@ -130,15 +154,19 @@ QString DataViewHtmlGenerator::speedtestSectionHtml() {
             firstLine += QStringLiteral(" — %1 tested, %2 skipped")
                              .arg(speedtest_.tested).arg(speedtest_.skipped);
         }
-        if (speedtest_.serverName.isEmpty()) return QString("<p style='text-align:center;margin:0;'>%1</p>").arg(firstLine);
+        const QString elapsedLine = elapsedPanelLine(speedtest_.startedAtMs);
+        if (speedtest_.serverName.isEmpty()) {
+            return QString("<p style='text-align:left;margin:0;'>%1</p>%2").arg(firstLine, elapsedLine);
+        }
         return QString(
-           "<p style='text-align:center;margin:0;'>%1</p>"
-           "<div style='text-align: center;'>"
-           "<span style='color: #3299FF;'>Dl↓ %2</span>  "
-           "<span style='color: #86C43F;'>Ul↑ %3</span>"
+           "<p style='text-align:left;margin:0;'>%1</p>"
+           "%2"
+           "<div style='text-align:left;'>"
+           "<span style='color: #3299FF;'>Dl↓ %3</span>  "
+           "<span style='color: #86C43F;'>Ul↑ %4</span>"
            "</div>"
-           "<p style='text-align:center;margin:0;'>Server: %4%5, %6</p>")
-            .arg(firstLine, speedtest_.dlSpeed, speedtest_.ulSpeed, speedtest_.serverCountryFlag, speedtest_.serverCountry,
+           "<p style='text-align:left;margin:0;'>Server: %5%6, %7</p>")
+            .arg(firstLine, elapsedLine, speedtest_.dlSpeed, speedtest_.ulSpeed, speedtest_.serverCountryFlag, speedtest_.serverCountry,
                 speedtest_.serverName);
     } else {
         QString res;
@@ -146,10 +174,11 @@ QString DataViewHtmlGenerator::speedtestSectionHtml() {
         if (speedtest_.totalProfiles > 1) {
             auto progress = getProgressBar(testProgress.load(), speedtest_.totalProfiles);
             progress += QString(" ") + Int2String(100 * testProgress.load() / speedtest_.totalProfiles) + "%";
-            res = QString("<p style='text-align:center;margin:0;'>%1</p>").arg(progress);
+            res = QString("<p style='text-align:left;margin:0;'>%1</p>").arg(progress);
             content += QString(" (%1 / %2)").arg(Int2String(testProgress.load()), Int2String(speedtest_.totalProfiles));
         }
-        res += QString("<p style='text-align:center;margin:0;'>%1</p>").arg(content);
+        res += QString("<p style='text-align:left;margin:0;'>%1</p>").arg(content);
+        res += elapsedPanelLine(speedtest_.startedAtMs);
         return res;
     }
 }
