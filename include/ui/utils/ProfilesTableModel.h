@@ -74,7 +74,17 @@ public:
     // normal Ctrl/Shift selection semantics across group boundaries.
     // Returns true when profile order/section membership changed. A forced
     // refresh updates group captions without invalidating the display caches.
-    bool setGroupSections(const QList<GroupSection> &sections, bool forceRefresh = false);
+    bool setGroupSections(const QList<GroupSection> &sections, bool forceRefresh = false,
+                          bool forceReset = false);
+
+    // Omit group header rows. Membership is unchanged; only the separators go.
+    void setFlatList(bool flat);
+    bool isFlatList() const { return m_flatList; }
+
+    // Flat-mode display order that may intermix groups after a global sort.
+    // Cleared when membership changes or the user leaves list mode.
+    void setGlobalOrder(const QList<int> &ids);
+    void clearGlobalOrder();
 
     // Legacy single-section refresh kept for callers that only change one
     // group. New main-window code uses setGroupSections().
@@ -89,7 +99,11 @@ public:
     // profile cache and selection.
     void reorderProfiles(const QList<int> &ids);
 
-    int indexOfProfile(int id);
+    // destRow is the final source row of the moved profile. Uses beginMoveRows
+    // so a speedtest result does not reset the table.
+    bool moveProfileToRow(int profileId, int destRow);
+
+    int indexOfProfile(int id) const;
 
     // IDs of every profile represented in the unified table, in display order.
     QList<int> allProfileIds() const { return m_profileIds; }
@@ -123,9 +137,14 @@ private:
     void ensureFilterIndex() const;
     void rebuildRowIndexesAndNumbers();
     void invalidatePreferredColumnWidths();
+    QList<Row> buildRows(const QList<GroupSection> &sections) const;
+    bool applyRows(const QList<Row> &newRows, bool forceRefresh, bool forceReset = false);
 
     QList<int> m_profileIds;
     QList<Row> m_rows;
+    QList<GroupSection> m_sections;
+    QList<int> m_globalOrder;
+    bool m_flatList = false;
     mutable QHash<int, int> id2row;
     mutable QHash<int, std::shared_ptr<Configs::Profile>> m_cache;
     mutable QList<int> m_lruOrder;

@@ -121,6 +121,11 @@ namespace Configs {
         bool show_config_security = false;
         // Proxy table column whose filter field was last used; -1 until one is.
         int last_filter_column = -1;
+        // Unified profiles table: grouped sections vs one list. Sort column 9 is
+        // ProfilesTableModel::ColSiteScore; -1 means the user has no active sort.
+        bool profiles_flat_list = false;
+        int profiles_sort_column = 9;
+        bool profiles_sort_descending = true;
 
         // throne:// URL scheme: mirror of what we last wrote to the OS (registry/desktop/bundle).
         // Re-registered on startup only when the current state differs (e.g. install moved).

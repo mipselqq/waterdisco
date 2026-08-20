@@ -6,6 +6,8 @@
 #include <QFontMetrics>
 #include <QMimeData>
 #include <QPalette>
+#include <QSet>
+#include <algorithm>
 
 #include "include/database/GroupsRepo.h"
 #include "include/database/ProfilesRepo.h"
@@ -302,46 +304,140 @@ void ProfilesTableModel::setProfileIds(const QList<int> &ids) {
     endResetModel();
 }
 
-bool ProfilesTableModel::setGroupSections(const QList<GroupSection> &sections, bool forceRefresh) {
-    int expectedRows = 0;
-    for (const GroupSection &section : sections) expectedRows += 1 + section.profileIds.size();
-    bool sameStructure = expectedRows == m_rows.size();
-    if (sameStructure) {
-        int row = 0;
+void ProfilesTableModel::setFlatList(bool flat) {
+    m_flatList = flat;
+}
+
+void ProfilesTableModel::setGlobalOrder(const QList<int> &ids) {
+    m_globalOrder = ids;
+}
+
+void ProfilesTableModel::clearGlobalOrder() {
+    m_globalOrder.clear();
+}
+
+QList<ProfilesTableModel::Row> ProfilesTableModel::buildRows(const QList<GroupSection> &sections) const {
+    QList<Row> rows;
+    if (m_flatList) {
+        QHash<int, int> idToGroup;
+        idToGroup.reserve(m_profileIds.size() + 16);
+        QList<int> concat;
         for (const GroupSection &section : sections) {
-            if (m_rows[row].profileId != -1 || m_rows[row].groupId != section.groupId
-                || m_rows[row].profileCount != section.profileIds.size()) {
-                sameStructure = false;
-                break;
-            }
-            ++row;
             for (int id : section.profileIds) {
-                if (m_rows[row].profileId != id || m_rows[row].groupId != section.groupId) {
-                    sameStructure = false;
-                    break;
-                }
-                ++row;
+                idToGroup.insert(id, section.groupId);
+                concat.append(id);
             }
-            if (!sameStructure) break;
+        }
+        QList<int> ids = m_globalOrder;
+        if (!ids.isEmpty()) {
+            QSet<int> membership(concat.cbegin(), concat.cend());
+            QSet<int> ordered(ids.cbegin(), ids.cend());
+            if (membership != ordered) ids = concat;
+        } else {
+            ids = concat;
+        }
+        rows.reserve(ids.size());
+        for (int id : ids) {
+            rows.append({id, idToGroup.value(id, -1), 0, 0});
+        }
+        return rows;
+    }
+    for (const GroupSection &section : sections) {
+        rows.append({-1, section.groupId, static_cast<int>(section.profileIds.size()), 0});
+        for (int id : section.profileIds) {
+            rows.append({id, section.groupId, 0, 0});
         }
     }
-    if (sameStructure) {
-        if (forceRefresh && !m_rows.isEmpty()) {
-            emit dataChanged(index(0, 0), index(m_rows.size() - 1, ColumnCount - 1));
+    return rows;
+}
+
+bool ProfilesTableModel::applyRows(const QList<Row> &newRows, bool forceRefresh, bool forceReset) {
+    if (forceReset) {
+        beginResetModel();
+        m_rows = newRows;
+        rebuildRowIndexesAndNumbers();
+        endResetModel();
+        return true;
+    }
+    if (newRows.size() == m_rows.size()) {
+        bool identical = true;
+        bool sameMembership = true;
+        QList<int> oldIds;
+        QList<int> newIds;
+        oldIds.reserve(m_rows.size());
+        newIds.reserve(newRows.size());
+        for (int row = 0; row < newRows.size(); ++row) {
+            const Row &oldRow = m_rows[row];
+            const Row &newRow = newRows[row];
+            const bool oldHeader = oldRow.profileId < 0;
+            const bool newHeader = newRow.profileId < 0;
+            if (oldHeader != newHeader || oldRow.groupId != newRow.groupId) {
+                sameMembership = false;
+                identical = false;
+                break;
+            }
+            if (oldRow.profileId != newRow.profileId) identical = false;
+            if (!oldHeader) {
+                oldIds.append(oldRow.profileId);
+                newIds.append(newRow.profileId);
+            }
         }
-        return false;
+        if (sameMembership) {
+            QList<int> oldSorted = oldIds;
+            QList<int> newSorted = newIds;
+            std::sort(oldSorted.begin(), oldSorted.end());
+            std::sort(newSorted.begin(), newSorted.end());
+            if (oldSorted != newSorted) sameMembership = false;
+        }
+        if (sameMembership && identical) {
+            if (forceRefresh && !m_rows.isEmpty()) {
+                emit dataChanged(index(0, 0), index(m_rows.size() - 1, ColumnCount - 1));
+            }
+            return false;
+        }
+        if (sameMembership) {
+            emit layoutAboutToBeChanged({}, QAbstractItemModel::VerticalSortHint);
+            const QModelIndexList oldPersistent = persistentIndexList();
+            QList<int> oldProfileByRow;
+            QList<int> oldGroupByRow;
+            oldProfileByRow.reserve(m_rows.size());
+            oldGroupByRow.reserve(m_rows.size());
+            for (const Row &row : m_rows) {
+                oldProfileByRow.append(row.profileId);
+                oldGroupByRow.append(row.groupId);
+            }
+            m_rows = newRows;
+            rebuildRowIndexesAndNumbers();
+            QModelIndexList newPersistent;
+            newPersistent.reserve(oldPersistent.size());
+            for (const QModelIndex &old : oldPersistent) {
+                if (!old.isValid()) {
+                    newPersistent.append(QModelIndex());
+                    continue;
+                }
+                const int pid = oldProfileByRow.value(old.row(), -1);
+                int newRow = -1;
+                if (pid >= 0) {
+                    newRow = id2row.value(pid, -1);
+                } else {
+                    const int gid = oldGroupByRow.value(old.row(), -1);
+                    for (int row = 0; row < m_rows.size(); ++row) {
+                        if (m_rows[row].profileId < 0 && m_rows[row].groupId == gid) {
+                            newRow = row;
+                            break;
+                        }
+                    }
+                }
+                newPersistent.append(newRow >= 0 ? index(newRow, old.column()) : QModelIndex());
+            }
+            changePersistentIndexList(oldPersistent, newPersistent);
+            emit layoutChanged({}, QAbstractItemModel::VerticalSortHint);
+            return true;
+        }
     }
 
     beginResetModel();
-    m_profileIds.clear();
-    m_rows.clear();
-    for (const GroupSection &section : sections) {
-        m_rows.append({-1, section.groupId, static_cast<int>(section.profileIds.size())});
-        for (int id : section.profileIds) {
-            m_profileIds.append(id);
-            m_rows.append({id, section.groupId, 0});
-        }
-    }
+    m_rows = newRows;
     rebuildRowIndexesAndNumbers();
     m_cache.clear();
     m_lruOrder.clear();
@@ -350,6 +446,20 @@ bool ProfilesTableModel::setGroupSections(const QList<GroupSection> &sections, b
     invalidatePreferredColumnWidths();
     endResetModel();
     return true;
+}
+
+bool ProfilesTableModel::setGroupSections(const QList<GroupSection> &sections, bool forceRefresh,
+                                          bool forceReset) {
+    m_sections = sections;
+    if (m_flatList && !m_globalOrder.isEmpty()) {
+        QSet<int> membership;
+        QSet<int> ordered(m_globalOrder.cbegin(), m_globalOrder.cend());
+        for (const GroupSection &section : sections) {
+            for (int id : section.profileIds) membership.insert(id);
+        }
+        if (membership != ordered) m_globalOrder.clear();
+    }
+    return applyRows(buildRows(sections), forceRefresh, forceReset);
 }
 
 namespace {
@@ -452,9 +562,44 @@ void ProfilesTableModel::reorderProfiles(const QList<int> &ids) {
     emit layoutChanged();
 }
 
-int ProfilesTableModel::indexOfProfile(int id) {
+int ProfilesTableModel::indexOfProfile(int id) const {
     if (id2row.contains(id)) return id2row.value(id);
     return -1;
+}
+
+bool ProfilesTableModel::moveProfileToRow(int profileId, int destRow) {
+    const int from = indexOfProfile(profileId);
+    if (from < 0 || destRow < 0 || destRow >= m_rows.size() || from == destRow) return false;
+    if (isGroupHeader(from) || isGroupHeader(destRow)) return false;
+    if (!m_flatList && m_rows[from].groupId != m_rows[destRow].groupId) return false;
+
+    const int destinationChild = from < destRow ? destRow + 1 : destRow;
+    if (!beginMoveRows({}, from, from, {}, destinationChild)) return false;
+    const Row moved = m_rows.takeAt(from);
+    m_rows.insert(destRow, moved);
+    const int lo = qMin(from, destRow);
+    const int hi = qMax(from, destRow);
+    int display = 0;
+    for (int row = lo - 1; row >= 0; --row) {
+        if (m_rows[row].profileId >= 0) {
+            display = m_rows[row].displayNumber;
+            break;
+        }
+    }
+    for (int row = lo; row <= hi; ++row) {
+        Row &entry = m_rows[row];
+        if (entry.profileId < 0) continue;
+        entry.displayNumber = ++display;
+        id2row.insert(entry.profileId, row);
+    }
+    m_profileIds.clear();
+    m_profileIds.reserve(m_rows.size());
+    for (const Row &entry : m_rows) {
+        if (entry.profileId >= 0) m_profileIds.append(entry.profileId);
+    }
+    if (m_flatList) m_globalOrder = m_profileIds;
+    endMoveRows();
+    return true;
 }
 
 QString ProfilesTableModel::rowLabel(int sourceRow, int displayRow) const {

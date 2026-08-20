@@ -1,5 +1,7 @@
 #include <include/database/entities/Group.h>
 
+#include "include/database/entities/Profile.h"
+#include "include/database/entities/ProfileMetrics.h"
 #include "include/database/ProfilesRepo.h"
 #include "include/global/Configs.hpp"
 
@@ -33,101 +35,110 @@ namespace Configs
         return 0.0;
     }
 
-    bool Group::SortProfiles(GroupSortAction sortAction) {
-        if (!mutex.tryLock()) {
-            return false;
+    bool ProfileIdComesBefore(int idA, int idB, const GroupSortAction &sortAction,
+                              testBy testSortBy, trafficBy trafficSortBy) {
+        auto profA = dataManager->profilesRepo->GetProfile(idA);
+        auto profB = dataManager->profilesRepo->GetProfile(idB);
+        if (!profA || !profB) return profA != nullptr;
+        QString ms_a;
+        QString ms_b;
+        if (sortAction.method == GroupSortMethod::ByType) {
+            ms_a = profA->outbound->DisplayType();
+            ms_b = profB->outbound->DisplayType();
+        } else if (sortAction.method == GroupSortMethod::ByName) {
+            ms_a = profA->outbound->name;
+            ms_b = profB->outbound->name;
+        } else if (sortAction.method == GroupSortMethod::ByAddress) {
+            ms_a = profA->outbound->DisplayAddress();
+            ms_b = profB->outbound->DisplayAddress();
+        } else if (sortAction.method == GroupSortMethod::BySecurity) {
+            auto secA = profA->outbound->GetSecurity();
+            auto secB = profB->outbound->GetSecurity();
+            if (secA.level != secB.level) {
+                return sortAction.descending ? secA.level > secB.level
+                                             : secA.level < secB.level;
+            }
+            ms_a = secA.transport + secA.label;
+            ms_b = secB.transport + secB.label;
+        } else if (sortAction.method == GroupSortMethod::ByTestResult) {
+            const auto statusForSort = [testSortBy](const std::shared_ptr<Profile> &profile) {
+                if (testSortBy == testBy::latency) {
+                    if (profile->latency > 0) return PerformanceTestStatus::Success;
+                    if (profile->latency == 0) return PerformanceTestStatus::Untested;
+                    return PerformanceTestStatus::Error;
+                }
+                return profile->performance_test_status;
+            };
+            const auto statusA = statusForSort(profA);
+            const auto statusB = statusForSort(profB);
+
+            double valueA = 0.0;
+            double valueB = 0.0;
+            if (testSortBy == testBy::latency) {
+                valueA = profA->latency;
+                valueB = profB->latency;
+            } else if (testSortBy == testBy::txSpeed) {
+                valueA = bitrateToBps(profA->ul_speed);
+                valueB = bitrateToBps(profB->ul_speed);
+            } else if (testSortBy == testBy::rxSpeed) {
+                valueA = profA->rx_speed_mbps;
+                valueB = profB->rx_speed_mbps;
+            } else if (testSortBy == testBy::connectTime) {
+                valueA = profA->connect_time_ms;
+                valueB = profB->connect_time_ms;
+            } else if (testSortBy == testBy::siteScore) {
+                valueA = profA->site_score;
+                valueB = profB->site_score;
+            }
+            return PerformanceComesBefore(statusA, valueA, statusB, valueB,
+                                          sortAction.descending);
+        } else if (sortAction.method == GroupSortMethod::ByTraffic) {
+            const qint64 valueA = trafficSortBy == trafficBy::rx
+                ? profA->traffic_downlink : profA->traffic_uplink;
+            const qint64 valueB = trafficSortBy == trafficBy::rx
+                ? profB->traffic_downlink : profB->traffic_uplink;
+            if (valueA == valueB) return false;
+            return sortAction.descending ? valueA > valueB : valueA < valueB;
         }
-        auto allProfs = dataManager->profilesRepo->GetProfileBatch(profiles); // to warm up the cache
+        return sortAction.descending ? ms_a > ms_b : ms_a < ms_b;
+    }
+
+    void SortProfileIdList(QList<int> &ids, const GroupSortAction &sortAction,
+                           testBy testSortBy, trafficBy trafficSortBy) {
+        dataManager->profilesRepo->GetProfileBatch(ids);
         switch (sortAction.method) {
-            case GroupSortMethod::Raw: {
+            case GroupSortMethod::Raw:
+            case GroupSortMethod::ById:
                 break;
-            }
-            case GroupSortMethod::ById: {
-                break;
-            }
             case GroupSortMethod::ByAddress:
             case GroupSortMethod::ByName:
             case GroupSortMethod::ByTestResult:
             case GroupSortMethod::ByTraffic:
             case GroupSortMethod::BySecurity:
-            case GroupSortMethod::ByType: {
-                std::stable_sort(profiles.begin(), profiles.end(),
-                                  [&](int a, int b) {
-                                      auto profA = dataManager->profilesRepo->GetProfile(a);
-                                      auto profB = dataManager->profilesRepo->GetProfile(b);
-                                      if (!profA || !profB) return profA != nullptr;
-                                      QString ms_a;
-                                      QString ms_b;
-                                      if (sortAction.method == GroupSortMethod::ByType) {
-                                          ms_a = profA->outbound->DisplayType();
-                                          ms_b = profB->outbound->DisplayType();
-                                      } else if (sortAction.method == GroupSortMethod::ByName) {
-                                          ms_a = profA->outbound->name;
-                                          ms_b = profB->outbound->name;
-                                      } else if (sortAction.method == GroupSortMethod::ByAddress) {
-                                          ms_a = profA->outbound->DisplayAddress();
-                                          ms_b = profB->outbound->DisplayAddress();
-                                      } else if (sortAction.method == GroupSortMethod::BySecurity) {
-                                          auto secA = profA->outbound->GetSecurity();
-                                          auto secB = profB->outbound->GetSecurity();
-                                          if (secA.level != secB.level) {
-                                              return sortAction.descending ? secA.level > secB.level
-                                                                           : secA.level < secB.level;
-                                          }
-                                          ms_a = secA.transport + secA.label;
-                                          ms_b = secB.transport + secB.label;
-                                      } else if (sortAction.method == GroupSortMethod::ByTestResult) {
-                                          const auto statusForSort = [this](const std::shared_ptr<Profile> &profile) {
-                                              if (test_sort_by == testBy::latency) {
-                                                  if (profile->latency > 0) return PerformanceTestStatus::Success;
-                                                  if (profile->latency == 0) return PerformanceTestStatus::Untested;
-                                                  return PerformanceTestStatus::Error;
-                                              }
-                                              return profile->performance_test_status;
-                                          };
-                                          const auto statusA = statusForSort(profA);
-                                          const auto statusB = statusForSort(profB);
-
-                                          double valueA = 0.0;
-                                          double valueB = 0.0;
-                                          if (test_sort_by == testBy::latency) {
-                                              valueA = profA->latency;
-                                              valueB = profB->latency;
-                                          } else if (test_sort_by == testBy::txSpeed) {
-                                              valueA = bitrateToBps(profA->ul_speed);
-                                              valueB = bitrateToBps(profB->ul_speed);
-                                          } else if (test_sort_by == testBy::rxSpeed) {
-                                              valueA = profA->rx_speed_mbps;
-                                              valueB = profB->rx_speed_mbps;
-                                          } else if (test_sort_by == testBy::connectTime) {
-                                              valueA = profA->connect_time_ms;
-                                              valueB = profB->connect_time_ms;
-                                          } else if (test_sort_by == testBy::siteScore) {
-                                              valueA = profA->site_score;
-                                              valueB = profB->site_score;
-                                          }
-                                          return PerformanceComesBefore(statusA, valueA, statusB, valueB,
-                                                                        sortAction.descending);
-                                      } else if (sortAction.method == GroupSortMethod::ByTraffic) {
-                                          const qint64 valueA = traffic_sort_by == trafficBy::rx
-                                              ? profA->traffic_downlink : profA->traffic_uplink;
-                                          const qint64 valueB = traffic_sort_by == trafficBy::rx
-                                              ? profB->traffic_downlink : profB->traffic_uplink;
-                                          if (valueA == valueB) return false;
-                                          return sortAction.descending ? valueA > valueB : valueA < valueB;
-                                      }
-                                      return sortAction.descending ? ms_a > ms_b : ms_a < ms_b;
-                                  });
+            case GroupSortMethod::ByType:
+                std::stable_sort(ids.begin(), ids.end(),
+                                 [&](int a, int b) {
+                                     return ProfileIdComesBefore(a, b, sortAction, testSortBy, trafficSortBy);
+                                 });
                 break;
-            }
         }
-        // Disabled profiles remain visible for management, but never interrupt the
-        // active portion of a group. Keep both partitions stable so manual order
-        // and the selected sort order are preserved within each one.
-        std::stable_partition(profiles.begin(), profiles.end(), [](int id) {
+        std::stable_partition(ids.begin(), ids.end(), [](int id) {
             return !dataManager->settingsRepo->IsProfileDisabled(id);
         });
+    }
+
+    bool Group::SortProfiles(GroupSortAction sortAction) {
+        if (!mutex.tryLock()) {
+            return false;
+        }
+        SortProfileIdList(profiles, sortAction, test_sort_by, traffic_sort_by);
         mutex.unlock();
+        return true;
+    }
+
+    bool Group::ReplaceProfiles(const QList<int> &ids) {
+        QMutexLocker locker(&mutex);
+        profiles = ids;
         return true;
     }
 

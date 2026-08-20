@@ -393,7 +393,8 @@ void MainWindow::selectAllProfiles() {
     if (!selected.isEmpty()) selectedGroup = selected.first().data(ProfilesTableModel::GroupIdRole).toInt();
 
     QList<int> rows;
-    const bool selectOneGroup = !selectAllIsGlobal
+    const bool flatList = profilesTableModel && profilesTableModel->isFlatList();
+    const bool selectOneGroup = !flatList && !selectAllIsGlobal
         && selectedGroup >= 0 && selectAllGroupId != selectedGroup;
     for (int row = 0; row < profilesFilterModel->rowCount(); ++row) {
         const QModelIndex index = profilesFilterModel->index(row, ProfilesTableModel::ColStartup);
@@ -413,10 +414,8 @@ void MainWindow::selectAllProfiles() {
 
 void MainWindow::on_menu_update_subscription_triggered() {
     auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-    if (group->url.isEmpty()) return;
-    if (mw_sub_updating) return;
-    mw_sub_updating = true;
-    Subscription::groupUpdater->AsyncUpdate(group->url, group->id, [&] { mw_sub_updating = false; }, true);
+    if (!group) return;
+    update_group_subscription(group->id);
 }
 
 void MainWindow::on_menu_remove_unavailable_triggered() {

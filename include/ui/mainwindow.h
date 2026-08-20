@@ -36,6 +36,7 @@
 #include <QLocalSocket>
 
 #include "group/GroupSort.hpp"
+#include "include/database/entities/Group.h"
 #include "include/global/GuiUtils.hpp"
 #include "include/ui/utils/DataViewHtmlGenerator.h"
 #include "include/ui/utils/ProfilesFilterProxyModel.h"
@@ -58,6 +59,8 @@ class QVideoSink;
 class QListWidget;
 class QSplitter;
 class QTextBrowser;
+class QToolButton;
+class QWidget;
 
 namespace Qv2ray::ui { class SyntaxHighlighter; }
 
@@ -99,6 +102,8 @@ public:
     void show_group(int gid);
 
     void edit_group(int gid);
+
+    void delete_group(int gid);
 
     void refresh_groups();
 
@@ -222,6 +227,8 @@ private:
     ProfilesFilterProxyModel *profilesFilterModel = nullptr;
     QListWidget *groupSidebar = nullptr;
     QSplitter *mainContentSplitter = nullptr;
+    QWidget *infoTabAlignSpacer = nullptr;
+    QToolButton *btnProfilesListMode = nullptr;
     bool refreshingGroupSidebar = false;
     bool handlingSelectAll = false;
     bool m_columnWidthsAutoSized = false;
@@ -275,8 +282,8 @@ private:
     qint64 last_test_time = 0;
     //
     int proxy_last_order = -1;
-    int live_sort_column = -1;
-    bool live_sort_descending = false;
+    int live_sort_column = ProfilesTableModel::ColSiteScore;
+    bool live_sort_descending = true;
     bool select_mode = false;
     QMutex mu_starting;
     QMutex mu_stopping;
@@ -361,6 +368,7 @@ private:
     void refreshInfoPanel();
     void refreshHostInfoIp();
     void runCurrentConnectionProbe();
+    void syncInfoPanelTop();
 
     QList<int> get_selected_or_group();
 
@@ -397,7 +405,22 @@ private:
     void rebuildGroupSidebar();
     void scrollToGroup(int groupId);
     void applyGroupSectionSpans();
+    void showGroupSidebarMenu(const QPoint &pos);
+    void update_group_subscription(int gid);
     void selectAllProfiles();
+    void applyLiveSortIndicator();
+    bool isLiveSortableColumn(int column) const;
+    bool sortActionFromColumn(int column, bool descending, GroupSortAction &action,
+                              Configs::testBy &testSortBy, Configs::trafficBy &trafficSortBy) const;
+    void stampSortPrefsOnGroups(Configs::testBy testSortBy, Configs::trafficBy trafficSortBy,
+                                Configs::typeBy typeSortBy);
+    void persistLiveSortPrefs();
+    void runProfilesSort(const GroupSortAction &action, Configs::testBy testSortBy,
+                         Configs::trafficBy trafficSortBy);
+    void liveReorderProfile(int profileId);
+    int liveInsertDestinationRow(int profileId) const;
+    void markGroupOrderDirty(int groupId);
+    void flushDirtyGroupOrders();
 
     void parseQrImage(const QPixmap *image);
 
@@ -433,6 +456,8 @@ private:
     void scheduleProxyListRefresh();
 
     bool m_adjustingColumns = false;
+    QTimer *m_groupOrderSaveDebounce = nullptr;
+    QSet<int> m_dirtySortGroupIds;
 
     //
 

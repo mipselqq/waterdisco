@@ -67,6 +67,7 @@ void MainWindow::changeEvent(QEvent *event) {
         // The toolButton widths and the window floor were derived from the old
         // font; redo them now that the stylesheet caches above are clean.
         applyTopBarMetrics();
+        syncInfoPanelTop();
     }
     if (type == QEvent::FontChange ||
         type == QEvent::PaletteChange ||
@@ -88,6 +89,8 @@ void MainWindow::changeEvent(QEvent *event) {
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
     syncConnectionViewState();
+    syncInfoPanelTop();
+    QTimer::singleShot(0, this, [this] { syncInfoPanelTop(); });
     scheduleProxyListRefresh();
 }
 

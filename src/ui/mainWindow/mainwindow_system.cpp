@@ -111,6 +111,7 @@ void MainWindow::on_commitDataRequest() {
     settings->remember_system_proxy = settings->spmode_system_proxy;
     settings->remember_tun = settings->spmode_vpn;
 
+    flushDirtyGroupOrders();
     settings->Save();
     qDebug() << "End of data save";
 }

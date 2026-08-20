@@ -223,6 +223,10 @@ QGroupBox {
   margin-bottom: 4px;
 }
 
+QGroupBox#proxyInfoGroup, QGroupBox#hostInfoGroup {
+  margin-top: 0px;
+}
+
 QGroupBox::title {
   subcontrol-origin: margin;
   subcontrol-position: top left;

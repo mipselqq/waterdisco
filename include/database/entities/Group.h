@@ -66,6 +66,10 @@ namespace Configs
 
         bool SortProfiles(GroupSortAction method);
 
+        // Reorder without changing membership. Used by live table moves so the
+        // UI thread never waits on SortProfiles' full stable_sort.
+        bool ReplaceProfiles(const QList<int> &ids);
+
         bool RemoveProfile(int ID);
 
         bool RemoveProfileBatch(const QList<int>& IDs);
@@ -80,4 +84,12 @@ namespace Configs
 
         [[nodiscard]] bool HasProfile(int ID) const;
     };
+
+    // Shared by header-click sorts and the per-result live insert. Disabled
+    // profiles are ordered separately via stable_partition in SortProfileIdList.
+    [[nodiscard]] bool ProfileIdComesBefore(int idA, int idB, const GroupSortAction &action,
+                                            testBy testSortBy, trafficBy trafficSortBy);
+
+    void SortProfileIdList(QList<int> &ids, const GroupSortAction &action,
+                           testBy testSortBy, trafficBy trafficSortBy);
 }// namespace Configs

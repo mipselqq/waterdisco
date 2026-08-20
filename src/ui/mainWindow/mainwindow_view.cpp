@@ -11,6 +11,8 @@
 #include <QMediaPlayer>
 #include <QPixmap>
 #include <QScrollBar>
+#include <QStyle>
+#include <QTabBar>
 #include <QTimer>
 #include <QToolButton>
 #include <QUrl>
@@ -19,6 +21,7 @@
 
 #include "include/api/RPC.h"
 #include "include/database/GroupsRepo.h"
+#include "include/database/entities/Group.h"
 #include "include/database/RoutesRepo.h"
 #include "include/global/HTTPRequestHelper.hpp"
 #include "include/stats/traffic/TrafficLooper.hpp"
@@ -28,6 +31,9 @@
 #include "include/ui/utils/ProfilesTableFilterHeader.h"
 #include "include/ui/utils/ProfilesTableModel.h"
 #include "include/ui/widget/StartStopButton.hpp"
+
+#include <QHash>
+#include <QMutexLocker>
 
 void MainWindow::applyTopBarMetrics() {
     // Give the menu toolButtons a uniform width (the widest one's) so the top
@@ -459,15 +465,18 @@ void MainWindow::refresh_proxy_list(const QList<int>& ids, bool mayNeedReset, Re
 }
 
 void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedReset) {
-    // refresh data
     refresh_proxy_list_impl_refresh_data(ids, mayNeedReset);
-    // now refresh column sizes
-    refresh_proxy_list_column_size();
+    // Measuring content widths walks every profile. Skip it on the speedtest
+    // hot path, which only repaints one (or a few) rows.
+    if (ids.isEmpty()) refresh_proxy_list_column_size();
 }
 
 void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
     if (!ids.isEmpty()) {
-        for (auto id:ids) profilesTableModel->refreshProfileId(id);
+        for (auto id:ids) {
+            profilesTableModel->refreshProfileId(id);
+            liveReorderProfile(id);
+        }
     } else {
         QList<ProfilesTableModel::GroupSection> sections;
         for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
@@ -479,6 +488,304 @@ void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, boo
             QTimer::singleShot(0, this, [this] { applyGroupSectionSpans(); });
         }
     }
+}
+
+bool MainWindow::isLiveSortableColumn(int column) const {
+    switch (column) {
+    case ProfilesTableModel::ColType:
+    case ProfilesTableModel::ColAddress:
+    case ProfilesTableModel::ColName:
+    case ProfilesTableModel::ColLatency:
+    case ProfilesTableModel::ColRxSpeed:
+    case ProfilesTableModel::ColConnectionTime:
+    case ProfilesTableModel::ColSiteScore:
+    case ProfilesTableModel::ColRxTraffic:
+    case ProfilesTableModel::ColTxTraffic:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool MainWindow::sortActionFromColumn(int column, bool descending, GroupSortAction &action,
+                                      Configs::testBy &testSortBy, Configs::trafficBy &trafficSortBy) const {
+    action = {};
+    action.descending = descending;
+    testSortBy = Configs::testBy::siteScore;
+    trafficSortBy = Configs::trafficBy::rx;
+    switch (column) {
+    case ProfilesTableModel::ColType: {
+        Configs::typeBy typeSortBy = Configs::typeBy::byType;
+        if (const auto group = Configs::dataManager->groupsRepo->CurrentGroup()) {
+            typeSortBy = group->type_sort_by;
+        }
+        action.method = (Configs::dataManager->settingsRepo->show_config_security
+                         && typeSortBy == Configs::typeBy::bySecurity)
+                            ? GroupSortMethod::BySecurity
+                            : GroupSortMethod::ByType;
+        return true;
+    }
+    case ProfilesTableModel::ColAddress:
+        action.method = GroupSortMethod::ByAddress;
+        return true;
+    case ProfilesTableModel::ColName:
+        action.method = GroupSortMethod::ByName;
+        return true;
+    case ProfilesTableModel::ColLatency:
+        action.method = GroupSortMethod::ByTestResult;
+        testSortBy = Configs::testBy::latency;
+        return true;
+    case ProfilesTableModel::ColRxSpeed:
+        action.method = GroupSortMethod::ByTestResult;
+        testSortBy = Configs::testBy::rxSpeed;
+        return true;
+    case ProfilesTableModel::ColConnectionTime:
+        action.method = GroupSortMethod::ByTestResult;
+        testSortBy = Configs::testBy::connectTime;
+        return true;
+    case ProfilesTableModel::ColSiteScore:
+        action.method = GroupSortMethod::ByTestResult;
+        testSortBy = Configs::testBy::siteScore;
+        return true;
+    case ProfilesTableModel::ColRxTraffic:
+        action.method = GroupSortMethod::ByTraffic;
+        trafficSortBy = Configs::trafficBy::rx;
+        return true;
+    case ProfilesTableModel::ColTxTraffic:
+        action.method = GroupSortMethod::ByTraffic;
+        trafficSortBy = Configs::trafficBy::tx;
+        return true;
+    default:
+        return false;
+    }
+}
+
+void MainWindow::stampSortPrefsOnGroups(Configs::testBy testSortBy, Configs::trafficBy trafficSortBy,
+                                        Configs::typeBy typeSortBy) {
+    for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+        if (!group) continue;
+        group->test_sort_by = testSortBy;
+        group->traffic_sort_by = trafficSortBy;
+        group->type_sort_by = typeSortBy;
+    }
+}
+
+void MainWindow::persistLiveSortPrefs() {
+    auto *settings = Configs::dataManager->settingsRepo.get();
+    settings->profiles_sort_column = live_sort_column;
+    settings->profiles_sort_descending = live_sort_descending;
+    settings->Save();
+}
+
+void MainWindow::applyLiveSortIndicator() {
+    auto *header = ui->profilesTableView->horizontalHeader();
+    if (!header) return;
+    if (isLiveSortableColumn(live_sort_column)) {
+        header->setSortIndicatorShown(true);
+        header->setSortIndicator(live_sort_column,
+                                 live_sort_descending ? Qt::DescendingOrder : Qt::AscendingOrder);
+    } else {
+        header->setSortIndicatorShown(false);
+    }
+}
+
+void MainWindow::runProfilesSort(const GroupSortAction &action, Configs::testBy testSortBy,
+                                 Configs::trafficBy trafficSortBy) {
+    if (!profilesTableModel) return;
+    const bool flat = profilesTableModel->isFlatList();
+    const auto groupIds = Configs::dataManager->groupsRepo->GetGroupsTabOrder();
+
+    // Header-click sorts stay on the UI thread: the profile cache is already
+    // warm, and a full model reset is cheaper than a background hop plus a
+    // SQLite write per group. Persist order in the existing 1s debounce.
+    if (flat) {
+        QList<int> allIds;
+        QHash<int, int> idToGroup;
+        for (int gid : groupIds) {
+            const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+            if (!group) continue;
+            QMutexLocker locker(&group->mutex);
+            for (int id : group->profiles) {
+                allIds.append(id);
+                idToGroup.insert(id, gid);
+            }
+        }
+        Configs::SortProfileIdList(allIds, action, testSortBy, trafficSortBy);
+        QHash<int, QList<int>> perGroup;
+        for (int id : allIds) perGroup[idToGroup.value(id)].append(id);
+        for (int gid : groupIds) {
+            const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+            if (!group) continue;
+            group->ReplaceProfiles(perGroup.value(gid));
+            markGroupOrderDirty(gid);
+        }
+        profilesTableModel->setGlobalOrder(allIds);
+    } else {
+        for (int gid : groupIds) {
+            const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+            if (!group) continue;
+            {
+                QMutexLocker locker(&group->mutex);
+                Configs::SortProfileIdList(group->profiles, action, testSortBy, trafficSortBy);
+            }
+            markGroupOrderDirty(gid);
+        }
+        profilesTableModel->clearGlobalOrder();
+    }
+
+    QList<ProfilesTableModel::GroupSection> sections;
+    for (int gid : groupIds) {
+        const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+        if (group) sections.append({gid, group->Profiles()});
+    }
+    saveProfileFocusState();
+    if (profilesTableModel->setGroupSections(sections, false, true)) {
+        m_profileStructureChanged = true;
+        applyGroupSectionSpans();
+    }
+    restoreProfileFocusState(RefreshAnchor::KeepPlace);
+    refresh_proxy_list_column_size();
+}
+
+int MainWindow::liveInsertDestinationRow(int profileId) const {
+    if (!profilesTableModel || !isLiveSortableColumn(live_sort_column)) return -1;
+    const int from = profilesTableModel->indexOfProfile(profileId);
+    if (from < 0) return -1;
+
+    GroupSortAction action;
+    Configs::testBy testSortBy;
+    Configs::trafficBy trafficSortBy;
+    if (!sortActionFromColumn(live_sort_column, live_sort_descending, action, testSortBy, trafficSortBy)) {
+        return -1;
+    }
+
+    const bool disabled = Configs::dataManager->settingsRepo->IsProfileDisabled(profileId);
+    const bool flat = profilesTableModel->isFlatList();
+    const int groupId = profilesTableModel->groupIdAt(from);
+    int lo = 0;
+    int hi = profilesTableModel->rowCount() - 1;
+    if (!flat) {
+        lo = from;
+        while (lo > 0 && !profilesTableModel->isGroupHeader(lo)) --lo;
+        if (profilesTableModel->isGroupHeader(lo)) ++lo;
+        hi = from;
+        while (hi + 1 < profilesTableModel->rowCount()
+               && !profilesTableModel->isGroupHeader(hi + 1)
+               && profilesTableModel->groupIdAt(hi + 1) == groupId) {
+            ++hi;
+        }
+    }
+
+    int firstDisabled = hi + 1;
+    for (int row = lo; row <= hi; ++row) {
+        if (profilesTableModel->isGroupHeader(row)) continue;
+        const int id = profilesTableModel->data(
+            profilesTableModel->index(row, 0), ProfilesTableModel::ProfileIdRole).toInt();
+        if (Configs::dataManager->settingsRepo->IsProfileDisabled(id)) {
+            firstDisabled = row;
+            break;
+        }
+    }
+    if (disabled) lo = firstDisabled;
+    else hi = firstDisabled - 1;
+    if (lo > hi) return from;
+
+    auto comesBefore = [&](int a, int b) {
+        return Configs::ProfileIdComesBefore(a, b, action, testSortBy, trafficSortBy);
+    };
+
+    auto idAt = [&](int row) {
+        return profilesTableModel->data(
+            profilesTableModel->index(row, 0), ProfilesTableModel::ProfileIdRole).toInt();
+    };
+
+    int prev = -1;
+    for (int row = from - 1; row >= lo; --row) {
+        if (!profilesTableModel->isGroupHeader(row)) {
+            prev = idAt(row);
+            break;
+        }
+    }
+    int next = -1;
+    for (int row = from + 1; row <= hi; ++row) {
+        if (!profilesTableModel->isGroupHeader(row)) {
+            next = idAt(row);
+            break;
+        }
+    }
+    if ((prev < 0 || !comesBefore(profileId, prev)) && (next < 0 || !comesBefore(next, profileId))) {
+        return from;
+    }
+
+    int insertRow = hi + 1;
+    for (int row = lo; row <= hi; ++row) {
+        if (row == from || profilesTableModel->isGroupHeader(row)) continue;
+        if (comesBefore(profileId, idAt(row))) {
+            insertRow = row;
+            break;
+        }
+    }
+    const int dest = insertRow > from ? insertRow - 1 : insertRow;
+    return dest;
+}
+
+void MainWindow::liveReorderProfile(int profileId) {
+    if (!profilesTableModel || !isLiveSortableColumn(live_sort_column)) return;
+    const int dest = liveInsertDestinationRow(profileId);
+    const int from = profilesTableModel->indexOfProfile(profileId);
+    if (dest < 0 || from < 0 || dest == from) return;
+    const int groupId = profilesTableModel->groupIdAt(from);
+    if (!profilesTableModel->moveProfileToRow(profileId, dest)) return;
+    if (groupId >= 0) {
+        if (auto group = Configs::dataManager->groupsRepo->GetGroup(groupId)) {
+            group->ReplaceProfiles(profilesTableModel->profileIdsForGroup(groupId));
+            markGroupOrderDirty(groupId);
+        }
+    }
+}
+
+void MainWindow::markGroupOrderDirty(int groupId) {
+    if (groupId < 0) return;
+    m_dirtySortGroupIds.insert(groupId);
+    if (!m_groupOrderSaveDebounce) {
+        m_groupOrderSaveDebounce = new QTimer(this);
+        m_groupOrderSaveDebounce->setSingleShot(true);
+        m_groupOrderSaveDebounce->setInterval(1000);
+        connect(m_groupOrderSaveDebounce, &QTimer::timeout, this, [this] { flushDirtyGroupOrders(); });
+    }
+    m_groupOrderSaveDebounce->start();
+}
+
+void MainWindow::flushDirtyGroupOrders() {
+    for (int gid : m_dirtySortGroupIds) {
+        if (const auto group = Configs::dataManager->groupsRepo->GetGroup(gid)) {
+            Configs::dataManager->groupsRepo->Save(group);
+        }
+    }
+    m_dirtySortGroupIds.clear();
+}
+
+void MainWindow::syncInfoPanelTop() {
+    if (!ui || !infoTabAlignSpacer) return;
+    QWidget *anchor = ui->down_tab;
+    QWidget *logsPage = ui->stats_widget ? ui->stats_widget->currentWidget() : nullptr;
+    if (!anchor || !logsPage || !ui->proxyInfoGroup) {
+        QTabBar *bar = ui->stats_widget ? ui->stats_widget->tabBar() : nullptr;
+        const int tabH = (bar && bar->isVisible()) ? bar->height() : 0;
+        infoTabAlignSpacer->setFixedHeight(qMax(0, tabH));
+        return;
+    }
+    if (logsPage->height() <= 0) {
+        QTabBar *bar = ui->stats_widget->tabBar();
+        infoTabAlignSpacer->setFixedHeight(qMax(0, (bar && bar->isVisible()) ? bar->height() : 0));
+        return;
+    }
+    const int logsY = logsPage->mapTo(anchor, QPoint(0, 0)).y();
+    const int proxyY = ui->proxyInfoGroup->mapTo(anchor, QPoint(0, 0)).y();
+    const int delta = proxyY - logsY;
+    if (delta == 0) return;
+    infoTabAlignSpacer->setFixedHeight(qMax(0, infoTabAlignSpacer->height() - delta));
 }
 
 // Owns no test session, so unlike the group sweeps it stays out of TestRunner.

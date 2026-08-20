@@ -72,11 +72,14 @@ namespace Configs {
             {"dns_disable_expire", &dns_disable_expire},
             {"dns_reverse_mapping", &dns_reverse_mapping},
             {"disable_private_range_bypass", &disable_private_range_bypass},
+            {"profiles_flat_list",           &profiles_flat_list},
+            {"profiles_sort_descending",     &profiles_sort_descending},
         };
 
         intMap = {
             {"current_group",          &current_group},
             {"last_filter_column",     &last_filter_column},
+            {"profiles_sort_column",   &profiles_sort_column},
             {"inbound_socks_port",     &inbound_socks_port},
             {"mux_concurrency",        &mux_concurrency},
             {"test_concurrent",        &test_concurrent},
