@@ -33,6 +33,7 @@ namespace Configs
         rx_speed_mbps = 0.0;
         site_score = 0;
         performance_test_status = PerformanceTestStatus::Untested;
+        performance_status_detail = {};
         dl_speed.clear();
         ul_speed.clear();
     }
@@ -43,24 +44,27 @@ namespace Configs
         rx_speed_mbps = std::max(0.0, rxMbps);
         site_score = CalculateSiteScore(connect_time_ms, rx_speed_mbps);
         performance_test_status = PerformanceTestStatus::Success;
+        performance_status_detail = {};
         dl_speed = displaySpeed.isEmpty()
             ? QStringLiteral("%1 Mbps").arg(rx_speed_mbps, 0, 'f', 2)
             : displaySpeed;
     }
 
-    void Profile::MarkPerformanceSkipped() {
+    void Profile::MarkPerformanceSkipped(const PerformanceStatusDetail& detail) {
         rx_speed_mbps = 0.0;
         site_score = 0;
         performance_test_status = PerformanceTestStatus::Skipped;
+        performance_status_detail = detail;
         dl_speed = QStringLiteral("Skipped");
         ul_speed.clear();
     }
 
-    void Profile::MarkPerformanceError() {
+    void Profile::MarkPerformanceError(const PerformanceStatusDetail& detail) {
         if (connect_time_ms < 0) connect_time_ms = 0;
         rx_speed_mbps = 0.0;
         site_score = 0;
         performance_test_status = PerformanceTestStatus::Error;
+        performance_status_detail = detail;
         dl_speed = QStringLiteral("Error");
         ul_speed.clear();
     }
@@ -107,6 +111,10 @@ namespace Configs
         case PerformanceTestStatus::Untested: return {};
         }
         return {};
+    }
+
+    QString Profile::DisplayRxSpeedTooltip() const {
+        return FormatPerformanceStatusTooltip(performance_test_status, performance_status_detail);
     }
 
     QString Profile::DisplayConnectionTime() const {

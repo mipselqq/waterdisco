@@ -50,6 +50,7 @@ namespace Configs {
         double rx_speed_mbps = 0.0;
         int site_score = 0;
         PerformanceTestStatus performance_test_status = PerformanceTestStatus::Untested;
+        PerformanceStatusDetail performance_status_detail;
         QString dl_speed;
         QString ul_speed;
         QString test_country;
@@ -70,8 +71,8 @@ namespace Configs {
         void ClearPerformanceTestResults();
         void SetPerformanceResult(int connectionTimeMs, double rxMbps,
                                   const QString &displaySpeed = {});
-        void MarkPerformanceSkipped();
-        void MarkPerformanceError();
+        void MarkPerformanceSkipped(const PerformanceStatusDetail& detail = {});
+        void MarkPerformanceError(const PerformanceStatusDetail& detail = {});
 
         // Always set latency through here: it stamps latency_at, which is what
         // lets consumers judge whether a stored result is still fresh.
@@ -81,6 +82,7 @@ namespace Configs {
 
         [[nodiscard]] QString DisplayLatency() const;
         [[nodiscard]] QString DisplayRxSpeed() const;
+        [[nodiscard]] QString DisplayRxSpeedTooltip() const;
         [[nodiscard]] QString DisplayConnectionTime() const;
         [[nodiscard]] QString DisplaySiteScore() const;
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QCoreApplication>
 #include <QRegularExpression>
 #include <QtGlobal>
 
@@ -36,6 +37,33 @@ namespace Configs {
         if (unit == QStringLiteral("m")) return value;
         if (unit == QStringLiteral("k")) return value / 1000.0;
         return value / 1000000.0;
+    }
+
+    QString FormatPerformanceStatusTooltip(PerformanceTestStatus status,
+                                           const PerformanceStatusDetail& detail) {
+        if (status != PerformanceTestStatus::Skipped && status != PerformanceTestStatus::Error) {
+            return {};
+        }
+        if (detail.reason.isEmpty() && detail.thresholdMs < 0 && detail.measuredMs < 0
+            && detail.measuredMbps < 0.0) {
+            return {};
+        }
+
+        QStringList lines;
+        if (!detail.reason.isEmpty()) lines << detail.reason;
+        if (detail.thresholdMs > 0) {
+            lines << QCoreApplication::translate("ProfileMetrics", "Limit: %1 ms")
+                       .arg(detail.thresholdMs);
+        }
+        if (detail.measuredMs >= 0) {
+            lines << QCoreApplication::translate("ProfileMetrics", "Measured: %1 ms")
+                       .arg(detail.measuredMs);
+        }
+        if (detail.measuredMbps >= 0.0) {
+            lines << QCoreApplication::translate("ProfileMetrics", "Measured: %1 Mbps")
+                       .arg(detail.measuredMbps, 0, 'f', 2);
+        }
+        return lines.join(QLatin1Char('\n'));
     }
 
     int PerformanceStatusRank(PerformanceTestStatus status) {

@@ -12,6 +12,18 @@ namespace Configs {
         Error,
     };
 
+    // Volatile context for Error/Skipped in the Rx speed column; cleared with
+    // performance results and not persisted to the database.
+    struct PerformanceStatusDetail {
+        QString reason;
+        qint64 measuredMs = -1;
+        double measuredMbps = -1.0;
+        int thresholdMs = -1;
+    };
+
+    [[nodiscard]] QString FormatPerformanceStatusTooltip(PerformanceTestStatus status,
+                                                         const PerformanceStatusDetail& detail);
+
     // Waterdisco's browsing-oriented score: receive speed contributes 75%,
     // while connection setup time contributes 25% with a piecewise penalty.
     [[nodiscard]] int CalculateSiteScore(int connectionTimeMs, double rxMbps);

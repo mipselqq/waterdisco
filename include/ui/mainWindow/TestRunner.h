@@ -105,10 +105,11 @@ private:
     bool runRankedConnectionPretest(const QList<int>& profileIDs, bool fallShort,
                                     qint64* bestConnectionMs, int* skipped, bool* hadErrors,
                                     const QString& stage = QString());
-    void runRankedUrlProbe(const Target& target, bool fallShort, int timeoutMs,
+    void runRankedUrlProbe(const Target& target, bool fallShort, int limitMs, int defaultTimeoutMs,
                            std::atomic<qint64>* bestConnectionMs);
     void applyConnectionResult(const std::shared_ptr<Configs::Profile>& ent,
-                               const libcore::URLTestResp& res, std::atomic<qint64>* bestConnectionMs);
+                               const libcore::URLTestResp& res, std::atomic<qint64>* bestConnectionMs,
+                               bool fallShort = false, int limitMs = -1, int defaultTimeoutMs = -1);
     void updateRankedProgress(const QString& stage, const std::shared_ptr<Configs::Profile>& profile,
                               int tested, int skipped, int total);
     int bestSiteScoreProfile(const QList<int>& profileIDs) const;

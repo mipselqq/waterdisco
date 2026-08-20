@@ -95,6 +95,74 @@ namespace {
         return QStringLiteral("%1 (%2)").arg(message, formatElapsedHms(elapsedMs));
     }
 
+    bool isCanceledProbeError(const QString& error) {
+        return isTestAborted(error)
+            || error.contains(QStringLiteral("context canceled"), Qt::CaseInsensitive);
+    }
+
+    bool usedFallShortLimit(bool fallShort, int limitMs, int defaultLimitMs) {
+        return fallShort && limitMs > 0 && limitMs < defaultLimitMs;
+    }
+
+    QString connectionProbeLimitReason(bool fallShort, int limitMs, int defaultLimitMs) {
+        if (usedFallShortLimit(fallShort, limitMs, defaultLimitMs)) {
+            return MainWindow::tr("Fall-short: connection limit exceeded (%1 ms)").arg(limitMs);
+        }
+        if (limitMs > 0) {
+            return MainWindow::tr("Connection probe timed out (%1 ms)").arg(limitMs);
+        }
+        return MainWindow::tr("Connection probe failed");
+    }
+
+    QString downloadProbeLimitReason(bool fallShort, int limitMs, int defaultLimitMs) {
+        if (usedFallShortLimit(fallShort, limitMs, defaultLimitMs)) {
+            return MainWindow::tr("Fall-short: download limit exceeded (%1 ms)").arg(limitMs);
+        }
+        if (limitMs > 0) {
+            return MainWindow::tr("Download timed out (%1 ms)").arg(limitMs);
+        }
+        return MainWindow::tr("Download failed");
+    }
+
+    Configs::PerformanceStatusDetail connectionProbeLimitDetail(bool fallShort, int limitMs,
+                                                               int defaultLimitMs,
+                                                               qint64 measuredMs = -1) {
+        Configs::PerformanceStatusDetail detail;
+        detail.reason = connectionProbeLimitReason(fallShort, limitMs, defaultLimitMs);
+        detail.measuredMs = measuredMs;
+        return detail;
+    }
+
+    Configs::PerformanceStatusDetail downloadFailureDetail(bool fallShort, int limitMs,
+                                                           int defaultLimitMs,
+                                                           const QString& coreError = {},
+                                                           qint64 measuredMs = -1,
+                                                           double measuredMbps = -1.0) {
+        Configs::PerformanceStatusDetail detail;
+        detail.measuredMs = measuredMs;
+        detail.measuredMbps = measuredMbps;
+        if (!coreError.isEmpty() && !isCanceledProbeError(coreError)) {
+            detail.reason = coreError;
+            return detail;
+        }
+        detail.reason = downloadProbeLimitReason(fallShort, limitMs, defaultLimitMs);
+        return detail;
+    }
+
+    Configs::PerformanceStatusDetail speedTestBuildError(const QString& message) {
+        Configs::PerformanceStatusDetail detail;
+        detail.reason = message;
+        return detail;
+    }
+
+    Configs::PerformanceStatusDetail speedTestInvalidResult(int connectionTimeMs, double rxMbps) {
+        Configs::PerformanceStatusDetail detail;
+        detail.reason = MainWindow::tr("Invalid speed test result");
+        if (connectionTimeMs > 0) detail.measuredMs = connectionTimeMs;
+        if (rxMbps > 0.0) detail.measuredMbps = rxMbps;
+        return detail;
+    }
+
     // Target is deduced, not named: access control applies to naming a private type.
     template <typename Req, typename Target>
     void fillCommonTestReq(Req& req, const Target& target) {
@@ -188,7 +256,8 @@ QList<TestRunner::Target> TestRunner::buildTargets(
 
 void TestRunner::applyConnectionResult(const std::shared_ptr<Configs::Profile>& ent,
                                        const libcore::URLTestResp& res,
-                                       std::atomic<qint64>* bestConnectionMs) {
+                                       std::atomic<qint64>* bestConnectionMs, bool fallShort,
+                                       int limitMs, int defaultTimeoutMs) {
     if (!ent) return;
     const QString error = QString::fromStdString(res.error.value());
     if (isTestAborted(error) || stopRequested_.load()) return;
@@ -202,20 +271,36 @@ void TestRunner::applyConnectionResult(const std::shared_ptr<Configs::Profile>& 
                 if (bestConnectionMs->compare_exchange_weak(current, observed)) break;
             }
         }
+        return;
+    }
+
+    const qint64 measuredMs = res.latency_ms.value() > 0 ? res.latency_ms.value() : -1;
+    const bool canceled = isCanceledProbeError(error);
+    if (!error.isEmpty() && !canceled) {
+        Configs::PerformanceStatusDetail detail;
+        detail.reason = error;
+        detail.measuredMs = measuredMs;
+        ent->MarkPerformanceError(detail);
+        return;
+    }
+
+    const auto detail = connectionProbeLimitDetail(fallShort, limitMs, defaultTimeoutMs, measuredMs);
+    if (fallShort && (canceled || usedFallShortLimit(fallShort, limitMs, defaultTimeoutMs))) {
+        ent->MarkPerformanceSkipped(detail);
     } else {
-        ent->MarkPerformanceError();
+        ent->MarkPerformanceError(detail);
     }
 }
 
-void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int timeoutMs,
-                                   std::atomic<qint64>* bestConnectionMs) {
+void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int limitMs,
+                                   int defaultTimeoutMs, std::atomic<qint64>* bestConnectionMs) {
     if (stopRequested_.load()) return;
 
     libcore::TestReq req;
     fillCommonTestReq(req, target);
     req.url = kWaterdiscoProbeUrl;
     req.max_concurrency = configuredTestConcurrency();
-    req.test_timeout_ms = std::max(1, timeoutMs);
+    req.test_timeout_ms = std::max(1, limitMs);
     req.dynamic_fall_short = fallShort;
 
     bool rpcOK = false;
@@ -223,7 +308,7 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int tim
     libcore::TestResp result;
     {
         ResultPoller poller([this, gen = sessionGen_.load(), tag2entID = target.tag2entID, fallback = target.entID,
-                             bestConnectionMs] {
+                             bestConnectionMs, fallShort, limitMs, defaultTimeoutMs] {
             if (sessionGen_.load() != gen || stopRequested_.load()) return;
             bool ok = false;
             const auto resp = defaultClient->QueryURLTest(&ok);
@@ -236,7 +321,7 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int tim
                 if (entid == -1) continue;
                 auto ent = Configs::dataManager->profilesRepo->GetProfile(entid);
                 if (!ent) continue;
-                applyConnectionResult(ent, res, bestConnectionMs);
+                applyConnectionResult(ent, res, bestConnectionMs, fallShort, limitMs, defaultTimeoutMs);
                 updated << entid;
             }
             if (updated.isEmpty()) return;
@@ -256,7 +341,7 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int tim
         if (entid == -1) continue;
         auto ent = Configs::dataManager->profilesRepo->GetProfile(entid);
         if (!ent) continue;
-        applyConnectionResult(ent, res, bestConnectionMs);
+        applyConnectionResult(ent, res, bestConnectionMs, fallShort, limitMs, defaultTimeoutMs);
     }
 }
 
@@ -286,7 +371,7 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
         if (!buildError.isEmpty()) {
             MW_show_log(MainWindow::tr("Failed to build test config for batch: ") + buildError);
             for (const auto& profile : profiles) {
-                profile->MarkPerformanceError();
+                profile->MarkPerformanceError(speedTestBuildError(buildError));
                 if (hadErrors) *hadErrors = true;
             }
             persistProfiles(profiles);
@@ -294,7 +379,7 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
             continue;
         }
 
-        const int timeout = fallShort
+        const int limitMs = fallShort
             ? Configs::RankedFallShortConnectionTimeoutMs(configuredTimeout, best.load())
             : configuredTimeout;
         for (const auto& target : targets) {
@@ -302,7 +387,7 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
                 persistProfileIDs(slice);
                 return false;
             }
-            runRankedUrlProbe(target, fallShort, timeout, &best);
+            runRankedUrlProbe(target, fallShort, limitMs, configuredTimeout, &best);
         }
 
         for (int id : slice) {
@@ -312,11 +397,12 @@ bool TestRunner::runRankedConnectionPretest(const QList<int>& profileIDs, bool f
                 if (hadErrors) *hadErrors = true;
                 continue;
             }
+            const auto detail = connectionProbeLimitDetail(fallShort, limitMs, configuredTimeout);
             if (fallShort) {
-                profile->MarkPerformanceSkipped();
+                profile->MarkPerformanceSkipped(detail);
                 if (skipped) ++*skipped;
             } else {
-                profile->MarkPerformanceError();
+                profile->MarkPerformanceError(detail);
                 if (hadErrors) *hadErrors = true;
                 if (skipped) ++*skipped;
             }
@@ -341,7 +427,7 @@ TestRunner::RankedProbeResult TestRunner::runDownloadProbe(
     QString buildError;
     const auto target = buildTarget(profile, &buildError);
     if (!buildError.isEmpty()) {
-        profile->MarkPerformanceError();
+        profile->MarkPerformanceError(speedTestBuildError(buildError));
         persistProfiles({profile});
         outcome.completed = true;
         outcome.error = buildError;
@@ -374,14 +460,20 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
     // Sequential 2 MiB transfers: parallel downloads would contend and change Mbps.
     req.country_concurrency = 1;
 
+    bool rpcOK = false;
+    QString coreError;
+    libcore::SpeedTestResponse result;
+
     auto markUnresolved = [&](int id) {
         auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
         if (!profile) return;
+        const auto detail = downloadFailureDetail(fallShort, timeoutMs, defaultTimeoutMs,
+                                                  !rpcOK ? coreError : QString());
         if (fallShort && timeoutMs < defaultTimeoutMs) {
-            profile->MarkPerformanceSkipped();
+            profile->MarkPerformanceSkipped(detail);
             if (skipped) ++*skipped;
         } else {
-            profile->MarkPerformanceError();
+            profile->MarkPerformanceError(detail);
             if (hadErrors) *hadErrors = true;
             if (skipped) ++*skipped;
         }
@@ -389,9 +481,6 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
 
     QElapsedTimer elapsed;
     elapsed.start();
-    bool rpcOK = false;
-    QString coreError;
-    libcore::SpeedTestResponse result;
     {
         ResultPoller poller([this, gen = sessionGen_.load(), tag2entID = target.tag2entID] {
             if (sessionGen_.load() != gen || stopRequested_.load()) return;
@@ -432,11 +521,12 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
                       res.ul_bytes.value(), res.dl_bytes.value());
 
         if (!error.isEmpty()) {
+            const auto detail = downloadFailureDetail(fallShort, timeoutMs, defaultTimeoutMs, error);
             if (fallShort && timeoutMs < defaultTimeoutMs) {
-                profile->MarkPerformanceSkipped();
+                profile->MarkPerformanceSkipped(detail);
                 if (skipped) ++*skipped;
             } else {
-                profile->MarkPerformanceError();
+                profile->MarkPerformanceError(detail);
                 if (hadErrors) *hadErrors = true;
                 if (skipped) ++*skipped;
             }
@@ -445,7 +535,7 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
             const double rxMbps = Configs::ParseSpeedMbps(speed);
             const int connectionTime = res.latency.value() > 0 ? res.latency.value() : profile->connect_time_ms;
             if (rxMbps <= 0.0 || connectionTime <= 0) {
-                profile->MarkPerformanceError();
+                profile->MarkPerformanceError(speedTestInvalidResult(connectionTime, rxMbps));
                 if (hadErrors) *hadErrors = true;
                 if (skipped) ++*skipped;
             } else {
@@ -1313,7 +1403,7 @@ void TestRunner::runSpeedProbe(const Target& target)
             if (ent->latency <= 0 && res.latency.value() > 0) ent->SetLatency(res.latency.value());
             if (!res.server_country.value().empty()) ent->test_country = CountryNameToCode(QString::fromStdString(res.server_country.value()));
         } else {
-            ent->MarkPerformanceError();
+            ent->MarkPerformanceError(downloadFailureDetail(false, -1, -1, error));
             ent->ul_speed = "N/A";
             ent->SetLatency(-1);
             ent->test_country = "";
