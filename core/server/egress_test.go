@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"runtime"
 	"testing"
 
@@ -82,5 +83,63 @@ func TestAutoRedirectMarkForIsLinuxOnly(t *testing.T) {
 	}
 	if got := autoRedirectMarkFor(config); got != want {
 		t.Errorf("autoRedirectMarkFor() on %s = %d, want %d", runtime.GOOS, got, want)
+	}
+}
+
+func TestStampHostEgress(t *testing.T) {
+	const untouched = `{"route":{"auto_detect_interface":true}}`
+	if got := stampHostEgress(untouched, "", 0); got != untouched {
+		t.Errorf("no iface/mark rewrote config: %s", got)
+	}
+	if got := stampHostEgress("", "eth0", 4660); got != "" {
+		t.Errorf("empty config became %q", got)
+	}
+	if got := stampHostEgress("{", "eth0", 0); got != "{" {
+		t.Errorf("malformed JSON was rewritten: %q", got)
+	}
+
+	got := stampHostEgress(`{"route":{"auto_detect_interface":true},"outbounds":[{"type":"direct"}]}`, "eth0", 4660)
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(got), &obj); err != nil {
+		t.Fatalf("rewritten config is not JSON: %v", err)
+	}
+	route, _ := obj["route"].(map[string]any)
+	if route == nil {
+		t.Fatal("route missing")
+	}
+	if route["auto_detect_interface"] != false {
+		t.Errorf("auto_detect_interface = %v, want false", route["auto_detect_interface"])
+	}
+	if route["default_interface"] != "eth0" {
+		t.Errorf("default_interface = %v, want eth0", route["default_interface"])
+	}
+	mark, _ := route["default_mark"].(float64)
+	if mark != 4660 {
+		t.Errorf("default_mark = %v, want 4660", route["default_mark"])
+	}
+
+	ifaceOnly := stampHostEgress(`{"outbounds":[{"type":"direct"}]}`, "wlan0", 0)
+	if err := json.Unmarshal([]byte(ifaceOnly), &obj); err != nil {
+		t.Fatalf("iface-only config is not JSON: %v", err)
+	}
+	route, _ = obj["route"].(map[string]any)
+	if route["default_interface"] != "wlan0" {
+		t.Errorf("iface-only default_interface = %v", route["default_interface"])
+	}
+	if _, hasMark := route["default_mark"]; hasMark {
+		t.Errorf("iface-only unexpectedly set default_mark")
+	}
+
+	markOnly := stampHostEgress(`{"route":{"auto_detect_interface":true}}`, "", 99)
+	if err := json.Unmarshal([]byte(markOnly), &obj); err != nil {
+		t.Fatalf("mark-only config is not JSON: %v", err)
+	}
+	route, _ = obj["route"].(map[string]any)
+	mark, _ = route["default_mark"].(float64)
+	if mark != 99 {
+		t.Errorf("mark-only default_mark = %v, want 99", route["default_mark"])
+	}
+	if route["auto_detect_interface"] != true {
+		t.Errorf("mark-only should keep auto_detect_interface, got %v", route["auto_detect_interface"])
 	}
 }

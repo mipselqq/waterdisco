@@ -55,3 +55,39 @@ func configAutoRedirectMark(coreConfig []byte) uint32 {
 	}
 	return 0
 }
+
+// Pins a test box to the host NIC (and the live auto_redirect mark when TUN is
+// up) so probes leave from the machine itself, never through the connected
+// profile. auto_detect_interface is turned off: the test box has no TUN of its
+// own, so a fresh monitor would otherwise pick the live TUN as the default route.
+func applyHostEgress(coreConfig string) string {
+	iface, mark := currentEgress()
+	return stampHostEgress(coreConfig, iface, mark)
+}
+
+func stampHostEgress(coreConfig, iface string, mark uint32) string {
+	if coreConfig == "" || (iface == "" && mark == 0) {
+		return coreConfig
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(coreConfig), &obj); err != nil {
+		return coreConfig
+	}
+	route, _ := obj["route"].(map[string]any)
+	if route == nil {
+		route = map[string]any{}
+		obj["route"] = route
+	}
+	if iface != "" {
+		route["default_interface"] = iface
+		route["auto_detect_interface"] = false
+	}
+	if mark != 0 {
+		route["default_mark"] = mark
+	}
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return coreConfig
+	}
+	return string(out)
+}

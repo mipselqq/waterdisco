@@ -478,17 +478,6 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
             mw_->ui->pushButton_cancel_speedtest->setEnabled(true);
         });
 
-        const int profileToRestore = mw_->running ? mw_->running->id : -1;
-        if (mw_->running) {
-            mw_->profile_stop(false, true, false);
-            if (mw_->running) {
-                MW_show_log(MainWindow::tr("Failed to stop active profile before speedtest; speedtest cancelled."));
-                session_.unlock();
-                runOnUiThread([this] { mw_->ui->pushButton_cancel_speedtest->setVisible(false); });
-                return;
-            }
-        }
-
         QElapsedTimer elapsed;
         elapsed.start();
 
@@ -544,7 +533,7 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
             completed = runRankedConnectionPretest(pretestOrder, fallShort, &bestConnectionMs,
                                                    &skipped, &hadErrors, connectionStage);
             if (!completed) {
-                // Fall through to the shared restore path.
+                // Fall through to the shared finish path.
             } else {
                 QList<Configs::RankedScheduleRow> survivors;
                 survivors.reserve(profileIDs.size());
@@ -629,12 +618,13 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
 
         const bool canChooseProfile = completed && !stopRequested_.load();
         // A partial error may still leave useful measurements, but it is not a
-        // successful auto-connect run: restore the prior connection instead.
+        // successful auto-connect run. The live profile is left running until
+        // auto-connect actually switches to a different winner.
         const int bestID = canChooseProfile && !hadErrors && connectBestSiteScore
             ? bestSiteScoreProfile(profileIDs) : -1;
         const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
-        runOnUiThread([this, profileIDs, bestID, profileToRestore, canChooseProfile, elapsedMs] {
+        runOnUiThread([this, profileIDs, bestID, canChooseProfile, elapsedMs] {
             mw_->dataViewHtmlGenerator_.clearTestSections();
             mw_->UpdateDataView(true);
             mw_->refresh_proxy_list(profileIDs);
@@ -643,10 +633,8 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
             MW_show_log(testFinishLog(
                 canChooseProfile ? MainWindow::tr("Speedtest finished!") : MainWindow::tr("Speedtest interrupted."),
                 elapsedMs));
-            if (bestID >= 0) {
+            if (bestID >= 0 && (!mw_->running || mw_->running->id != bestID)) {
                 mw_->profile_start(bestID);
-            } else if (profileToRestore >= 0) {
-                mw_->profile_start(profileToRestore);
             }
         });
     });
@@ -855,17 +843,6 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
             mw_->ui->pushButton_cancel_speedtest->setEnabled(true);
         });
 
-        const int profileToRestore = mw_->running ? mw_->running->id : -1;
-        if (mw_->running) {
-            mw_->profile_stop(false, true, false);
-            if (mw_->running) {
-                MW_show_log(MainWindow::tr("Failed to stop active profile before connection test; test cancelled."));
-                session_.unlock();
-                runOnUiThread([this] { mw_->ui->pushButton_cancel_speedtest->setVisible(false); });
-                return;
-            }
-        }
-
         QElapsedTimer elapsed;
         elapsed.start();
 
@@ -906,7 +883,7 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
 
         const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
-        runOnUiThread([this, profileIDs, profileToRestore, completed, elapsedMs] {
+        runOnUiThread([this, profileIDs, completed, elapsedMs] {
             mw_->dataViewHtmlGenerator_.clearTestSections();
             mw_->UpdateDataView(true);
             mw_->refresh_proxy_list(profileIDs);
@@ -915,7 +892,6 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
             MW_show_log(testFinishLog(
                 completed ? MainWindow::tr("Connection test finished!") : MainWindow::tr("Connection test interrupted."),
                 elapsedMs));
-            if (profileToRestore >= 0) mw_->profile_start(profileToRestore);
         });
     });
 }

@@ -299,7 +299,7 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 	}
 	cleanups = append(cleanups, func() { closeXrayInstances(fullXray) })
 
-	box, cancel, err := boxmain.Create([]byte(coreConfig))
+	box, cancel, err := boxmain.Create([]byte(applyHostEgress(coreConfig)))
 	if err != nil {
 		unwind()
 		return nil, err

@@ -46,9 +46,10 @@ public:
 
     void runSpeedTests(const QList<int>& profileIDs, bool testCurrent = false);
 
-    // Ranked 2 MiB Cloudflare download. ByConnectionTime prepends a concurrent
-    // TTFB pretest then downloads fastest-this-run first. BySavedSiteScore
-    // takes TTFB from the download. Last-run values only change order.
+    // Ranked 2 MiB Cloudflare download. Runs beside a live profile on a
+    // separate test box. ByConnectionTime prepends a concurrent TTFB pretest
+    // then downloads fastest-this-run first. BySavedSiteScore takes TTFB from
+    // the download. Last-run values only change order.
     void runRankedSpeedTests(const QList<int>& profileIDs, RankedStartMode mode,
                              bool connectBestSiteScore, bool fallShort);
 

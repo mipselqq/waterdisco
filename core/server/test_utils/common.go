@@ -175,6 +175,7 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 func dialerHTTPClient(dial func(ctx context.Context, network, address string) (net.Conn, error), timeout time.Duration) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
+			Proxy: http.ProxyNone,
 			DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
 				return dial(ctx, network, addr)
 			},
