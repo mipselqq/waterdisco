@@ -41,6 +41,7 @@
 #include "include/ui/utils/DataViewHtmlGenerator.h"
 #include "include/ui/utils/ProfilesFilterProxyModel.h"
 #include "include/ui/utils/ProfilesTableModel.h"
+#include "include/ui/utils/LiveResizeFreeze.h"
 #include "ui_mainwindow.h"
 
 #endif
@@ -455,13 +456,13 @@ private:
     QTimer *m_proxyListRefreshDebounce = nullptr;
     QTimer *m_liveResizeTimer = nullptr;
     bool m_liveResizing = false;
-    QPointer<QWidget> m_tableResizeOverlay;
+    LiveResizeFreeze m_tableResizeFreeze;
+    LiveResizeFreeze m_logResizeFreeze;
     void scheduleProxyListRefresh();
     void beginLiveResize();
     void endLiveResize();
-    void showTableResizeSnapshot();
-    void syncTableResizeOverlay();
-    void hideTableResizeSnapshot();
+    void syncLiveResizeOverlays();
+    QTextBrowser *activeLogBrowser() const;
 
     bool m_adjustingColumns = false;
     QTimer *m_groupOrderSaveDebounce = nullptr;

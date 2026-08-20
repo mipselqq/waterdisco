@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -106,7 +107,7 @@ type batchProbe[T any] struct {
 }
 
 func normalizeConcurrency(maxConcurrency int) int {
-	if maxConcurrency <= 0 || maxConcurrency >= 500 {
+	if maxConcurrency <= 0 {
 		return MaxConcurrentTests
 	}
 	return maxConcurrency
@@ -137,7 +138,6 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 		default:
 		}
 
-		time.Sleep(2 * time.Millisecond) // don't spawn goroutines too quickly
 		limiter <- struct{}{}
 		go func(t string) {
 			defer wg.Done()
@@ -153,8 +153,13 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 				return
 			}
 			res := probe.run(ctx, t, outbound)
+			if ctx.Err() != nil {
+				res = probe.fail(t, ErrTestAborted)
+			}
 			store(t, res)
-			probe.publish(res)
+			if ctx.Err() == nil {
+				probe.publish(res)
+			}
 		}(tag)
 	}
 
@@ -175,7 +180,8 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 func dialerHTTPClient(dial func(ctx context.Context, network, address string) (net.Conn, error), timeout time.Duration) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyNone,
+			// nil URL disables HTTP_PROXY; ProxyNone needs Go 1.23+.
+			Proxy: func(*http.Request) (*url.URL, error) { return nil, nil },
 			DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
 				return dial(ctx, network, addr)
 			},

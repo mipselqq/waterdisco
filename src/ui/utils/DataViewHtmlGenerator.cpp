@@ -52,6 +52,7 @@ void DataViewHtmlGenerator::setRankedSpeedtestProgress(const QString &stage, con
     speedtest_.tested = tested;
     speedtest_.skipped = skipped;
     speedtest_.totalProfiles = totalProfiles;
+    testProgress.store(tested + skipped);
 }
 
 void DataViewHtmlGenerator::seedLatencyTest(LatencyTestPanelState::Kind kind, int totalProfiles) {

@@ -182,6 +182,8 @@ set(PROJECT_SOURCES
         src/ui/utils/ProfilesFilterProxyModel.cpp
         include/ui/utils/ProfilesTableView.h
         src/ui/utils/ProfilesTableView.cpp
+        include/ui/utils/LiveResizeFreeze.h
+        src/ui/utils/LiveResizeFreeze.cpp
         include/ui/utils/ProfilesTableVerticalHeader.h
         src/ui/utils/ProfilesTableVerticalHeader.cpp
         include/ui/utils/ProfilesTableFilterHeader.h

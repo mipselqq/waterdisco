@@ -178,7 +178,7 @@ void MainWindow::UpdateDataView(bool force)
     auto html = dataViewHtmlGenerator_.buildHtml();
     runOnUiThread([=, this] {
         ui->data_view->setHtml(html);
-    }, true);
+    });
     lastUpdatedMs.store(QDateTime::currentMSecsSinceEpoch());
 }
 

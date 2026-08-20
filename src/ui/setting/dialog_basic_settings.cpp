@@ -30,6 +30,7 @@
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QIntValidator>
 
 #include "include/ui/mainwindow.h"
 
@@ -55,6 +56,8 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_INT(inbound_socks_port)
     ui->random_listen_port->setChecked(Configs::dataManager->settingsRepo->random_inbound_port);
     D_LOAD_INT(test_concurrent)
+    ui->test_concurrent->setValidator(new QIntValidator(0, 10000, ui->test_concurrent));
+    ui->label_14->setToolTip(tr("Parallel test probes per batch (0 = default 100, max 10000)."));
     D_LOAD_STRING(test_latency_url)
     D_LOAD_BOOL(disable_tray)
     ui->reset_proxy_on_disable_sp->setChecked(Configs::dataManager->settingsRepo->reset_proxy_on_disable_sp);
@@ -335,7 +338,16 @@ void DialogBasicSettings::accept() {
         needChoosePort = true;
     }
     Configs::dataManager->settingsRepo->random_inbound_port = ui->random_listen_port->isChecked();
-    D_SAVE_INT(test_concurrent)
+    {
+        bool ok = false;
+        const int concurrency = ui->test_concurrent->text().toInt(&ok);
+        if (!ok || concurrency < 0 || concurrency > 10000) {
+            MessageBoxWarning(tr("Invalid concurrency"),
+                              tr("Concurrency must be an integer from 0 to 10000."));
+            return;
+        }
+        Configs::dataManager->settingsRepo->test_concurrent = concurrency;
+    }
     D_SAVE_STRING(test_latency_url)
     D_SAVE_BOOL(disable_tray)
     Configs::dataManager->settingsRepo->proxy_scheme = ui->proxy_scheme->currentText().toLower();

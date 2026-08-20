@@ -4,47 +4,13 @@
 #include <QCursor>
 #include <QLineEdit>
 #include <QMimeData>
-#include <QPaintEvent>
-#include <QPainter>
-#include <QPixmap>
 #include <QResizeEvent>
+#include <QTextBrowser>
 #include <QTimer>
-#include <QWidget>
 
 #include "include/ui/utils/ProfilesTableView.h"
 #include "include/ui/widget/TrayOtpCodes.hpp"
 #include "include/ui/widget/TrayProfileSelector.hpp"
-
-namespace {
-class LastFrameOverlay final : public QWidget {
-public:
-    explicit LastFrameOverlay(QWidget *parent = nullptr) : QWidget(parent) {
-        setAttribute(Qt::WA_TransparentForMouseEvents);
-        setAttribute(Qt::WA_NoSystemBackground);
-        setAutoFillBackground(false);
-    }
-
-    void setSnapshot(const QPixmap &snap, const QColor &fill) {
-        m_snap = snap;
-        m_fill = fill;
-        update();
-    }
-
-    void clearSnapshot() { m_snap = QPixmap(); }
-
-protected:
-    void paintEvent(QPaintEvent *event) override {
-        QPainter painter(this);
-        painter.setClipRegion(event->region());
-        painter.fillRect(rect(), m_fill);
-        if (!m_snap.isNull()) painter.drawPixmap(0, 0, m_snap);
-    }
-
-private:
-    QPixmap m_snap;
-    QColor m_fill{QStringLiteral("#19232D")};
-};
-} // namespace
 
 void MainWindow::trayClickEvent() {
     constexpr qint64 recentlyActiveMs = 350;
@@ -146,7 +112,7 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
     updateImproveMoodGeometry();
     if (event->oldSize().isValid()) beginLiveResize();
-    syncTableResizeOverlay();
+    syncLiveResizeOverlays();
 }
 
 void MainWindow::scheduleProxyListRefresh() {
@@ -154,44 +120,27 @@ void MainWindow::scheduleProxyListRefresh() {
     if (m_proxyListRefreshDebounce) m_proxyListRefreshDebounce->start(proxyListRefreshDebounceMs);
 }
 
-void MainWindow::showTableResizeSnapshot() {
-    auto *table = ui->profilesTableView;
-    if (!table || !table->parentWidget()) return;
-
-    const QPixmap snap = table->grab();
-
-    auto *overlay = static_cast<LastFrameOverlay *>(m_tableResizeOverlay.data());
-    if (!overlay) {
-        overlay = new LastFrameOverlay(table->parentWidget());
-        m_tableResizeOverlay = overlay;
-    } else if (overlay->parentWidget() != table->parentWidget()) {
-        overlay->setParent(table->parentWidget());
-    }
-    overlay->setSnapshot(snap, table->palette().color(QPalette::Base));
-    overlay->setGeometry(table->geometry());
-    overlay->raise();
-    overlay->show();
-    table->setUpdatesEnabled(false);
+QTextBrowser *MainWindow::activeLogBrowser() const {
+    if (!ui->stats_widget) return nullptr;
+    if (ui->stats_widget->currentWidget() == ui->Logs) return ui->masterLogBrowser;
+    if (coreLogBrowser && coreLogBrowser->isVisible()) return coreLogBrowser;
+    return nullptr;
 }
 
-void MainWindow::syncTableResizeOverlay() {
-    if (!m_liveResizing || !m_tableResizeOverlay || !ui->profilesTableView) return;
-    m_tableResizeOverlay->setGeometry(ui->profilesTableView->geometry());
-}
-
-void MainWindow::hideTableResizeSnapshot() {
-    if (ui->profilesTableView) ui->profilesTableView->setUpdatesEnabled(true);
-    if (auto *overlay = static_cast<LastFrameOverlay *>(m_tableResizeOverlay.data())) {
-        overlay->hide();
-        overlay->clearSnapshot();
-    }
+void MainWindow::syncLiveResizeOverlays() {
+    if (!m_liveResizing) return;
+    m_tableResizeFreeze.syncGeometry();
+    m_logResizeFreeze.syncGeometry();
 }
 
 void MainWindow::beginLiveResize() {
     if (!m_liveResizeTimer) return;
     if (!m_liveResizing) {
         m_liveResizing = true;
-        showTableResizeSnapshot();
+        m_tableResizeFreeze.show(ui->profilesTableView);
+        if (const auto browser = activeLogBrowser()) {
+            m_logResizeFreeze.show(browser);
+        }
     }
     m_liveResizeTimer->start();
 }
@@ -202,7 +151,8 @@ void MainWindow::endLiveResize() {
     if (auto *table = qobject_cast<ProfilesTableView *>(ui->profilesTableView)) {
         table->settleChromeMasks();
     }
-    hideTableResizeSnapshot();
+    m_tableResizeFreeze.hide();
+    m_logResizeFreeze.hide();
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
