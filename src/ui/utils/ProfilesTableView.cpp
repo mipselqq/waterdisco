@@ -11,6 +11,7 @@
 #include <QRegion>
 #include <QResizeEvent>
 #include <QScrollBar>
+#include <QTimer>
 
 ProfilesTableView::ProfilesTableView(QWidget *parent)
     : QTableView(parent) {
@@ -25,6 +26,11 @@ ProfilesTableView::ProfilesTableView(QWidget *parent)
     setVerticalHeader(m_verticalHeader);
     m_filterHeader = new ProfilesTableFilterHeader(this);
     setHorizontalHeader(m_filterHeader);
+
+    m_chromeMaskTimer = new QTimer(this);
+    m_chromeMaskTimer->setSingleShot(true);
+    m_chromeMaskTimer->setInterval(15);
+    connect(m_chromeMaskTimer, &QTimer::timeout, this, [this] { updateChromeMasks(); });
 }
 
 void ProfilesTableView::setModel(QAbstractItemModel *model) {
@@ -48,33 +54,64 @@ int ProfilesTableView::firstVisibleRow() {
 
 void ProfilesTableView::resizeEvent(QResizeEvent *event) {
     QTableView::resizeEvent(event);
+    if (!event->oldSize().isValid()) {
+        updateChromeMasks();
+        return;
+    }
+    deferChromeMasks();
+}
+
+void ProfilesTableView::deferChromeMasks() {
+    // setMask() invalidates the whole widget. Rebuilding a viewport-sized
+    // QRegion on every live-resize event was a major cost on large windows.
+    if (!m_chromeMaskDeferred) {
+        m_chromeMaskDeferred = true;
+        if (auto *area = viewport()) area->clearMask();
+        if (auto *bar = verticalScrollBar()) bar->clearMask();
+        m_maskedViewportSize = QSize();
+        m_maskedBarSize = QSize();
+    }
+    m_chromeMaskTimer->start();
+}
+
+void ProfilesTableView::settleChromeMasks() {
+    if (!m_chromeMaskTimer) return;
+    m_chromeMaskTimer->stop();
     updateChromeMasks();
 }
 
 void ProfilesTableView::updateChromeMasks() {
     constexpr qreal radius = 4.0;
+    m_chromeMaskDeferred = false;
 
     // The viewport is a child of QAbstractScrollArea, so a stylesheet radius
     // on the view alone cannot clip its lower-left corner. This mask is only
-    // recomputed on resize, never while scrolling.
+    // recomputed after resize settles, never while scrolling.
     if (auto *area = viewport(); area && area->width() > radius && area->height() > radius) {
-        const QRectF rect = area->rect();
-        QPainterPath path;
-        path.moveTo(rect.topLeft());
-        path.lineTo(rect.topRight());
-        path.lineTo(rect.bottomRight());
-        path.lineTo(rect.left() + radius, rect.bottom());
-        path.quadTo(rect.bottomLeft(), QPointF(rect.left(), rect.bottom() - radius));
-        path.lineTo(rect.topLeft());
-        path.closeSubpath();
-        area->setMask(QRegion(path.toFillPolygon().toPolygon()));
+        if (area->size() != m_maskedViewportSize) {
+            const QRectF rect = area->rect();
+            QPainterPath path;
+            path.moveTo(rect.topLeft());
+            path.lineTo(rect.topRight());
+            path.lineTo(rect.bottomRight());
+            path.lineTo(rect.left() + radius, rect.bottom());
+            path.quadTo(rect.bottomLeft(), QPointF(rect.left(), rect.bottom() - radius));
+            path.lineTo(rect.topLeft());
+            path.closeSubpath();
+            area->setMask(QRegion(path.toFillPolygon().toPolygon()));
+            m_maskedViewportSize = area->size();
+        }
     }
 
     // The right edge belongs visually to the scrollbar, not the table body.
     // Clip only its two outer-right corners; the left side stays flush with
     // the viewport and header.
     auto *bar = verticalScrollBar();
-    if (!bar || bar->width() <= radius || bar->height() <= radius) return;
+    if (!bar || bar->width() <= radius || bar->height() <= radius) {
+        m_maskedBarSize = QSize();
+        return;
+    }
+    if (bar->size() == m_maskedBarSize) return;
     const QRectF rect = bar->rect();
     QPainterPath path;
     path.moveTo(rect.topLeft());
@@ -85,6 +122,7 @@ void ProfilesTableView::updateChromeMasks() {
     path.lineTo(rect.bottomLeft());
     path.closeSubpath();
     bar->setMask(QRegion(path.toFillPolygon().toPolygon()));
+    m_maskedBarSize = bar->size();
 }
 
 

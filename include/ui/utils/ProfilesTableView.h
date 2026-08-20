@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QTableView>
+#include <QSize>
 #include <functional>
 
 // Table view for the profiles list: drag-drop reorder and custom vertical header.
@@ -17,6 +18,8 @@ public:
 
     int firstVisibleRow();
 
+    void settleChromeMasks();
+
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
@@ -25,8 +28,13 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
+    void deferChromeMasks();
     void updateChromeMasks();
     class ProfilesTableVerticalHeader *m_verticalHeader = nullptr;
     class ProfilesTableFilterHeader *m_filterHeader = nullptr;
     class ProfilesFilterProxyModel *m_filterProxy = nullptr;
+    class QTimer *m_chromeMaskTimer = nullptr;
+    bool m_chromeMaskDeferred = false;
+    QSize m_maskedViewportSize;
+    QSize m_maskedBarSize;
 };

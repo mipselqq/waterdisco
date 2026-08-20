@@ -453,7 +453,15 @@ private:
     QSize designMinimumSize;
 
     QTimer *m_proxyListRefreshDebounce = nullptr;
+    QTimer *m_liveResizeTimer = nullptr;
+    bool m_liveResizing = false;
+    QPointer<QWidget> m_tableResizeOverlay;
     void scheduleProxyListRefresh();
+    void beginLiveResize();
+    void endLiveResize();
+    void showTableResizeSnapshot();
+    void syncTableResizeOverlay();
+    void hideTableResizeSnapshot();
 
     bool m_adjustingColumns = false;
     QTimer *m_groupOrderSaveDebounce = nullptr;

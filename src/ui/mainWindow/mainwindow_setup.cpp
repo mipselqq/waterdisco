@@ -296,6 +296,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     coreLogBrowser->setDocument(coreLogDocument);
     applyLogBrowserFont();
     updateLogFilterFields();
+    m_liveResizeTimer = new QTimer(this);
+    m_liveResizeTimer->setSingleShot(true);
+    m_liveResizeTimer->setInterval(15);
+    connect(m_liveResizeTimer, &QTimer::timeout, this, [this] { endLiveResize(); });
     runOnThread([=, this] {
         log_process_loop();
     }, LogThread);
@@ -1497,8 +1501,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(t, &QTimer::timeout, this, [&] { Configs_sys::logCounter.fetchAndStoreRelaxed(0); });
     t->start(1000);
 
-    // Debounced so font/theme/resize changes settle; fired from changeEvent,
-    // resizeEvent and ThemeManager::themeChanged.
+    // Debounced so font/theme changes settle; fired from changeEvent, showEvent
+    // and ThemeManager::themeChanged. Window resize does not change table data.
     m_proxyListRefreshDebounce = new QTimer(this);
     m_proxyListRefreshDebounce->setSingleShot(true);
     connect(m_proxyListRefreshDebounce, &QTimer::timeout, this, [this] { refresh_proxy_list({}, false); });
