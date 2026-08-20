@@ -1166,12 +1166,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         testRunner->runRankedSpeedTests(selected, mode, connectBest,
                                         Configs::dataManager->settingsRepo->speed_test_fall_short);
     };
-    auto* actionSpeedtestByConnTime = new QAction(tr("Speedtest by connection time"), ui->menu_server);
-    auto* actionSpeedtestBySavedScore = new QAction(tr("Speedtest by saved site score"), ui->menu_server);
-    auto* actionConnectBestScore = new QAction(tr("Connect with best site score"), ui->menu_server);
+    auto* actionSpeedtestByConnTime = new QAction(tr("Speedtest By Connection Time"), ui->menu_server);
+    auto* actionSpeedtestBySavedScore = new QAction(tr("Speedtest By Saved Site Score"), ui->menu_server);
     ui->menu_server->insertAction(ui->actionSpeedtest_Selected, actionSpeedtestBySavedScore);
     ui->menu_server->insertAction(ui->actionSpeedtest_Selected, actionSpeedtestByConnTime);
-    ui->menu_server->insertAction(ui->actionSpeedtest_Selected, actionConnectBestScore);
     ui->actionSpeedtest_Selected->setVisible(false);
     connect(actionSpeedtestByConnTime, &QAction::triggered, this, [=, this] {
         startSelectedRankedSpeedtest(TestRunner::RankedStartMode::ByConnectionTime,
@@ -1181,19 +1179,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         startSelectedRankedSpeedtest(TestRunner::RankedStartMode::BySavedSiteScore,
                                      Configs::dataManager->settingsRepo->auto_connect_best_site_score);
     });
-    connect(actionConnectBestScore, &QAction::triggered, this, [=, this] {
-        const auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-        if (!group) return;
-        testRunner->runRankedSpeedTests(group->Profiles(), TestRunner::RankedStartMode::BySavedSiteScore,
-                                        true, Configs::dataManager->settingsRepo->speed_test_fall_short);
-    });
 
     connect(ui->menu_server, &QMenu::aboutToShow, this, [=,this](){
         if (auto selected = get_now_selected_list(); selected.empty())
         {
             actionSpeedtestByConnTime->setEnabled(false);
             actionSpeedtestBySavedScore->setEnabled(false);
-            actionConnectBestScore->setEnabled(false);
             ui->actionUrl_Test_Selected->setEnabled(false);
             ui->menu_resolve_selected->setEnabled(false);
             ui->actionResolve_Selected_Out_IP->setEnabled(false);
@@ -1201,13 +1192,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         {
             actionSpeedtestByConnTime->setEnabled(true);
             actionSpeedtestBySavedScore->setEnabled(true);
-            actionConnectBestScore->setEnabled(true);
             ui->actionUrl_Test_Selected->setEnabled(true);
             ui->menu_resolve_selected->setEnabled(true);
             ui->actionResolve_Selected_Out_IP->setEnabled(true);
         }
-        const auto group = Configs::dataManager->groupsRepo->CurrentGroup();
-        actionConnectBestScore->setEnabled(group != nullptr && !group->Profiles().isEmpty());
         if (testRunner->isRunning()) {
             ui->menu_server->addAction(ui->menu_stop_testing);
         } else {

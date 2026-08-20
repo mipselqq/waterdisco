@@ -1282,7 +1282,7 @@ QTabBar::tab:selected {
   </action>
   <action name="actionUrl_Test_Selected">
    <property name="text">
-    <string>Test connection time</string>
+    <string>Test Connection Time</string>
    </property>
    <property name="shortcut">
     <string notr="true">Ctrl+Shift+S</string>
