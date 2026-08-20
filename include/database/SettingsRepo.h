@@ -68,7 +68,7 @@ namespace Configs {
         QString test_latency_url = "http://cp.cloudflare.com/";
         int url_test_timeout_ms = 3000;
         bool disable_tray = false;
-        int test_concurrent = 10;
+        int test_concurrent = 100;
         bool disable_traffic_stats = false;
         int current_group = 0; // group id
         QString mux_protocol = "smux";
