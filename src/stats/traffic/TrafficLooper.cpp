@@ -115,7 +115,8 @@ namespace Stats {
                 }
                 runOnUiThread([=]
                 {
-                   auto m = GetMainWindow();
+                   auto *m = GetMainWindow();
+                   if (m == nullptr || !m->isVisible() || m->isMinimized()) return;
                    m->update_traffic_graph(0, 0, 0, 0);
                 });
                 continue;
@@ -140,21 +141,29 @@ namespace Stats {
 
             // post to UI
             runOnUiThread([=,this] {
-                auto m = GetMainWindow();
+                auto *m = GetMainWindow();
+                if (m == nullptr) return;
+                const bool foreground = m->isVisible() && !m->isMinimized();
                 if (proxy != nullptr) {
                     m->refresh_status(QObject::tr("Proxy: %1\nDirect: %2").arg(DisplaySpeed(proxy), DisplaySpeed(direct)));
-                    m->update_traffic_graph(proxy->downlink_rate, proxy->uplink_rate, direct->downlink_rate, direct->uplink_rate);
+                    if (foreground) {
+                        m->update_traffic_graph(proxy->downlink_rate, proxy->uplink_rate, direct->downlink_rate, direct->uplink_rate);
+                    }
                 }
+                if (!foreground) return;
                 // One batched refresh: a 300-member auto-selector pool would
                 // otherwise fire hundreds of list refreshes every second.
                 QList<int> ids;
                 QSet<int> seen;
-                for (const auto& group : groups) {
-                    for (const auto& profile : group.profiles) {
-                        if (!profile || profile->id < 0) continue;
-                        if (seen.contains(profile->id)) continue;
-                        seen.insert(profile->id);
-                        ids << profile->id;
+                {
+                    QMutexLocker lk(&loop_mutex);
+                    for (const auto& group : groups) {
+                        for (const auto& profile : group.profiles) {
+                            if (!profile || profile->id < 0) continue;
+                            if (seen.contains(profile->id)) continue;
+                            seen.insert(profile->id);
+                            ids << profile->id;
+                        }
                     }
                 }
                 if (!ids.isEmpty()) m->refresh_proxy_list(ids);

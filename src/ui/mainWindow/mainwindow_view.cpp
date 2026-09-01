@@ -221,6 +221,11 @@ void MainWindow::applyProfileFilters()
 
 void MainWindow::refresh_status(const QString &traffic_update) {
     const auto* settings = Configs::dataManager->settingsRepo.get();
+    const bool foreground = isVisible() && !isMinimized();
+    if (!foreground && !traffic_update.isEmpty()) {
+        if (m_trayStatusThrottle.isValid() && m_trayStatusThrottle.elapsed() < 10'000) return;
+        m_trayStatusThrottle.start();
+    }
     Q_UNUSED(traffic_update)
 
     // From UI
@@ -232,7 +237,9 @@ void MainWindow::refresh_status(const QString &traffic_update) {
 
     ui->checkBox_VPN->setChecked(settings->spmode_vpn);
     ui->checkBox_SystemProxy->setChecked(settings->spmode_system_proxy);
-    refreshInfoPanel();
+    if (isVisible() && !isMinimized()) {
+        refreshInfoPanel();
+    }
 
     const auto route = Configs::dataManager->routesRepo->GetRouteProfile(settings->current_route_id);
     const QString activeRouteName = (route && route->name != "Default") ? route->name : "";
@@ -354,22 +361,36 @@ void MainWindow::runCurrentConnectionProbe() {
 
     const int profileID = running->id;
     const quint64 generation = connectionProbeGeneration;
-    if (testRunner->isRunning()) {
-        // A manual measurement owns the core test session. Retry shortly rather
-        // than constructing a second test environment or interrupting it.
-        connectionProbeTimer->start(1'000);
+    const bool foreground = isVisible() && !isMinimized();
+    const bool hasIp = !running->ip_out.trimmed().isEmpty();
+    static constexpr int kProbeWithIpMs = 60'000;
+    static constexpr int kProbeForegroundMs = 10'000;
+
+    if (testRunner->isRunning() || testRunner->isTestingCurrent()) {
+        connectionProbeTimer->start(hasIp ? kProbeWithIpMs : (foreground ? 5'000 : 30'000));
         return;
     }
 
     QPointer<MainWindow> self(this);
-    testRunner->runCurrentIpTest(profileID, [self, profileID, generation](bool success) {
+    testRunner->runCurrentIpTest(profileID, [self, profileID, generation, foreground](bool success) {
         if (!self || self->running == nullptr || self->running->id != profileID
             || self->connectionProbeTimer == nullptr
             || self->connectionProbeGeneration != generation) {
             return;
         }
         self->refresh_status();
-        self->connectionProbeTimer->start(success ? 10'000 : 1'000);
+        const bool hasIpNow = !self->running->ip_out.trimmed().isEmpty();
+        int delayMs;
+        if (success) {
+            self->connectionProbeFailStreak.store(0);
+            delayMs = hasIpNow ? kProbeWithIpMs : (foreground ? kProbeForegroundMs : kProbeWithIpMs);
+        } else {
+            const int streak = self->connectionProbeFailStreak.fetch_add(1) + 1;
+            static constexpr int kBackoffMs[] = {5'000, 15'000, 30'000, 60'000};
+            const int idx = qMin(streak - 1, 3);
+            delayMs = hasIpNow ? kProbeWithIpMs : (foreground ? kBackoffMs[idx] : qMax(kBackoffMs[idx], kProbeWithIpMs));
+        }
+        self->connectionProbeTimer->start(delayMs);
     });
 }
 
@@ -482,10 +503,11 @@ void MainWindow::refresh_proxy_list_impl(const QList<int>& ids, bool mayNeedRese
 }
 
 void MainWindow::refresh_proxy_list_impl_refresh_data(const QList<int>& ids, bool mayNeedReset) {
+    const bool foreground = isVisible() && !isMinimized();
     if (!ids.isEmpty()) {
         for (auto id:ids) {
             profilesTableModel->refreshProfileId(id);
-            liveReorderProfile(id);
+            if (foreground) liveReorderProfile(id);
         }
     } else {
         QList<ProfilesTableModel::GroupSection> sections;

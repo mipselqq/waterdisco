@@ -1,8 +1,7 @@
 #include "include/global/Utils.hpp"
 
-#include "3rdparty/QThreadCreateThread.hpp"
-
 #include <random>
+#include <thread>
 
 #include <QApplication>
 #include <QUrlQuery>
@@ -23,6 +22,7 @@
 #include <QPlainTextEdit>
 #include <QDialogButtonBox>
 #include <QDialog>
+#include <QThreadPool>
 
 #ifdef Q_OS_WIN
 #include "include/sys/windows/guihelper.h"
@@ -459,17 +459,8 @@ void LaunchFiles_FlushPending() {
     MW_import_files(paths);
 }
 
-void runOnNewThread(const std::function<void()> &callback, bool wait) {
-    auto *timer = new QTimer();
-    auto thread = new QThread();
-    timer->moveToThread(thread);
-    timer->setSingleShot(true);
-
-    thread->start();
-    QObject::connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-
-    QEventLoop loop;
-    QObject::connect(timer, &QTimer::timeout, [=, &loop]() {
+namespace {
+    void runWorkerCallback(const std::function<void()> &callback) {
         try {
             callback();
         } catch (const std::exception& e) {
@@ -477,19 +468,30 @@ void runOnNewThread(const std::function<void()> &callback, bool wait) {
         } catch (...) {
             qWarning() << "Unhandled non-standard exception in worker callback";
         }
-        timer->deleteLater();
-        QMetaObject::invokeMethod(thread, "quit", Qt::QueuedConnection);
-
-        if (wait)
-        {
-            QMetaObject::invokeMethod(&loop, "quit", Qt::QueuedConnection);
-        }
-    });
-    QMetaObject::invokeMethod(timer, "start", Qt::QueuedConnection, Q_ARG(int, 0));
-
-    if (wait && QThread::currentThread() != thread) {
-        loop.exec();
     }
+
+    class FunctorRunnable : public QRunnable {
+    public:
+        explicit FunctorRunnable(std::function<void()> callback)
+            : callback_(std::move(callback)) {
+            setAutoDelete(true);
+        }
+
+        void run() override {
+            runWorkerCallback(callback_);
+        }
+
+    private:
+        std::function<void()> callback_;
+    };
+}
+
+void runOnNewThread(const std::function<void()> &callback, bool wait) {
+    if (wait) {
+        std::thread([&callback] { runWorkerCallback(callback); }).join();
+        return;
+    }
+    QThreadPool::globalInstance()->start(new FunctorRunnable(callback));
 }
 
 void runOnThread(const std::function<void()> &callback, QObject *parent, bool wait) {

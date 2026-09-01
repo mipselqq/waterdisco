@@ -257,6 +257,7 @@ private:
     QThreadPool *parallelCoreCallPool = new QThreadPool(this);
     std::unique_ptr<TestRunner> testRunner;
     QTimer *connectionProbeTimer = nullptr;
+    QElapsedTimer m_trayStatusThrottle;
     //
     Configs_sys::CoreProcess *core_process = nullptr;
     QMutex coreProcessMutex;

@@ -930,8 +930,13 @@ void TestRunner::applyIpResult(const std::shared_ptr<Configs::Profile>& ent, con
                                bool live) {
     const auto error = QString::fromStdString(res.error.value());
     if (error.isEmpty()) {
-        ent->ip_out = QString::fromStdString(res.ip.value());
-        ent->test_country = QString::fromStdString(res.country_code.value());
+        const QString newIp = QString::fromStdString(res.ip.value());
+        const QString newCountry = QString::fromStdString(res.country_code.value());
+        if (live && ent->ip_out == newIp && ent->test_country == newCountry) {
+            return;
+        }
+        ent->ip_out = newIp;
+        ent->test_country = newCountry;
     } else {
         if (!isTestAborted(error) && !live) {
             MW_show_log(MainWindow::tr("[%1] IP test error: %2").arg(ent->outbound->DisplayTypeAndName(), error));
@@ -939,6 +944,8 @@ void TestRunner::applyIpResult(const std::shared_ptr<Configs::Profile>& ent, con
         if (!live) {
             ent->ip_out.clear();
             ent->test_country.clear();
+        } else {
+            return;
         }
     }
     Configs::dataManager->profilesRepo->Save(ent);
@@ -1198,7 +1205,11 @@ void TestRunner::runCurrentIpTest(int profileID, const std::function<void(bool)>
         }
         testingCurrent_.store(false);
         session_.unlock();
-        postUi([this, profileID](MainWindow* mw) { mw->refresh_proxy_list({profileID}); });
+        postUi([this, profileID](MainWindow* mw) {
+            if (mw->isVisible() && !mw->isMinimized()) {
+                mw->refresh_proxy_list({profileID});
+            }
+        });
         if (finished) {
             runOnUiThread([finished, success] { finished(success); });
         }

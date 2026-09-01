@@ -209,7 +209,8 @@ namespace Stats
         if (sort == Default)
         {
             runOnUiThread([=,this] {
-                auto m = GetMainWindow();
+                auto *m = GetMainWindow();
+                if (m == nullptr || !m->isVisible() || m->isMinimized()) return;
                 m->UpdateConnectionList(toUpdate, toAdd);
             });
         } else
@@ -289,7 +290,8 @@ namespace Stats
                     });
             }
             runOnUiThread([=,this] {
-                auto m = GetMainWindow();
+                auto *m = GetMainWindow();
+                if (m == nullptr || !m->isVisible() || m->isMinimized()) return;
                 m->UpdateConnectionListWithRecreate(sorted);
             });
         }

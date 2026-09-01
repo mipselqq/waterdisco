@@ -16,6 +16,18 @@ namespace Configs_sys {
             return log.contains("router: failed to search process: process not found")
                 || log.contains("network: updated default interface");
         }
+
+        bool ShouldForwardCoreLogToUi() {
+            if (auto *mw = GetMainWindow()) {
+                return mw->isVisible() && !mw->isMinimized();
+            }
+            return false;
+        }
+
+        bool CoreLogRateLimited(const QByteArray& log) {
+            return logCounter.fetchAndAddRelaxed(log.count("\n"))
+                > Configs::dataManager->settingsRepo->max_log_line;
+        }
     }
 
     CoreProcess::~CoreProcess() {
@@ -38,12 +50,13 @@ namespace Configs_sys {
                 MW_dialog_message(MwMessage::CoreCrashed, {});
             }
             if (IsIgnorableRouterLog(log)) return;
-            if (logCounter.fetchAndAddRelaxed(log.count("\n")) > Configs::dataManager->settingsRepo->max_log_line) return;
+            if (!ShouldForwardCoreLogToUi() || CoreLogRateLimited(log)) return;
             MW_show_core_log(log);
         });
         connect(this, &QProcess::readyReadStandardError, this, [&]() {
             auto log = readAllStandardError().trimmed();
             if (IsIgnorableRouterLog(log)) return;
+            if (!ShouldForwardCoreLogToUi() || CoreLogRateLimited(log)) return;
             MW_show_core_log(log);
         });
         connect(this, &QProcess::errorOccurred, this, [&](ProcessError error) {
@@ -73,7 +86,7 @@ namespace Configs_sys {
 
                 MW_show_log("[Fatal] " + QObject::tr("Core exited, cleaning up..."));
 
-                GetMainWindow()->profile_stop(true, true);
+                GetMainWindow()->profile_stop(true, false);
 
                 // Retry rate limit
                 if (coreRestartTimer.isValid()) {
