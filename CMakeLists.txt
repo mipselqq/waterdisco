@@ -543,11 +543,34 @@ if (DASHBOARD_FILES)
             PROPERTY AUTORCC_OPTIONS "--compress-algo;zlib;--compress;9;--threshold;5")
 endif ()
 
+# Route preset catalog (gitignored). CI also curls this into the build dir.
+set(SRSLIST_H "${CMAKE_BINARY_DIR}/srslist.h")
+if (NOT EXISTS "${SRSLIST_H}")
+    if (EXISTS "${CMAKE_SOURCE_DIR}/srslist.h")
+        file(COPY "${CMAKE_SOURCE_DIR}/srslist.h" DESTINATION "${CMAKE_BINARY_DIR}")
+    else ()
+        message(STATUS "Downloading srslist.h")
+        file(DOWNLOAD
+                "https://raw.githubusercontent.com/throneproj/routeprofiles/rule-set/srslist.h"
+                "${SRSLIST_H}"
+                STATUS SRSLIST_STATUS
+                TIMEOUT 60
+        )
+        list(GET SRSLIST_STATUS 0 SRSLIST_CODE)
+        if (NOT SRSLIST_CODE EQUAL 0)
+            list(GET SRSLIST_STATUS 1 SRSLIST_MSG)
+            file(REMOVE "${SRSLIST_H}")
+            message(FATAL_ERROR "Failed to download srslist.h: ${SRSLIST_MSG}")
+        endif ()
+    endif ()
+endif ()
+
 # Qt exe
 qt_add_executable(Throne
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
 )
+target_include_directories(Throne PRIVATE ${CMAKE_BINARY_DIR})
 
 # Target
 
