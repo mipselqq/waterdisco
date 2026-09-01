@@ -24,7 +24,6 @@ func TestRemapInboundsMovesPortsBehindTheOriginals(t *testing.T) {
 	if len(pairs) != 2 {
 		t.Fatalf("got %d pairs, want 2", len(pairs))
 	}
-	// The gate has to answer on exactly the addresses sing-box was told to dial.
 	for i, want := range []string{"127.0.0.1:34567", "127.0.0.1:34568"} {
 		if pairs[i].gate != want {
 			t.Errorf("pair %d gates %q, want %q", i, pairs[i].gate, want)
@@ -53,7 +52,6 @@ func TestRemapInboundsMovesPortsBehindTheOriginals(t *testing.T) {
 			t.Errorf("inbound %d listens on %q, but the gate forwards to %q", i, want, pairs[i].target)
 		}
 	}
-	// Everything the gate does not own has to survive untouched.
 	if len(parsed.Inbounds) != 2 || parsed.Inbounds[0].Tag != "a-inbound" {
 		t.Errorf("inbound identity lost: %+v", parsed.Inbounds)
 	}
@@ -62,9 +60,7 @@ func TestRemapInboundsMovesPortsBehindTheOriginals(t *testing.T) {
 	}
 }
 
-// Ports are probed by binding and releasing, so a naive one-at-a-time probe can
-// hand the same freshly released port to two inbounds and only one of them ends
-// up reachable.
+// Ports are probed by binding and releasing, so a one-at-a-time probe can hand the same port to two inbounds.
 func TestRemapInboundsAssignsDistinctPorts(t *testing.T) {
 	inbounds := make([]map[string]any, 0, 16)
 	for i := 0; i < 16; i++ {
@@ -108,9 +104,7 @@ func TestRemapInboundsRejectsUngateableConfigs(t *testing.T) {
 	}
 }
 
-// The gate must own the dialed port from the moment the config loads, whether
-// or not an instance is up: a closed port reads to the auto-selector as a dead
-// member rather than a cold one.
+// A closed port reads to the auto-selector as a dead member rather than a cold one.
 func TestGateListensBeforeAnyInstanceStarts(t *testing.T) {
 	probe, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

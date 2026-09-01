@@ -12,7 +12,6 @@ namespace Configs
         int up_mbps = 0;
         int down_mbps = 0;
 
-        // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         QString ExportToLink() override;
@@ -48,7 +47,6 @@ namespace Configs
             if (state == 0) unspecified = true;
         }
 
-        // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         bool ParseFromClash(const clash::Proxies& object) override;

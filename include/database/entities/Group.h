@@ -46,7 +46,6 @@ namespace Configs
         int front_proxy_id = -1;
         int landing_proxy_id = -1;
 
-        // list ui
         QList<int> column_width;
         QList<int> calculated_column_width; // memory only, no need to save to db
         QList<int> profiles;
@@ -55,7 +54,7 @@ namespace Configs
         trafficBy traffic_sort_by = trafficBy::tx;
         typeBy type_sort_by = typeBy::byType;
         testShowItems test_items_to_show = testShowItems::all;
-        // Memory only, not persisted. Pairs of (profileID, row as displayed).
+        // Memory only. Pairs of (profileID, row as displayed).
         QList<std::pair<int, int>> selectedProfilesIdIdxPairs;
 
         Group() = default;

@@ -140,38 +140,6 @@
    </item>
    <item>
     <widget class="QTabWidget" name="tabWidget">
-     <property name="styleSheet">
-      <string notr="true">QTabWidget::pane {
-    margin-top: 1px;
-    border: 1px solid #777777;
-    border-radius: 4px;
-}
-
-QTabBar {
-    background: transparent;
-    qproperty-drawBase: 0;
-}
-
-QTabBar::tab {
-    border: 1px solid #777777;
-    border-radius: 4px;
-
-    padding: 2px 4px;
-    margin-right: 1px;
-}
-
-QTabBar::tab:selected {
-    border: 1px solid palette(highlight);
-}
-
-QTabBar::tab:!selected {
-    border: 1px solid #777777;
-}
-
-QTabBar::tab:hover:!selected {
-    border: 1px solid #777777;
-}</string>
-     </property>
      <property name="currentIndex">
       <number>0</number>
      </property>
@@ -254,6 +222,47 @@ QTabBar::tab:hover:!selected {
           </widget>
          </item>
         </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="endpointsTab">
+      <attribute name="title">
+       <string>Endpoints</string>
+      </attribute>
+      <attribute name="toolTip">
+       <string>OpenVPN / OpenConnect profiles started alongside this routing profile. Traffic for the networks they advertise goes through them; everything else follows this profile's rules. Each endpoint gets a rule in the Advanced tab that you can move among your own rules.</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="endpointsTabLayout">
+       <item>
+        <layout class="QHBoxLayout" name="endpointsActionRow">
+         <item>
+          <widget class="QComboBox" name="endpointPicker">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <horstretch>1</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="endpointAddBtn">
+           <property name="text">
+            <string>Add</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="endpointRemoveBtn">
+           <property name="text">
+            <string>Remove</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QListWidget" name="endpointList"/>
        </item>
       </layout>
      </widget>
@@ -444,6 +453,16 @@ QTabBar::tab:hover:!selected {
            </layout>
           </item>
           <item>
+           <widget class="QLabel" name="rule_managed_note">
+            <property name="text">
+             <string>This rule is managed by the Endpoints tab. You can only move it.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QTabWidget" name="rule_attr_tabs">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -456,38 +475,6 @@ QTabBar::tab:hover:!selected {
               <width>0</width>
               <height>100</height>
              </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QTabWidget::pane {
-    margin-top: 1px;
-    border: 1px solid #777777;
-    border-radius: 4px;
-}
-
-QTabBar {
-    background: transparent;
-    qproperty-drawBase: 0;
-}
-
-QTabBar::tab {
-    border: 1px solid #777777;
-    border-radius: 4px;
-
-    padding: 2px 4px;
-    margin-right: 1px;
-}
-
-QTabBar::tab:selected {
-    border: 1px solid palette(highlight);
-}
-
-QTabBar::tab:!selected {
-    border: 1px solid #777777;
-}
-
-QTabBar::tab:hover:!selected {
-    border: 1px solid #777777;
-}</string>
             </property>
             <property name="currentIndex">
              <number>-1</number>

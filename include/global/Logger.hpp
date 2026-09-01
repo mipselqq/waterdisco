@@ -3,8 +3,7 @@
 #include <QString>
 #include <QStringList>
 
-// Diagnostic log, distinct from the in-app log browser. Nothing here may call
-// qDebug()/qWarning(): the installed Qt message handler feeds back into Write().
+// Nothing here may call qDebug()/qWarning(): the installed Qt message handler feeds back into Write().
 namespace Logging {
     enum class Level {
         Trace = 0,
@@ -25,8 +24,7 @@ namespace Logging {
     // Messages logged before this are buffered in memory and replayed.
     void Init(const QString &baseDir);
 
-    // Clears the running marker, so anything that misses this is reported as a
-    // crash on the next start.
+    // Clears the running marker; anything that misses this is reported as a crash next start.
     void Shutdown();
 
     void SetLevel(Level level);

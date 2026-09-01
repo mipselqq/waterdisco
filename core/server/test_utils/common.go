@@ -25,7 +25,6 @@ const MaxConcurrentTests = 100
 // The GUI matches on this text, so the wording is part of the contract.
 var ErrTestAborted = errors.New("test aborted")
 
-// Scopes every probe in flight so StopTest can cancel them together.
 type testSession struct {
 	mu     sync.Mutex
 	ctx    context.Context
@@ -54,7 +53,6 @@ func (s *testSession) cancelAndRearm() {
 
 func TestContext() context.Context { return session.current() }
 
-// Aborts everything in flight and arms a fresh context for the next run.
 func CancelTests() { session.cancelAndRearm() }
 
 // Drains on read: each result is handed to the GUI exactly once.
@@ -100,7 +98,6 @@ func (b *resultBuffer[T]) Reclaim(owned []*T) {
 	b.results = kept
 }
 
-// The per-kind half of runBatch: measure, report an unmeasurable tag, publish.
 type batchProbe[T any] struct {
 	run     func(ctx context.Context, tag string, outbound adapter.Outbound) *T
 	fail    func(tag string, err error) *T
@@ -175,7 +172,6 @@ func runBatch[T any](ctx context.Context, i *boxbox.Box, outboundTags []string, 
 	return res
 }
 
-// Routes every request through `dial`, passing the per-request context straight on.
 func dialerHTTPClient(dial func(ctx context.Context, network, address string) (net.Conn, error), timeout time.Duration) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{

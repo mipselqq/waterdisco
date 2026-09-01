@@ -24,7 +24,6 @@ namespace {
     constexpr int kPerPage = 12;
     constexpr int kSearchDebounceMs = 200;
 
-    // Per-item metadata stored on each QListWidgetItem.
     enum ItemKind { KindGroup = 1, KindProfile, KindRoute };
     constexpr int RoleKind = Qt::UserRole;
     constexpr int RoleId = Qt::UserRole + 1;
@@ -32,15 +31,13 @@ namespace {
 
 TrayProfileSelector::TrayProfileSelector(Mode mode, Callbacks cb, QWidget *parent)
     : QFrame(parent), m_mode(mode), m_cb(std::move(cb)) {
-    // A transient, always-on-top tool window. Translucent so the inner rounded "card"
-    // shows anti-aliased corners (a bitmap mask would be jagged).
+    // Translucent so the card's rounded corners come out anti-aliased; a bitmap mask would be jagged.
     setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_DeleteOnClose);
     setAttribute(Qt::WA_TranslucentBackground);
     setFrameShape(QFrame::NoFrame);
     setMinimumWidth(300);
 
-    // Theme-adaptive colours pulled from the active palette.
     const QString bg = palette().color(QPalette::Window).name();
     const QString base = palette().color(QPalette::Base).name();
     const QString border = palette().color(QPalette::Mid).name();
@@ -59,7 +56,6 @@ TrayProfileSelector::TrayProfileSelector(Mode mode, Callbacks cb, QWidget *paren
     root->setContentsMargins(10, 10, 10, 10);
     root->setSpacing(6);
 
-    // ---- search row (top, horizontal): [ search .......... ] [x] ----
     auto *searchRow = new QHBoxLayout();
     m_search = new QLineEdit(card);
     m_search->setObjectName(QStringLiteral("traySearch"));
@@ -69,16 +65,15 @@ TrayProfileSelector::TrayProfileSelector(Mode mode, Callbacks cb, QWidget *paren
     m_search->setStyleSheet(QStringLiteral(
         "QLineEdit#traySearch { border:1px solid %1; border-radius:8px; padding:5px 9px; background-color:%2; }")
         .arg(border, base));
-    auto *closeBtn = new QPushButton(QStringLiteral("✕"), card); // ✕
+    auto *closeBtn = new QPushButton(QStringLiteral("✕"), card);
     closeBtn->setFixedWidth(28);
     closeBtn->setToolTip(tr("Close"));
     searchRow->addWidget(m_search, 1);
     searchRow->addWidget(closeBtn);
     root->addLayout(searchRow);
 
-    // ---- context header: [back] title ----
     auto *header = new QHBoxLayout();
-    m_backBtn = new QPushButton(QStringLiteral("◀"), card); // ◀
+    m_backBtn = new QPushButton(QStringLiteral("◀"), card);
     m_backBtn->setFixedWidth(28);
     m_backBtn->setToolTip(tr("Back to groups"));
     m_title = new QLabel(card);
@@ -87,12 +82,9 @@ TrayProfileSelector::TrayProfileSelector(Mode mode, Callbacks cb, QWidget *paren
     header->addWidget(m_title, 1);
     root->addLayout(header);
 
-    // Optional "Stop: <name>" banner (server mode, group list, when running).
     m_stopBtn = new QPushButton(card);
     root->addWidget(m_stopBtn);
 
-    // The paginated list of entries. A fixed-ish height keeps the popup from jumping as
-    // results change; long names elide instead of forcing a horizontal scrollbar.
     m_list = new QListWidget(card);
     m_list->setUniformItemSizes(true);
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -100,21 +92,19 @@ TrayProfileSelector::TrayProfileSelector(Mode mode, Callbacks cb, QWidget *paren
     m_list->installEventFilter(this);
     root->addWidget(m_list, 1);
 
-    // ---- footer: [prev]  page x/y  [next] ----
     auto *footer = new QHBoxLayout();
-    m_prevBtn = new QPushButton(QStringLiteral("◀"), card); // ◀
+    m_prevBtn = new QPushButton(QStringLiteral("◀"), card);
     m_prevBtn->setFixedWidth(36);
     m_pageLabel = new QLabel(card);
     m_pageLabel->setAlignment(Qt::AlignCenter);
     m_pageLabel->setStyleSheet(QStringLiteral("border:none;"));
-    m_nextBtn = new QPushButton(QStringLiteral("▶"), card); // ▶
+    m_nextBtn = new QPushButton(QStringLiteral("▶"), card);
     m_nextBtn->setFixedWidth(36);
     footer->addWidget(m_prevBtn);
     footer->addWidget(m_pageLabel, 1);
     footer->addWidget(m_nextBtn);
     root->addLayout(footer);
 
-    // Debounced search: typing only restarts the timer; the filter runs once it settles.
     m_debounce = new QTimer(this);
     m_debounce->setSingleShot(true);
     m_debounce->setInterval(kSearchDebounceMs);
@@ -138,7 +128,6 @@ TrayProfileSelector::TrayProfileSelector(Mode mode, Callbacks cb, QWidget *paren
         if (m_cb.stopProfile) m_cb.stopProfile();
         close();
     });
-    // Single click selects, mirroring how the old menu behaved.
     connect(m_list, &QListWidget::itemClicked, this, [this](QListWidgetItem *it) { activateItem(it); });
 }
 
@@ -200,7 +189,6 @@ void TrayProfileSelector::rebuild() {
         const bool running = m_cb.isRunning && m_cb.isRunning();
         const int rid = (running && m_cb.runningId) ? m_cb.runningId() : -1;
         if (searching) {
-            // Search spans every profile in every group, not just the current view.
             title = tr("Select Server");
             ensureServerCache();
             for (int i = 0; i < m_serverCache.size(); ++i) {
@@ -210,7 +198,6 @@ void TrayProfileSelector::rebuild() {
             }
             if (entries.isEmpty()) entries.append({0, -1, tr("No matches"), false, false});
         } else if (m_groupId < 0) {
-            // ---- group list ----
             title = tr("Select Server");
             if (running) {
                 showStop = true;
@@ -224,9 +211,8 @@ void TrayProfileSelector::rebuild() {
             }
             if (entries.isEmpty()) entries.append({0, -1, tr("No servers"), false, false});
         } else {
-            // ---- profiles within a group ----
             auto group = Configs::dataManager->groupsRepo->GetGroup(m_groupId);
-            if (!group || group->archive) { // group vanished -> back to the group list
+            if (!group || group->archive) {
                 goBackToGroups();
                 return;
             }
@@ -241,7 +227,6 @@ void TrayProfileSelector::rebuild() {
         }
     }
 
-    // Paginate whatever list we ended up with so the popup stays small.
     const int total = static_cast<int>(entries.size());
     const int pages = qMax(1, (total + kPerPage - 1) / kPerPage);
     m_page = qBound(0, m_page, pages - 1);
@@ -251,14 +236,14 @@ void TrayProfileSelector::rebuild() {
     for (int i = start; i < end; ++i) {
         const Entry &e = entries[i];
         QString label = e.text;
-        if (e.current) label = QStringLiteral("✓ ") + label; // ✓
-        if (e.kind == KindGroup) label += QStringLiteral("   ▶"); // trailing ▶
+        if (e.current) label = QStringLiteral("✓ ") + label;
+        if (e.kind == KindGroup) label += QStringLiteral("   ▶");
         auto *it = new QListWidgetItem(label, m_list);
         it->setData(RoleKind, e.kind);
         it->setData(RoleId, e.id);
         if (!e.enabled) it->setFlags(it->flags() & ~Qt::ItemIsEnabled);
     }
-    if (m_list->count() > 0) m_list->setCurrentRow(0); // so Enter targets the top result
+    if (m_list->count() > 0) m_list->setCurrentRow(0);
 
     m_title->setText(title);
     m_backBtn->setVisible(showBack);
@@ -314,8 +299,6 @@ void TrayProfileSelector::popupAt(const QPoint &globalPos) {
     rebuild();
     adjustSize();
 
-    // Anchor near the cursor (which is where the tray menu row was clicked), but keep
-    // the whole panel on the screen that contains that point.
     QScreen *scr = QGuiApplication::screenAt(globalPos);
     if (!scr) scr = QGuiApplication::primaryScreen();
     const QRect avail = scr ? scr->availableGeometry() : QRect(0, 0, 1024, 768);
@@ -361,10 +344,9 @@ bool TrayProfileSelector::eventFilter(QObject *obj, QEvent *e) {
             return true;
         }
         if (obj == m_list && (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter)) {
-            activateItem(m_list->currentItem()); // consume so the view doesn't also "activate"
+            activateItem(m_list->currentItem());
             return true;
         }
-        // Down from the search box hands off to the list for arrow-key browsing.
         if (obj == m_search && ke->key() == Qt::Key_Down && m_list->count() > 0) {
             m_list->setFocus();
             m_list->setCurrentRow(0);

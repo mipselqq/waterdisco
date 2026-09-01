@@ -104,7 +104,7 @@ namespace {
         if (dialog.exec() != QDialog::Accepted) return {};
         return edit->toPlainText();
     }
-} // namespace
+}
 
 DialogOtpManager::DialogOtpManager(QWidget *parent) : QDialog(parent), ui(new Ui::DialogOtpManager) {
     ui->setupUi(this);

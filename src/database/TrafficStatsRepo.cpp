@@ -9,8 +9,7 @@ namespace Configs {
     std::string TrafficStatsRepo::bucketExpr(long long bucketSecs, long long utcOffsetSecs) {
         const std::string b = std::to_string(bucketSecs);
         const std::string off = std::to_string(utcOffsetSecs);
-        // floor((bucket_start + off) / b) * b - off. Wrapping off in parens keeps a
-        // negative (west-of-UTC) offset valid: "+ (-28800)" / "- (-28800)".
+        // floor((bucket_start + off) / b) * b - off; the parens around off keep a negative (west-of-UTC) offset valid.
         return "((bucket_start + (" + off + ")) / " + b + ") * " + b + " - (" + off + ")";
     }
 
@@ -114,9 +113,7 @@ namespace Configs {
 
     void TrafficStatsRepo::UpsertConfigMeta(const ConfigMetaRow& m) {
         std::lock_guard<std::mutex> lk(mu);
-        // On insert, first_seen/last_seen both take `now`. On conflict we refresh
-        // the mutable fields and last_seen but deliberately keep the original
-        // first_seen.
+        // On conflict last_seen and the mutable fields refresh, but the original first_seen is deliberately kept.
         db.exec(
             "INSERT INTO config_meta "
             "(profile_id, name, group_name, type, server_address, first_seen, last_seen) "
@@ -230,11 +227,7 @@ namespace Configs {
         std::lock_guard<std::mutex> lk(mu);
         QList<TrafficSeriesPoint> out;
         if (bucketSecs <= 0) return out;
-        // bucketSecs/utcOffsetSecs are internal numbers (hourly/daily size; the
-        // viewer's UTC offset), so embedding them as literals is safe and keeps the
-        // alignment arithmetic in one place. Shifting by the offset before the
-        // floor-divide snaps each bucket to the local calendar boundary; subtracting
-        // it back makes the returned bkt the epoch of that local boundary.
+        // bucketSecs/utcOffsetSecs are internal numbers, safe to inline; shifting before the floor-divide snaps each bucket to the local calendar boundary, subtracting back returns that boundary's epoch.
         const std::string bkt = bucketExpr(bucketSecs, utcOffsetSecs);
         auto q = db.query(
             "SELECT " + bkt + " AS bkt, SUM(u), SUM(d) FROM ("

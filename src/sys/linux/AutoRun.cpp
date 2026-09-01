@@ -45,16 +45,12 @@ void AutoRun_SetEnabled(bool enable) {
 
     if (enable) {
         if (!QDir().exists(userAutoStartPath) && !QDir().mkpath(userAutoStartPath)) {
-            // qCWarning(lcUtility) << "Could not create autostart folder"
-            // << userAutoStartPath;
             return;
         }
 
         QFile iniFile(desktopFileLocation);
 
         if (!iniFile.open(QIODevice::WriteOnly)) {
-            // qCWarning(lcUtility) << "Could not write auto start entry" <<
-            // desktopFileLocation;
             return;
         }
 

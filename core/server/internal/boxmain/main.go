@@ -57,21 +57,7 @@ func preRun(cmd *cobra.Command, args []string) {
 	}
 }
 
-// newBoxContext builds a fresh, self-contained context for a single sing-box
-// instance: a background context carrying the service registry (the include.*
-// type registries, installed via box.Context), the deprecated-feature manager,
-// and — under sudo — the file-manager default.
-//
-// Each call returns an independent context with its own service.Registry, and
-// that independence is the point. boxbox.New reuses whatever registry it finds in
-// its context and mutates it via service.MustRegister (e.g. registering the box's
-// OutboundManager). If several boxes are created concurrently from one shared
-// context — as happened when Create derived from the package-global globalCtx that
-// preRun rewrote on every call — they share a single registry, and each box's
-// MustRegister[OutboundManager] overwrites the previous box's. A later
-// service.FromContext[OutboundManager] then returns the wrong box's manager, so a
-// parallel URL test panics with "no outbound with tag ... found". Building the
-// context per box keeps concurrent test instances fully isolated.
+// Must stay per-box: boxes sharing one service.Registry each overwrite the previous box's MustRegister[OutboundManager].
 func newBoxContext() context.Context {
 	ctx := context.Background()
 	sudoUser := os.Getenv("SUDO_USER")

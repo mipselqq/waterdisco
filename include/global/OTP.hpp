@@ -62,7 +62,7 @@ namespace OTP {
     QString ExportToMigrationLink(const QList<Entry> &entries);
     bool ParseFromMigrationLink(const QString &link, QList<Entry> &out);
 
-    // Takes any of the above or a bare base32 secret, which yields an unnamed entry.
+    // A bare base32 secret yields an unnamed entry.
     QList<Entry> ParseAny(const QString &text, QStringList *problems = nullptr);
 
     QByteArray ExportToJson(const QList<Entry> &entries);

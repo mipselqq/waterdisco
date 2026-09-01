@@ -22,7 +22,6 @@ namespace Configs {
         auto query = QUrlQuery(url.query());
         outbound::ParseFromLink(url.toString());
 
-        // Traditional SS format
         if (url.password().isEmpty()) {
             // Traditional format: method:password base64 encoded in username
             auto method_password = DecodeB64IfValid(url.userName(), QByteArray::Base64Option::Base64UrlEncoding);
@@ -119,11 +118,9 @@ namespace Configs {
         url.setScheme("ss");
         
         if (method.startsWith("2022-")) {
-            // 2022 format: method:password directly
             url.setUserName(method);
             url.setPassword(password);
         } else {
-            // Traditional format: base64 encode method:password
             auto method_password = method + ":" + password;
             url.setUserName(method_password.toUtf8().toBase64(QByteArray::Base64Option::Base64UrlEncoding));
         }

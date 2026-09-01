@@ -43,7 +43,6 @@ namespace Configs
             return transport;
         }
 
-        // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         bool ParseFromClash(const clash::Proxies& object) override;

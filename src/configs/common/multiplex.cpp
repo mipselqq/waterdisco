@@ -113,8 +113,7 @@ namespace Configs {
     QJsonObject Multiplex::ExportToJson()
     {
         QJsonObject object;
-        // tri-state: omit only for "Keep Default"; persist On (true) / Off (false)
-        // explicitly so an Off choice survives a round-trip.
+        // Tri-state: omit only for "Keep Default"; On/Off are persisted explicitly.
         if (unspecified) return object;
         object["enabled"] = enabled;
         if (!enabled) return object;

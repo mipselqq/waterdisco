@@ -31,6 +31,17 @@ private slots:
     void on_client_key_clicked();
 
 private:
+    struct InterfaceFields {
+        bool *system = nullptr;
+        QString *interface_name = nullptr;
+        QString *udp_timeout = nullptr;
+        QString *udp_mapping = nullptr;
+        QString *udp_filtering = nullptr;
+        int *udp_nat_max = nullptr;
+    };
+
+    [[nodiscard]] InterfaceFields GetInterfaceFields() const;
+
     Ui::EditAdvanced *ui;
     std::shared_ptr<Configs::Profile> ent;
 

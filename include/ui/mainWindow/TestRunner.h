@@ -20,8 +20,7 @@
 
 class MainWindow;
 
-// Owns profile measuring: URL latency, egress IP and speed. Not a QObject: queued
-// signals would reorder the synchronous progress path, and tr() would change context.
+// Not a QObject: queued signals would reorder the synchronous progress path.
 class TestRunner {
 public:
     enum class RankedStartMode { ByConnectionTime, BySavedSiteScore };
@@ -57,7 +56,6 @@ public:
 
     bool isRunning();
 
-    // A profile stop has to cancel the test before tearing the instance down.
     bool isTestingCurrent() const { return testingCurrent_.load(); }
 
 private:
@@ -69,9 +67,9 @@ private:
         QStringList xrayFullConfigs;
         QStringList outboundTags;
         QMap<QString, int> tag2entID;
+        QString xrayDnsStrategy;
         int entID = -1;
-        // Not derivable from an empty outboundTags: a test-current run leaves
-        // both empty but must let the core pick "proxy" over the config default.
+        // Not derivable from an empty outboundTags: a test-current run leaves both empty but wants "proxy".
         bool useDefaultOutbound = false;
         bool testCurrent = false;
     };
@@ -110,7 +108,8 @@ private:
     int bestSiteScoreProfile(const QList<int>& profileIDs) const;
 
     // Shared by the live progress poll and the final pass, which must not drift.
-    void applyUrlResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::URLTestResp& res);
+    void applyUrlResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::URLTestResp& res,
+                        const QHash<QString, bool>* vpnConnected = nullptr);
 
     void applyIpResult(const std::shared_ptr<Configs::Profile>& ent, const libcore::IPTestRes& res,
                        bool live = false);
@@ -138,8 +137,7 @@ private:
     std::atomic<bool> stopRequested_ = false;
     std::atomic<bool> testingCurrent_ = false;
 
-    // Tests dial the outbound directly and bypass the clash tracker, so their
-    // bytes are counted only here, diffed per tag against the last report.
+    // Tests bypass the clash tracker, so their bytes are counted only here, diffed per tag.
     QMutex creditMu_;
     QHash<QString, QPair<qint64, qint64>> credited_;
     QMutex rankedApplyMu_;

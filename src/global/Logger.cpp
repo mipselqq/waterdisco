@@ -36,8 +36,7 @@ namespace Logging {
 
         std::atomic<int> g_level{static_cast<int>(Level::Debug)};
 
-        // Buffering applies only before Init(); afterwards a closed file means
-        // disk logging has failed for good and messages are dropped.
+        // Buffering applies only before Init(); after it, a closed file means disk logging failed for good.
         QStringList g_preInit;
         bool g_preInitOverflowed = false;
         bool g_initDone = false;
@@ -168,7 +167,7 @@ namespace Logging {
             out += "================================";
             return out;
         }
-    } // namespace
+    }
 
     Level LevelFromString(const QString &name) {
         const QString n = name.trimmed().toLower();
@@ -238,8 +237,7 @@ namespace Logging {
         g_crashDirNative = QDir::toNativeSeparators(g_crashDir).toStdWString();
 #endif
 
-        // Set the crashed session's log aside before this one truncates it and
-        // before rotation can push it out.
+        // Set the crashed session's log aside before this one truncates it or rotation pushes it out.
         g_previousCrashed = QFile::exists(g_markerPath);
         if (g_previousCrashed && QFile::exists(g_logPath)) {
             const QString stamp = QFileInfo(g_logPath).lastModified().toString("yyyyMMdd-HHmmss");
@@ -372,7 +370,7 @@ namespace Logging {
             // Qt aborts the process the moment this returns for a fatal message.
             if (type == QtFatalMsg) FlushForCrash();
         }
-    } // namespace
+    }
 
     void InstallQtMessageHandler() { qInstallMessageHandler(qtMessageHandler); }
 } // namespace Logging

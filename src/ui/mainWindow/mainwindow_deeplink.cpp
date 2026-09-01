@@ -25,8 +25,7 @@ namespace {
 
 constexpr qint64 kMaxImportFileSize = 50 * 1024 * 1024;
 
-// Content-sniffs text vs binary: the name promises nothing (.json/.conf/.txt/none).
-// A BOM also pins the encoding and is dropped - Qt's json parser rejects it.
+// A BOM is dropped here: Qt's json parser rejects it.
 bool decodeImportedText(const QByteArray &bytes, QString &out) {
     if (const auto encoding = QStringConverter::encodingForData(bytes)) {
         QStringDecoder decoder(*encoding);
@@ -34,8 +33,6 @@ bool decodeImportedText(const QByteArray &bytes, QString &out) {
         return !decoder.hasError();
     }
 
-    // No BOM: reject NUL bytes or a heavy control-character share, then decode leniently
-    // so a legacy 8-bit config still parses with only its names garbled.
     const qsizetype sample = std::min<qsizetype>(bytes.size(), 8192);
     qsizetype control = 0;
     for (qsizetype i = 0; i < sample; i++) {
@@ -126,8 +123,6 @@ void MainWindow::importFromFiles(const QStringList &paths)
         const auto bytes = file.readAll();
         file.close();
 
-        // Decide the type from the bytes rather than the suffix, so a QR code
-        // screenshot saved without one still reaches the decoder.
         QBuffer buffer;
         buffer.setData(bytes);
         buffer.open(QIODevice::ReadOnly);
@@ -159,8 +154,7 @@ void MainWindow::importFromFiles(const QStringList &paths)
 
     for (const QString &problem : problems) MW_show_log(problem);
 
-    // A payload that is itself a url keeps the single item path: that one asks
-    // whether to make a subscription group out of it, which a batch cannot.
+    // A url payload takes the single-item path: only that one offers a subscription group.
     QStringList batch;
     for (const QString &payload : payloads) {
         if (payload.startsWith("http://") || payload.startsWith("https://")) {
@@ -266,8 +260,6 @@ void MainWindow::handle_add_remote_routes(const QString &url) {
         Configs::dataManager->routesRepo->AddRouteProfile(profile);
     }
 
-    // Fetch the freshly added profiles so they have rules right away. Runs off the UI thread and
-    // persists each result; a failed fetch just leaves an empty, updatable profile.
     const auto added = profiles;
     runOnNewThread([added] {
         int ok = 0;
@@ -349,16 +341,13 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
             AutoRun_FixTaskIfNeeded();
         }
         if (changed(MwArg::ProfileListDisplay)) {
-            // The security suffix changes the Type column's width; drop its
-            // cached auto-width so ResizeToContents re-measures.
+            // The security suffix changes the Type column's width, so drop its cached auto-width.
             if (auto group = Configs::dataManager->groupsRepo->CurrentGroup();
                 group && group->calculated_column_width.size() > ProfilesTableModel::ColType)
                 group->calculated_column_width[ProfilesTableModel::ColType] = 0;
             refresh_proxy_list({}, true);
         }
         auto suggestRestartProxy = settings->Save();
-        // Pick up any changed auto-update interval immediately instead of waiting for the
-        // next poll (e.g. the user just enabled or shortened a job).
         Throne::PeriodicRunner::instance()->CheckNow();
         if (changed(MwArg::Route)) {
             settings->Save();

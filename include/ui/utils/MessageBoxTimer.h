@@ -19,7 +19,7 @@ public:
     void cancel() {
         QTimer::stop();
         if (msgbox != nullptr && showed) {
-            msgbox->reject(); // return the timeoutFunc
+            msgbox->reject();
         }
     };
 

@@ -6,16 +6,6 @@
 
 class QPropertyAnimation;
 
-// A self-painted start/stop control for the main toolbar.
-//
-// It keeps the standard QToolButton chrome (frame, background, hover/pressed)
-// so it sits naturally next to the other toolbar buttons, and paints a custom
-// indicator on top: a central glyph that morphs between a play triangle and a
-// stop square, wrapped by a ring that carries the active proxy-mode colour and
-// doubles as a spinner while connecting.
-//
-// It is a thin view over the app's profile state: the owner pushes a State
-// (Disabled / Idle / Connecting / Running) and a Mode (the active proxy mode).
 class StartStopButton : public QToolButton {
     Q_OBJECT
     Q_PROPERTY(qreal morph READ morph WRITE setMorph)
@@ -43,7 +33,6 @@ public:
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override { return sizeHint(); }
 
-    // --- animated properties ---
     qreal morph() const { return m_morph; }
     void setMorph(qreal v) { m_morph = v; update(); }
     qreal spin() const { return m_spin; }
@@ -77,9 +66,9 @@ private:
     Mode m_mode = Mode::Off;
 
     qreal m_morph = 0.0; // 0 = play triangle, 1 = stop square
-    qreal m_spin = 0.0;  // connecting arc rotation, degrees
-    qreal m_dim = 1.0;   // indicator opacity multiplier (low while disabled)
-    qreal m_press = 0.0; // press depth, 0..1
+    qreal m_spin = 0.0;
+    qreal m_dim = 1.0;
+    qreal m_press = 0.0;
     QColor m_ringColor;
 
     QPropertyAnimation *m_morphAnim = nullptr;
@@ -88,12 +77,8 @@ private:
     QPropertyAnimation *m_ringColorAnim = nullptr;
     QPropertyAnimation *m_spinAnim = nullptr;
 
-    // The looping spinner runs only while the button is actually on screen.
     bool m_shown = false;
 
-    // The standard tool-button chrome never animates; it is rendered through
-    // QStyle once and the cached pixmap is blitted on the looping frames.
-    // Rebuilt only when the size, device-pixel-ratio, or style state change.
     QPixmap m_chromeCache;
     QSize m_chromeKeySize;
     qreal m_chromeKeyDpr = 0.0;

@@ -22,12 +22,11 @@ namespace Configs {
             if (url.scheme() == "socks5") version = 5;
         }
         
-        // Handle v2rayN format (base64 encoded username)
         if (!url.password().isEmpty() || !url.userName().isEmpty()) {
             username = url.userName();
             password = url.password();
             
-            // Check if username is base64 encoded (v2rayN format)
+            // v2rayN base64-encodes "user:pass" into the username.
             if (password.isEmpty() && !username.isEmpty()) {
                 QString decoded = DecodeB64IfValid(username);
                 if (!decoded.isEmpty()) {
@@ -39,7 +38,6 @@ namespace Configs {
 
         if (query.hasQueryItem("uot")) uot = query.queryItemValue("uot") == "true" || query.queryItemValue("uot").toInt() > 0;
         
-        // Default port
         if (server_port == 0) server_port = 1080;
 
         return !server.isEmpty();
@@ -71,7 +69,6 @@ namespace Configs {
         QUrl url;
         QUrlQuery query;
         
-        // Determine scheme based on SOCKS version (default to socks5)
         QString scheme = "socks5";
         if (version == 4) {
             scheme = "socks4";

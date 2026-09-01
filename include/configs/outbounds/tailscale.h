@@ -18,7 +18,6 @@ namespace Configs
         bool advertise_exit_node = false;
         bool globalDNS = false;
 
-        // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         QString ExportToLink() override;

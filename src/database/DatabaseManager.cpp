@@ -18,10 +18,9 @@ namespace Configs {
 
     DatabaseManager::DatabaseManager(const std::string& dbPath)
         : db(dbPath), statsDb(deriveStatsDbPath(dbPath), true) {
-        // Create entity IDs table first (before repos are initialized)
+        // entity_ids must exist before the repos are constructed.
         createEntityIdsTable(db);
         
-        // Initialize repos after entity_ids table is created
         initializeRepos();
     }
 
@@ -35,8 +34,7 @@ namespace Configs {
     }
 
     void DatabaseManager::createEntityIdsTable(Database& db) {
-        // Create table to track last used ID for each entity type
-        // Single row with separate columns for each entity type
+        // Single row, one column per entity type.
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS entity_ids (
                 profile_last_id INTEGER NOT NULL DEFAULT 0,
@@ -50,7 +48,6 @@ namespace Configs {
         if (!entityIdsColumnExists(db, "otp_profile_last_id"))
             db.exec("ALTER TABLE entity_ids ADD COLUMN otp_profile_last_id INTEGER NOT NULL DEFAULT 0");
 
-        // Initialize entity IDs if table is empty (insert a single row with all zeros)
         auto checkQuery = db.query("SELECT COUNT(*) FROM entity_ids");
         int count = 0;
         if (checkQuery && checkQuery->executeStep()) {

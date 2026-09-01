@@ -25,10 +25,7 @@ namespace Configs {
     }
 
     void ProfilesRepo::createTables() const {
-        // Note: This table has a foreign key to groups(id).
-        // Ensure GroupsRepo::createTables() is called before this method
-        // to avoid foreign key constraint errors.
-        // Create profiles table
+        // groups(id) FK: GroupsRepo::createTables() must run before this.
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS profiles (
                 id INTEGER PRIMARY KEY,
@@ -54,8 +51,6 @@ namespace Configs {
             )
         )");
 
-        // When the latency in the row was measured. Lets a consumer decide
-        // whether a stored result is still worth trusting instead of guessing.
         if (!profilesColumnExists("latency_at"))
             db.exec("ALTER TABLE profiles ADD COLUMN latency_at INTEGER NOT NULL DEFAULT 0");
         if (!profilesColumnExists("connect_time_ms"))
@@ -101,7 +96,6 @@ namespace Configs {
     std::shared_ptr<Profile> ProfilesRepo::profileFromJson(const QJsonObject& json) const {
         auto profile = std::make_shared<Profile>();
         
-        // Simple fields
         profile->type = json["type"].toString();
         profile->name = json["name"].toString();
         profile->id = json["id"].toInt();
@@ -129,7 +123,6 @@ namespace Configs {
             profile->performance_status_detail.reason = profile->ul_speed;
         }
         
-        // Reconstruct outbound (bean is not needed in new implementation)
         QString type = profile->type;
         if (type == "hysteria2") {
             type = "hysteria";
@@ -138,8 +131,8 @@ namespace Configs {
         Configs::outbound* outbound = Configs::NewOutboundByType(type);
 
         profile->outbound = std::shared_ptr<Configs::outbound>(outbound);
-        
-        // Parse complex objects from JSON
+        profile->outbound->profile_id = profile->id;
+
         if (json.contains("outbound") && json["outbound"].isObject()) {
             profile->outbound->ParseFromJson(json["outbound"].toObject());
         }
@@ -271,7 +264,6 @@ namespace Configs {
     std::shared_ptr<Profile> ProfilesRepo::NewProfile(const QString &type) {
         Configs::outbound* outbound = Configs::NewOutboundByType(type);
 
-        // Bean is legacy, pass nullptr
         return std::make_shared<Profile>(outbound, type);
     }
 
@@ -279,6 +271,7 @@ namespace Configs {
         if (profile->id >= 0) return false;
         int newId = NewProfileID();
         profile->id = newId;
+        if (profile->outbound) profile->outbound->profile_id = newId;
         profile->gid = gid < 0 ? Configs::dataManager->settingsRepo->current_group : gid;
         QMutexLocker locker(&mutex);
         identityMap[newId] = std::weak_ptr<Profile>(profile);
@@ -310,6 +303,7 @@ namespace Configs {
         for (int i = 0; i < n; ++i) {
             int id = firstId + i;
             toAdd[i]->id = id;
+            if (toAdd[i]->outbound) toAdd[i]->outbound->profile_id = id;
             toAdd[i]->gid = gid;
             identityMap[id] = std::weak_ptr<Profile>(toAdd[i]);
         }
@@ -441,7 +435,6 @@ namespace Configs {
     }
 
     std::shared_ptr<Profile> ProfilesRepo::GetProfileByName(const QString& name) {
-        // Query by name using the index
         auto query = db.query("SELECT id FROM profiles WHERE name = ? LIMIT 1", name.toStdString());
         if (!query || !query->executeStep()) {
             return nullptr;
@@ -532,7 +525,6 @@ namespace Configs {
     }
 
     int ProfilesRepo::NewProfileID() const {
-        // Atomically increment and get the new ID using RETURNING clause (DB atomic, no lock required)
         auto query = db.query("UPDATE entity_ids SET profile_last_id = profile_last_id + 1 RETURNING profile_last_id");
         if (query && query->executeStep()) {
             return query->getColumn(0).getInt();
@@ -542,7 +534,7 @@ namespace Configs {
 
     int ProfilesRepo::NewProfileIDRange(int n) const {
         if (n <= 0) return 0;
-        // Atomically reserve n IDs; RETURNING gives the new value (old + n), so first ID = newValue - n + 1
+        // RETURNING gives the new value (old + n), so the first id is newValue - n + 1.
         auto query = db.query("UPDATE entity_ids SET profile_last_id = profile_last_id + ? RETURNING profile_last_id", n);
         if (query && query->executeStep()) {
             int newValue = query->getColumn(0).getInt();

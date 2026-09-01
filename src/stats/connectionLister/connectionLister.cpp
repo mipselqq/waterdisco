@@ -10,13 +10,10 @@
 
 namespace Stats
 {
-    // Ignore samples taken closer together than this when deriving a rate, so
-    // out-of-band ForceUpdate() polls (e.g. on a header click) don't divide a
-    // tiny byte delta by a tiny interval and produce a misleading spike.
+    // Guards out-of-band ForceUpdate() polls: a tiny byte delta over a tiny interval reads as a spike.
     static constexpr qint64 kSpeedSampleMinMs = 500;
 
-    // Poll cadence: 1 Hz while the connections view is visible, relaxed otherwise
-    // (off-view polls only keep the per-app traffic stats sampled).
+    // Off-view polls still run: they keep the per-app traffic stats sampled.
     static constexpr unsigned long kActivePollMs = 1000;
     static constexpr unsigned long kRelaxedPollMs = 5000;
 
@@ -42,9 +39,7 @@ namespace Stats
             if (stop) return;
 
             {
-                // Sleep until the next poll, but wake immediately when the view
-                // opens (SetInView) or we're shutting down (stopLoop). 1 Hz while
-                // visible; relaxed otherwise.
+                // Woken early by SetInView() and stopLoop().
                 QMutexLocker wlk(&waitMu_);
                 waitCond_.wait(&waitMu_, inView_.load() ? kActivePollMs : kRelaxedPollMs);
             }
@@ -63,14 +58,11 @@ namespace Stats
         const bool was = inView_.exchange(inView);
         if (inView && !was)
         {
-            // Became visible: wake the loop so it switches to 1 Hz and refreshes
-            // now instead of waiting out the remaining relaxed sleep.
             QMutexLocker wlk(&waitMu_);
             waitCond_.wakeAll();
         }
     }
 
-    // Map one wire connection into the in-memory metadata used by the UI table.
     static ConnectionMetadata metaFromProto(const libcore::ConnectionMetaData& conn)
     {
         ConnectionMetadata c;
@@ -103,10 +95,6 @@ namespace Stats
         {
             auto c = metaFromProto(conn);
 
-            // Derive an instantaneous rate by diffing this connection's
-            // cumulative byte counters against its previous sample. When polls
-            // arrive faster than the sampling window, carry the last rate and
-            // baseline forward unchanged so the number stays stable.
             SpeedSample s;
             if (const auto it = speedSamples_.constFind(c.id); it != speedSamples_.constEnd())
             {
@@ -158,12 +146,7 @@ namespace Stats
         state->clear();
         for (const auto& id : newState) state->insert(id);
 
-        // One enriched poll, two consumers: the connection table above, and the
-        // per-app traffic module here. Diff each connection's cumulative byte
-        // counters across the live set plus the recently-closed ring (deduped by
-        // id), so a connection that opened and closed between polls is still
-        // counted. Gated by the traffic-stats toggle; the lister itself already
-        // requires connection stats (enable_stats) to run.
+        // Credits the live set plus the recently-closed ring (deduped by id), so a connection that opened and closed between polls still counts.
         if (!Configs::dataManager->settingsRepo->disable_traffic_stats)
         {
             QHash<QString, QPair<qint64, qint64>> newLast;
@@ -180,7 +163,7 @@ namespace Stats
                 }
                 qint64 dUp = curUp - baseUp;
                 qint64 dDown = curDown - baseDown;
-                if (dUp < 0) dUp = 0; // counters only grow; guard against any reset
+                if (dUp < 0) dUp = 0;
                 if (dDown < 0) dDown = 0;
                 if (dUp == 0 && dDown == 0) return;
                 QString name = QString::fromStdString(cm.process.value());
@@ -301,19 +284,23 @@ namespace Stats
     {
         stop = true;
         QMutexLocker wlk(&waitMu_);
-        waitCond_.wakeAll(); // break the poll sleep so the loop exits promptly
+        waitCond_.wakeAll();
     }
 
     void ConnectionLister::setSort(const ConnectionSort newSort)
     {
-        // Re-selecting the active field flips its direction; a new field starts
-        // descending (largest / most-recent first).
         if (sort == newSort) asc = !asc;
         else
         {
             sort = newSort;
             asc = false;
         }
+    }
+
+    void ConnectionLister::restoreSort(const ConnectionSort newSort, const bool ascending)
+    {
+        sort = newSort;
+        asc = ascending;
     }
 
 }

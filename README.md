@@ -25,7 +25,7 @@ The binary remains named `Throne` inside portable archives for compatibility.
 
 ## Supported protocols
 
-- SOCKS, HTTP(S), Shadowsocks, Trojan, VMess, VLESS, TUIC, Hysteria, Hysteria2, AnyTLS, Mieru, NaïveProxy, Juicity, TrustTunnel, ShadowTLS, WireGuard, AmneziaWG and SSH.
+- SOCKS, HTTP(S), Shadowsocks, Trojan, VMess, VLESS, TUIC, Hysteria, Hysteria2, AnyTLS, Mieru, NaïveProxy, Juicity, TrustTunnel, ShadowTLS, WireGuard, AmneziaWG, SSH, Snell, OpenVPN and OpenConnect.
 - Xray VLESS, custom sing-box/Xray outbounds and configs, chaining and extra cores.
 
 ## Subscription formats

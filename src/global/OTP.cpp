@@ -147,7 +147,7 @@ namespace OTP {
             else object["counter"] = entry.counter;
             return object;
         }
-    } // namespace
+    }
 
     QString AlgorithmToString(Algorithm algorithm) {
         switch (algorithm) {

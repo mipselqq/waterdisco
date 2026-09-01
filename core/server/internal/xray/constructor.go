@@ -26,13 +26,7 @@ func CreateXrayInstance(config string) (*core.Instance, error) {
 	return server, nil
 }
 
-// CheckXrayConfig validates an Xray JSON config without creating a running
-// instance. Decoding plus conf.Build() parses and validates the protocol
-// settings (UUIDs, flow, encryption, stream/TLS/reality settings, etc.), which
-// is everything that determines whether a profile is well-formed. It
-// deliberately stops short of core.New: that would instantiate a full set of
-// handlers just to throw them away, and validation runs concurrently (bulk
-// "remove invalid configs") while a live Xray instance is up.
+// Stops short of core.New on purpose: bulk validation runs concurrently while a live Xray instance is up.
 func CheckXrayConfig(config string) error {
 	r := bytes.NewReader([]byte(config))
 	conf, err := serial.DecodeJSONConfig(r)

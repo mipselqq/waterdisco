@@ -26,7 +26,7 @@ namespace Stats
             if (secs < 3600) return QObject::tr("%1m ago").arg(secs / 60);
             return QObject::tr("%1h ago").arg(secs / 3600);
         }
-    } // namespace
+    }
 
     QString AutoSelectorView::summary() const
     {
@@ -82,8 +82,7 @@ namespace Stats
         active = false;
         if (infos.isEmpty()) return;
 
-        // Throne only ever builds one selector per config (it is the profile
-        // being started); take the first and ignore any future extras.
+        // Throne builds exactly one selector per config, so any extras are ignored.
         const auto &info = infos.first();
         groupTag = info.groupTag;
         profileID = info.profile ? info.profile->id : -1;
@@ -97,27 +96,17 @@ namespace Stats
         view.profileID = profileID;
         view.phase = "starting";
         view.membersTotal = static_cast<int>(info.members.size());
-        // Start the persist clock now: nothing measured in the first seconds is
-        // worth writing, and the members already carry the results this build
-        // was ranked on.
         lastHealthPersist = QDateTime::currentMSecsSinceEpoch();
         active = true;
     }
 
-    // The core measures continuously and far more thoroughly than a one-off URL
-    // test ever does; throwing that away on every stop is what made a restart
-    // behave like a first run. Writing it onto the member profiles means the
-    // ranking survives, the results stay inside the profile's validity window so
-    // no second sweep is triggered, and the rebuilt config can hand the numbers
-    // straight back to the core as its warm start.
     void AutoSelectorMonitor::PersistHealth()
     {
         QList<AutoSelectorMemberView> members;
         {
             QMutexLocker lock(&mutex);
             if (!active || !view.valid) return;
-            // A suspended core believes the local network is down, so nothing it
-            // reports right now describes the servers.
+            // A suspended core believes the local network is down, so nothing it reports describes the servers.
             if (view.suspended) return;
             members = view.members;
             lastHealthPersist = QDateTime::currentMSecsSinceEpoch();
@@ -130,9 +119,7 @@ namespace Stats
             if (member.isUsable() && member.averageMs > 0) {
                 latency = member.averageMs;
             } else if (member.isDead()) {
-                // Every sample in the window failed. Anything softer than that —
-                // a cooldown, a member the prober has not reached — says nothing
-                // conclusive, so it keeps whatever result it already had.
+                // -1 means every sample failed; softer states are inconclusive and keep their existing result.
                 latency = -1;
             } else {
                 continue;
@@ -203,8 +190,7 @@ namespace Stats
         if (!ok) return QObject::tr("Could not reach the core.");
         if (!error.isEmpty()) return error;
 
-        // Stored as a profile id rather than a tag: tags are positional within
-        // one build and mean nothing to the next one.
+        // Stored as a profile id, not a tag: tags are positional within one build and mean nothing to the next.
         if (auto selector = Configs::dataManager->profilesRepo->GetProfile(selectorID); selector != nullptr) {
             if (auto bean = selector->AutoSelector(); bean != nullptr && bean->pinnedID != memberID) {
                 bean->pinnedID = memberID;
@@ -302,8 +288,7 @@ namespace Stats
                     next.selectedProfileID = entry.profileID;
                 }
                 if (entry.pinned) next.pinnedName = entry.name;
-                // "untested" counts as usable: it has not failed, the prober
-                // simply has not reached it yet.
+                // "untested" counts as usable: it has not failed, only not been reached.
                 if (entry.isUsable() || entry.state == "untested") usable++;
                 next.members.append(entry);
             }
@@ -316,9 +301,7 @@ namespace Stats
             QMutexLocker lock(&mutex);
             if (!active) return;
 
-            // The pool only counts as exhausted when the core itself is sure the
-            // local network is fine — a dropped wifi suspends the core, and a
-            // suspended core must never trigger a rebuild.
+            // A suspended core (dropped wifi) must never count as an exhausted pool.
             const bool everythingDead = usable == 0 && next.membersProbed > 0 && !next.suspended
                 && next.phase != "starting";
             if (!everythingDead) {
@@ -340,8 +323,6 @@ namespace Stats
                 }
             }
             if (usable > 0) {
-                // A working pool resets the ladder, so an unrelated failure
-                // later is not punished by an old backoff.
                 rebuildBackoffSecs = 0;
             }
             view = next;
@@ -350,9 +331,7 @@ namespace Stats
         emit updated();
         if (now - lastHealthPersist >= kHealthPersistSecs * 1000) PersistHealth();
         if (fireExhausted) {
-            // Second, independent check: the OS default route. If this machine
-            // has no network at all, every profile "failing" says nothing about
-            // the profiles, and rebuilding would only burn the ranked pool.
+            // Second, independent check: with no OS default route the failures say nothing about the profiles.
             bool interfaceOK = false;
             const auto iface = API::defaultClient->GetDefaultInterface(&interfaceOK);
             if (interfaceOK && iface.name.value().empty()) {

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>534</height>
+    <width>760</width>
+    <height>460</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,56 +19,10 @@
      <property name="title">
       <string>Dial Fields</string>
      </property>
-     <layout class="QGridLayout" name="gridLayout_2">
-      <item row="2" column="0">
-       <widget class="QLabel" name="label">
+     <layout class="QGridLayout" name="gridLayout_2">      <item row="0" column="0">
+       <widget class="QCheckBox" name="reuse_addr">
         <property name="text">
-         <string>Connect Timeout</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QLineEdit" name="connect_timeout"/>
-      </item>
-      <item row="3" column="0">
-       <widget class="QLabel" name="label_bind_ifc">
-        <property name="text">
-         <string>Bind Interface</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1">
-       <widget class="QComboBox" name="bind_interface">
-        <property name="editable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QLabel" name="label_inet4_bind">
-        <property name="text">
-         <string>IPv4 Bind Address</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="1">
-       <widget class="QComboBox" name="inet4_bind_address">
-        <property name="editable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="0">
-       <widget class="QLabel" name="label_inet6_bind">
-        <property name="text">
-         <string>IPv6 Bind Address</string>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="1">
-       <widget class="QComboBox" name="inet6_bind_address">
-        <property name="editable">
-         <bool>true</bool>
+         <string>Reuse Address</string>
         </property>
        </widget>
       </item>
@@ -79,31 +33,163 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
-       <widget class="QCheckBox" name="tcp_multipath">
-        <property name="text">
-         <string>TCP MultiPath</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QCheckBox" name="reuse_addr">
-        <property name="text">
-         <string>Reuse Address</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
+      <item row="0" column="2">
        <widget class="QCheckBox" name="udp_fragment">
         <property name="text">
          <string>UDP Fragment</string>
         </property>
        </widget>
       </item>
-     </layout>
+      <item row="0" column="3">
+       <widget class="QCheckBox" name="tcp_multipath">
+        <property name="text">
+         <string>TCP MultiPath</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Connect Timeout</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="connect_timeout"/>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="label_bind_ifc">
+        <property name="text">
+         <string>Bind Interface</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QComboBox" name="bind_interface">
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_inet4_bind">
+        <property name="text">
+         <string>IPv4 Bind Address</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="inet4_bind_address">
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="label_inet6_bind">
+        <property name="text">
+         <string>IPv6 Bind Address</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QComboBox" name="inet6_bind_address">
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+</layout>
     </widget>
    </item>
-   <item row="2" column="0">
+   <item row="3" column="0">
+    <widget class="QGroupBox" name="interface_box">
+     <property name="title">
+      <string>Interface</string>
+     </property>
+     <layout class="QGridLayout" name="interface_form">      <item row="0" column="0" colspan="4">
+       <widget class="QCheckBox" name="system">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Requires privilege and cannot conflict with existing system interfaces. The internal network stack is used when disabled.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Use System Interface</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="interface_name_l">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Custom system interface name. A generated name is used by default.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Interface Name</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="interface_name"/>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="udp_timeout_l">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;UDP NAT expiration time.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>UDP Timeout</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QLineEdit" name="udp_timeout">
+        <property name="placeholderText">
+         <string>5m (default)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="udp_mapping_l">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;UDP NAT mapping behavior. endpoint_independent is used by default.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>UDP Mapping</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="udp_mapping"/>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="udp_filtering_l">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;UDP NAT filtering behavior. endpoint_independent is used by default.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>UDP Filtering</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QComboBox" name="udp_filtering"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="udp_nat_max_l">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Maximum number of UDP NAT entries.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>UDP NAT Max</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLineEdit" name="udp_nat_max"/>
+      </item>
+</layout>
+    </widget>
+   </item>
+   <item row="4" column="0">
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Orientation::Horizontal</enum>
@@ -118,74 +204,17 @@
      <property name="title">
       <string>TLS</string>
      </property>
-     <layout class="QFormLayout" name="formLayout">
-      <item row="3" column="0">
-       <widget class="QCheckBox" name="enable_ech">
-        <property name="text">
-         <string>Enable ECH</string>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>ECH Config</string>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="1">
-       <widget class="QPushButton" name="ech_config">
-        <property name="text">
-         <string>Not Set</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="0">
-       <widget class="QLabel" name="label_3">
-        <property name="text">
-         <string>Certificate SHA256</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="1">
-       <widget class="QPushButton" name="cert_sha256">
-        <property name="text">
-         <string>Not Set</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="0">
-       <widget class="QLabel" name="label_4">
-        <property name="text">
-         <string>Client Certificate</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="1">
-       <widget class="QPushButton" name="client_cert">
-        <property name="text">
-         <string>Not Set</string>
-        </property>
-       </widget>
-      </item>
-      <item row="8" column="0">
-       <widget class="QLabel" name="label_5">
-        <property name="text">
-         <string>Client Key</string>
-        </property>
-       </widget>
-      </item>
-      <item row="8" column="1">
-       <widget class="QPushButton" name="client_key">
-        <property name="text">
-         <string>Not Set</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
+     <layout class="QGridLayout" name="formLayout">      <item row="0" column="0" colspan="2">
        <widget class="QCheckBox" name="disable_sni">
         <property name="text">
          <string>Disable SNI</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2" colspan="2">
+       <widget class="QCheckBox" name="enable_ech">
+        <property name="text">
+         <string>Enable ECH</string>
         </property>
        </widget>
       </item>
@@ -199,17 +228,79 @@
       <item row="1" column="1">
        <widget class="QLineEdit" name="min_version"/>
       </item>
-      <item row="2" column="0">
+      <item row="1" column="2">
        <widget class="QLabel" name="label_7">
         <property name="text">
          <string>TLS Max Version</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="1" column="3">
        <widget class="QLineEdit" name="max_version"/>
       </item>
-      <item row="4" column="0">
+      <item row="2" column="0">
+       <widget class="QLabel" name="tls_spoof_state_l">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Whether this profile injects a forged ClientHello. &amp;quot;Keep Default&amp;quot; follows Preset Settings, unless a Spoof SNI is set below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>TLS Spoof</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="tls_spoof_state">
+        <item>
+         <property name="text">
+          <string>Keep Default</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>On</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Off</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="tls_spoof_l">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Inject a forged TLS ClientHello carrying this SNI before the real one, to pass SNI filtering that allows specific hostnames.&lt;/p&gt;&lt;p&gt;Client only. Requires elevated privileges (root / Administrator). Not supported on Windows ARM64. &amp;quot;wrong-timestamp&amp;quot; is not supported on macOS.&lt;/p&gt;&lt;p&gt;Leave empty to inherit the global value from Preset Settings.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Spoof SNI</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QLineEdit" name="tls_spoof">
+        <property name="maximumSize">
+         <size>
+          <width>160</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="placeholderText">
+         <string>Allowed SNI to forge</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="tls_spoof_method_l">
+        <property name="text">
+         <string>Method</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QComboBox" name="tls_spoof_method"/>
+      </item>
+      <item row="3" column="2">
        <widget class="QLabel" name="label_8">
         <property name="toolTip">
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h4 style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;a name=&quot;query_server_name&quot;/&gt;&lt;span style=&quot; font-size:medium; font-weight:700;&quot;&gt;q&lt;/span&gt;&lt;span style=&quot; font-size:medium; font-weight:700;&quot;&gt;uery_server_name in sing-box&lt;/span&gt;&lt;/h4&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -219,8 +310,223 @@
         </property>
        </widget>
       </item>
-      <item row="4" column="1">
+      <item row="3" column="3">
        <widget class="QLineEdit" name="ech_server_name"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>ECH Config</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QPushButton" name="ech_config">
+        <property name="text">
+         <string>Not Set</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="2">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>Certificate SHA256</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="3">
+       <widget class="QPushButton" name="cert_sha256">
+        <property name="text">
+         <string>Not Set</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Client Certificate</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QPushButton" name="client_cert">
+        <property name="text">
+         <string>Not Set</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="2">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>Client Key</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="3">
+       <widget class="QPushButton" name="client_key">
+        <property name="text">
+         <string>Not Set</string>
+        </property>
+       </widget>
+      </item>
+</layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QGroupBox" name="quic_box">
+     <property name="title">
+      <string>QUIC Parameters</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_quic">
+      <item row="0" column="0" colspan="4">
+       <widget class="QLabel" name="quic_note">
+        <property name="text">
+         <string>Empty fields fall back to the global values in Preset Settings.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="quic_idle_timeout_l">
+        <property name="text">
+         <string>Idle Timeout</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="quic_idle_timeout">
+        <property name="maximumSize">
+         <size>
+          <width>120</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="placeholderText">
+         <string notr="true">30s</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="quic_keep_alive_period_l">
+        <property name="text">
+         <string>Keep Alive Period</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QLineEdit" name="quic_keep_alive_period">
+        <property name="maximumSize">
+         <size>
+          <width>120</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="placeholderText">
+         <string notr="true">15s</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="quic_stream_receive_window_l">
+        <property name="text">
+         <string>Stream Receive Window</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLineEdit" name="quic_stream_receive_window">
+        <property name="maximumSize">
+         <size>
+          <width>120</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="placeholderText">
+         <string notr="true">8 MB</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="quic_connection_receive_window_l">
+        <property name="text">
+         <string>Connection Receive Window</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QLineEdit" name="quic_connection_receive_window">
+        <property name="maximumSize">
+         <size>
+          <width>120</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="placeholderText">
+         <string notr="true">64 MB</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="quic_max_concurrent_streams_l">
+        <property name="text">
+         <string>Max Concurrent Streams</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLineEdit" name="quic_max_concurrent_streams">
+        <property name="maximumSize">
+         <size>
+          <width>120</width>
+          <height>16777215</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="quic_initial_packet_size_l">
+        <property name="text">
+         <string>Initial Packet Size</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QLineEdit" name="quic_initial_packet_size">
+        <property name="maximumSize">
+         <size>
+          <width>120</width>
+          <height>16777215</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="quic_disable_path_mtu_discovery_l">
+        <property name="text">
+         <string>Disable Path MTU Discovery</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QComboBox" name="quic_disable_path_mtu_discovery">
+        <item>
+         <property name="text">
+          <string>Keep Default</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>On</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Off</string>
+         </property>
+        </item>
+       </widget>
       </item>
      </layout>
     </widget>
@@ -237,14 +543,30 @@
   <tabstop>inet4_bind_address</tabstop>
   <tabstop>inet6_bind_address</tabstop>
   <tabstop>disable_sni</tabstop>
+  <tabstop>enable_ech</tabstop>
   <tabstop>min_version</tabstop>
   <tabstop>max_version</tabstop>
-  <tabstop>enable_ech</tabstop>
+  <tabstop>tls_spoof_state</tabstop>
+  <tabstop>tls_spoof</tabstop>
+  <tabstop>tls_spoof_method</tabstop>
   <tabstop>ech_server_name</tabstop>
   <tabstop>ech_config</tabstop>
   <tabstop>cert_sha256</tabstop>
   <tabstop>client_cert</tabstop>
   <tabstop>client_key</tabstop>
+  <tabstop>quic_idle_timeout</tabstop>
+  <tabstop>quic_keep_alive_period</tabstop>
+  <tabstop>quic_stream_receive_window</tabstop>
+  <tabstop>quic_connection_receive_window</tabstop>
+  <tabstop>quic_max_concurrent_streams</tabstop>
+  <tabstop>quic_initial_packet_size</tabstop>
+  <tabstop>quic_disable_path_mtu_discovery</tabstop>
+  <tabstop>system</tabstop>
+  <tabstop>interface_name</tabstop>
+  <tabstop>udp_timeout</tabstop>
+  <tabstop>udp_mapping</tabstop>
+  <tabstop>udp_filtering</tabstop>
+  <tabstop>udp_nat_max</tabstop>
  </tabstops>
  <resources/>
  <connections>

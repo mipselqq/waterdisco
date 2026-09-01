@@ -17,7 +17,6 @@ namespace Configs {
     }
 
     void GroupsRepo::createTables() const {
-        // Create groups table
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS groups (
                 id INTEGER PRIMARY KEY,
@@ -45,7 +44,6 @@ namespace Configs {
         if (!groupsColumnExists("type_sort_by"))
             db.exec("ALTER TABLE groups ADD COLUMN type_sort_by INTEGER NOT NULL DEFAULT 0");
 
-        // Create groups_order table to store UI tab order
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS groups_order (
                 group_id INTEGER NOT NULL PRIMARY KEY,
@@ -112,7 +110,6 @@ namespace Configs {
     }
 
     void GroupsRepo::saveToDatabase(const Group* group, int id) const {
-        // Serialize lists to JSON strings
         QJsonArray columnWidthArray = QListInt2QJsonArray(group->column_width);
         QJsonArray profilesArray = QListInt2QJsonArray(group->profiles);
         
@@ -184,7 +181,6 @@ namespace Configs {
         json["front_proxy_id"] = query->getColumn(8).getInt();
         json["landing_proxy_id"] = query->getColumn(9).getInt();
 
-        // Parse JSON arrays
         QString columnWidthJsonStr = QString::fromStdString(query->getColumn(10).getText());
         if (!columnWidthJsonStr.isEmpty()) {
             QJsonDocument columnWidthDoc = QJsonDocument::fromJson(columnWidthJsonStr.toUtf8());
@@ -208,9 +204,7 @@ namespace Configs {
         json["type_sort_by"] = query->getColumn(16).getInt();
 
         auto group = groupFromJson(json);
-        // Refreshes used to map several identical servers onto one id, leaving
-        // that id in the list once per server. The list is persisted whole, so
-        // an affected group stays broken until it is repaired here (#1775).
+        // Refreshes could map several identical servers onto one id, leaving it in the persisted list once per server (#1775).
         QSet<int> seen;
         QList<int> unique;
         unique.reserve(group->profiles.size());
@@ -262,14 +256,12 @@ namespace Configs {
     }
 
     std::shared_ptr<Group> GroupsRepo::CurrentGroup() const {
-        // Read current_group from SettingsRepo
         if (!Configs::dataManager || !Configs::dataManager->settingsRepo) {
             return nullptr;
         }
         
         int currentGroupId = Configs::dataManager->settingsRepo->current_group;
         
-        // Retrieve and return the group with that ID
         return GetGroup(currentGroupId);
     }
 
@@ -292,14 +284,12 @@ namespace Configs {
     }
 
     int GroupsRepo::NewGroupID() const {
-        // Atomically increment and get the new ID using RETURNING clause
-        // Note: This method is called from within methods that already hold the mutex lock
+        // Callers already hold the mutex.
         auto query = db.query("UPDATE entity_ids SET group_last_id = group_last_id + 1 RETURNING group_last_id");
         if (query && query->executeStep()) {
             return query->getColumn(0).getInt();
         }
         
-        // Fallback if RETURNING is not supported (shouldn't happen with modern SQLite)
         return 0;
     }
 
@@ -333,7 +323,7 @@ namespace Configs {
         }
         
         if (group->id < 0) {
-            return false; // Group doesn't have an ID, use AddGroup instead
+            return false;
         }
         
         QMutexLocker locker(&mutex);

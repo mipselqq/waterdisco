@@ -15,7 +15,7 @@ namespace {
         painter.end();
         return QIcon(pixmap);
     }
-} // namespace
+}
 
 DialogEditOtp::DialogEditOtp(QWidget *parent, std::shared_ptr<Configs::OtpProfile> profile_)
     : QDialog(parent), ui(new Ui::DialogEditOtp), profile(std::move(profile_)) {

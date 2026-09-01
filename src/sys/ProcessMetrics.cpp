@@ -113,9 +113,7 @@ namespace {
         if (pid <= 0) return r;
 
         char path[64];
-        // CPU: utime (field 14) + stime (field 15) of /proc/<pid>/stat, in clock
-        // ticks. The comm field (2) may contain spaces/parens, so parse after the
-        // last ')'.
+        // utime(14)+stime(15) of /proc/<pid>/stat, in clock ticks; comm(2) can hold spaces/parens, so parse after the last ')'.
         std::snprintf(path, sizeof(path), "/proc/%lld/stat", static_cast<long long>(pid));
         if (FILE* f = std::fopen(path, "r")) {
             char buf[1024];
@@ -155,7 +153,7 @@ namespace {
         return r;
     }
 #endif
-} // namespace
+}
 
 namespace Sys {
     ProcessMetrics::Sample ProcessMetrics::sample(qint64 pid) {

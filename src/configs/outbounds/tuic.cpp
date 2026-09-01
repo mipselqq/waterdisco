@@ -24,7 +24,8 @@ namespace Configs {
         
         tls->ParseFromLink(link);
         tls->enabled = true; // TUIC always uses tls
-        
+        quic->ParseFromLink(link);
+
         if (server_port == 0) server_port = 443;
 
         return !(uuid.isEmpty() || server.isEmpty());
@@ -42,6 +43,7 @@ namespace Configs {
         if (object.contains("zero_rtt_handshake")) zero_rtt_handshake = object["zero_rtt_handshake"].toBool();
         if (object.contains("heartbeat")) heartbeat = object["heartbeat"].toString();
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
+        quic->ParseFromJson(object);
         return true;
     }
 
@@ -80,6 +82,7 @@ namespace Configs {
         if (!heartbeat.isEmpty()) query.addQueryItem("heartbeat", heartbeat);
         
         mergeUrlQuery(query, tls->ExportToLink());
+        mergeUrlQuery(query, quic->ExportToLink());
         mergeUrlQuery(query, outbound::ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
@@ -99,6 +102,7 @@ namespace Configs {
         if (zero_rtt_handshake) object["zero_rtt_handshake"] = zero_rtt_handshake;
         if (!heartbeat.isEmpty()) object["heartbeat"] = heartbeat;
         if (tls->enabled) object["tls"] = tls->ExportToJson();
+        mergeJsonObjects(object, quic->ExportToJson());
         return object;
     }
 
@@ -115,6 +119,7 @@ namespace Configs {
         if (zero_rtt_handshake) object["zero_rtt_handshake"] = zero_rtt_handshake;
         if (!heartbeat.isEmpty()) object["heartbeat"] = heartbeat;
         if (tls->enabled) object["tls"] = tls->Build().object;
+        mergeJsonObjects(object, quic->Build().object);
         return {object, ""};
     }
 

@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Throne</title>
+</head>
+<body>
+<noscript>JavaScript is required to open the dashboard.</noscript>
+<script>
+// The dashboard reads neither query nor fragment and has no same-origin default, so its
+// server list has to be seeded here before handing off to it.
+(function () {
+    var params = new URLSearchParams(location.hash.slice(1));
+    var entry = {
+        id: "throne",
+        name: "Throne",
+        // normalizeServerUrl() strips the scheme before storing.
+        url: params.get("url") || location.host,
+        secret: params.get("secret") || ""
+    };
+
+    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+
+    var KEY = "sing-box-dashboard.servers";
+    var state = null;
+    try { state = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (!state || typeof state !== "object") state = {};
+    if (!Array.isArray(state.servers)) state.servers = [];
+
+    var i = state.servers.findIndex(function (s) { return s && s.id === entry.id; });
+    if (i >= 0) state.servers[i] = entry; else state.servers.push(entry);
+    state.activeId = entry.id;
+
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+
+    location.replace("./");
+})();
+</script>
+</body>
+</html>

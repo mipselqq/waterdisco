@@ -16,10 +16,7 @@ namespace Configs {
         username = url.userName();
         password = url.password();
 
-        // Handle v2rayN format: credentials are base64-encoded in the username field
-        // e.g. http://base64(token)@server:port
-        // If decoded string has no ':', SubStrBefore/After both return the full string,
-        // so username == password == decoded_token (matches expected behavior).
+        // v2rayN base64s "user:pass" into the username; with no ':' SubStrBefore/After both return it whole.
         if (password.isEmpty() && !username.isEmpty()) {
             QString decoded = DecodeB64IfValid(username);
             if (!decoded.isEmpty()) {
@@ -28,8 +25,7 @@ namespace Configs {
             }
         }
 
-        // Handle single-credential format: http://:token@server:port
-        // Some providers set password only; username should equal password.
+        // Some providers set only the password (http://:token@host); username must equal it.
         if (username.isEmpty() && !password.isEmpty()) {
             username = password;
         }

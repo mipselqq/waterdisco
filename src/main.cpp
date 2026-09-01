@@ -43,9 +43,7 @@
 #ifdef Q_OS_MACOS
 #include <QFileOpenEvent>
 
-// On macOS the OS reuses the running app and delivers throne:// URLs, as well as
-// files opened with the app, as a QFileOpenEvent to the application object (never
-// via argv). This filter feeds both into the common pipelines.
+// macOS reuses the running app and delivers throne:// URLs and opened files as a QFileOpenEvent, never via argv.
 class MacOpenEventFilter : public QObject {
 public:
     using QObject::QObject;
@@ -80,10 +78,7 @@ void signal_handler(int signum) {
 namespace {
     int g_signalPipe[2] = {-1, -1};
 
-    // Async-signal-safe: a write() to the self-pipe is all that is allowed here. The
-    // teardown itself (Qt widgets, QProcess, SQLite) runs from the notifier below, on
-    // the main thread, so a session-manager SIGTERM can no longer be delivered on a
-    // worker thread or re-enter a lock the interrupted thread was already holding.
+    // Async-signal-safe: only the self-pipe write() is allowed here; teardown runs from the notifier on the main thread.
     void posix_signal_handler(int signum) {
         const auto byte = static_cast<char>(signum);
         [[maybe_unused]] const ssize_t written = ::write(g_signalPipe[1], &byte, 1);
@@ -91,7 +86,6 @@ namespace {
 
     void install_termination_handlers() {
         if (::pipe(g_signalPipe) != 0) {
-            // Without the pipe, the unsafe direct handler still beats no handler at all.
             signal(SIGTERM, signal_handler);
             signal(SIGINT, signal_handler);
             return;
@@ -104,7 +98,7 @@ namespace {
 
         auto *notifier = new QSocketNotifier(g_signalPipe[0], QSocketNotifier::Read, qApp);
         QObject::connect(notifier, &QSocketNotifier::activated, qApp, [notifier] {
-            notifier->setEnabled(false); // one teardown is enough; later signals just fill the pipe
+            notifier->setEnabled(false);
             char drain[16];
             while (::read(g_signalPipe[0], drain, sizeof(drain)) > 0) {}
             signal_handler(0);
@@ -138,7 +132,6 @@ void loadTranslate(const QString& locale) {
     trans = new QTranslator;
     trans_qt = new QTranslator;
     QLocale::setDefault(QLocale(locale));
-    //
     const QString diskPath = QCoreApplication::applicationDirPath()+"/translations/" + locale + ".qm";
     const QString qrcPath = ":/translations/" + locale + ".qm";
     bool loadOK=false;
@@ -156,8 +149,7 @@ void loadTranslate(const QString& locale) {
 namespace {
     constexpr auto FALLBACK_MARKER = "config/.install-dir-unwritable";
 
-    // QFileInfo::isWritable reports the read-only attribute, not what a UAC-filtered
-    // token may actually do under Program Files.
+    // QFileInfo::isWritable reports the read-only attribute, not what a UAC-filtered token can actually do.
     bool DirIsWritable(const QDir &dir) {
         if (!dir.exists() && !QDir().mkpath(dir.absolutePath())) return false;
         QFile probe(dir.absoluteFilePath(".throne-write-test"));
@@ -186,8 +178,7 @@ namespace {
         }
     }
 
-    // An elevated relaunch finds the install dir writable again, so the fallback is
-    // pinned by a marker or the two runs land on different databases.
+    // An elevated relaunch finds the install dir writable again, so the fallback must stay pinned by the marker.
     bool AdoptUserConfigDir(const QDir &installWd, const QDir &userWd) {
         QFile marker(userWd.absoluteFilePath(FALLBACK_MARKER));
         if (marker.open(QIODevice::ReadOnly)) {
@@ -212,14 +203,13 @@ namespace {
         LOG_WARN(QString("%1 is not writable, using %2").arg(installConfig, userConfig));
         return true;
     }
-} // namespace
+}
 
 #define LOCAL_SERVER_PREFIX "throne-"
 
 int main(int argc, char* argv[]) {
     Logging::InstallQtMessageHandler();
 
-    // Core dump
 #ifdef Q_OS_WIN
     Windows_SetCrashHandler();
 #endif
@@ -237,7 +227,6 @@ int main(int argc, char* argv[]) {
 #endif
 
 #if !defined(Q_OS_MACOS) && (QT_VERSION >= QT_VERSION_CHECK(6,9,0))
-    // Load the emoji fonts
 #ifdef Q_OS_WIN
     int fontId = QFontDatabase::addApplicationFont(WinVersion::IsBuildNumGreaterOrEqual(BuildNumber::Windows_11_22H2) ? ":/font/notoEmoji" : ":/font/Twemoji");
 #else
@@ -254,20 +243,15 @@ int main(int argc, char* argv[]) {
 #endif
 
     QStringList arguments = QApplication::arguments();
-    // A throne:// URL may be passed as a launch argument (Windows/Linux), and so may
-    // config files opened with the app. Both are delivered after the window is up, or
-    // forwarded to the primary instance via the socket below. Files are resolved
-    // before the working directory moves, since their paths may be relative to it.
+    // Must run before the working directory moves below: argument paths may be relative to it.
     const QString launchDeeplink = Deeplink_ExtractFromArgs(arguments);
     const QStringList launchFiles = LaunchFiles_ExtractFromArgs(arguments, QDir::current());
 
-    // Clean
     QDir::setCurrent(QApplication::applicationDirPath());
     if (QFile::exists("updater.old")) {
         QFile::remove("updater.old");
     }
 
-    // dirs & clean
     auto wd = QDir(QApplication::applicationDirPath());
     bool useAppdata = false;
     QString appdataDir;
@@ -279,7 +263,7 @@ int main(int argc, char* argv[]) {
         }
     }
 #ifdef NKR_CPP_USE_APPDATA
-    useAppdata = true; // Example: Package & MacOS
+    useAppdata = true;
 #endif
     QApplication::setApplicationName("Throne");
     if(useAppdata) {
@@ -305,18 +289,14 @@ int main(int argc, char* argv[]) {
     QDir::setCurrent(configDir);
     QDir("temp").removeRecursively();
 
-    // Record app start for the Runtime Stats uptime readout.
     appStartEpoch = QDateTime::currentSecsSinceEpoch();
 
-    // Load database
     Configs::initDB(QString(QDir::currentPath() + QDir::separator() + "throne.db").toStdString());
 
     Logging::SetLevel(Logging::LevelFromString(Configs::dataManager->settingsRepo->log_file_level));
 
-    // Start traffic-statistics maintenance (startup downsample + background rollup).
     Stats::trafficStatsManager->Init();
 
-    // Store Flags
     Configs::dataManager->settingsRepo->argv = arguments;
     if (Configs::dataManager->settingsRepo->argv.contains("-many")) Configs::dataManager->settingsRepo->flag_many = true;
     if (Configs::dataManager->settingsRepo->argv.contains("-tray")) Configs::dataManager->settingsRepo->flag_tray = true;
@@ -333,19 +313,16 @@ int main(int argc, char* argv[]) {
     QApplication::addLibraryPath(QApplication::applicationDirPath() + "/usr/plugins");
 #endif
 
-    // dispatchers
     DS_cores = new QThread;
     DS_cores->start();
 
     LogThread = new QThread;
     LogThread->start();
 
-// icons
     QIcon::setFallbackSearchPaths(QStringList{
         ":/icon",
     });
 
-    // icon for no theme
     if (QIcon::themeName().isEmpty()) {
         QIcon::setThemeName("breeze");
     }
@@ -361,10 +338,8 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    // dataManager->settingsRepo & Flags
     if (Configs::dataManager->settingsRepo->start_minimal) Configs::dataManager->settingsRepo->flag_tray = true;
 
-    // Translate
     QString locale;
     switch (Configs::dataManager->settingsRepo->language) {
         case 1: // English
@@ -373,10 +348,10 @@ int main(int argc, char* argv[]) {
             locale = "zh_CN";
             break;
         case 3:
-            locale = "fa_IR"; // farsi(iran)
+            locale = "fa_IR";
             break;
         case 4:
-            locale = "ru_RU"; // Russian
+            locale = "ru_RU";
             break;
         default:
             locale = QLocale().name();
@@ -384,7 +359,6 @@ int main(int argc, char* argv[]) {
     QGuiApplication::tr("QT_LAYOUT_DIRECTION");
     loadTranslate(locale);
 
-    // Check if another instance is running
     QByteArray hashBytes = QCryptographicHash::hash(wd.absolutePath().toUtf8(), QCryptographicHash::Md5).toBase64(QByteArray::OmitTrailingEquals);
     hashBytes.replace('+', '0').replace('/', '1');
     auto serverName = LOCAL_SERVER_PREFIX + QString::fromUtf8(hashBytes);
@@ -394,9 +368,7 @@ int main(int argc, char* argv[]) {
     if (socket.waitForConnected(250))
     {
         qDebug() << "Another instance is running, let's wake it up and quit";
-        // Hand off whatever we were launched with so the primary instance handles it:
-        // one item per line, a throne:// url or a file:// url. Paths go over as urls
-        // so that a name containing a newline cannot break the framing.
+        // Framing is one url per line, so paths go over as file:// urls: a newline in a name would break it.
         QStringList payload;
         if (!launchDeeplink.isEmpty()) payload << launchDeeplink;
         for (const auto &file : launchFiles) payload << QUrl::fromLocalFile(file).toString();
@@ -409,8 +381,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // Must follow the single-instance check: opening the log earlier truncates
-    // the running instance's file and leaves a marker it would report as a crash.
+    // Must follow the single-instance check: opening the log earlier truncates the running instance's file and fakes a crash marker.
     Logging::Init(configDir);
     LOG_INFO(QString("appdata mode: %1").arg(useAppdata ? "yes" : "no"));
 #ifdef Q_OS_WIN
@@ -418,7 +389,6 @@ int main(int argc, char* argv[]) {
     Windows_ConfigureWER();
 #endif
 
-    // QLocalServer
     QLocalServer server(qApp);
     server.setSocketOptions(QLocalServer::WorldAccessOption);
     if (!server.listen(serverName)) {
@@ -429,9 +399,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(&server, &QLocalServer::newConnection, qApp, [&] {
         auto s = server.nextPendingConnection();
         qDebug() << "Another instance tried to wake us up on " << serverName << s;
-        // The waking instance may forward deeplinks and opened files as payload, one
-        // url per line. Only whole lines are handled as they arrive; the tail, which
-        // carries no trailing newline, is flushed once the peer is done.
+        // One url per line; the tail carries no trailing newline, so it is only flushed on disconnect.
         auto pending = std::make_shared<QByteArray>();
         auto handleLine = [](const QString &line) {
             if (line.startsWith("throne://")) {
@@ -457,7 +425,6 @@ int main(int argc, char* argv[]) {
         QObject::connect(s, &QLocalSocket::disconnected, s, [readPayload] { readPayload(true); });
         QObject::connect(s, &QLocalSocket::disconnected, s, &QLocalSocket::deleteLater);
         readPayload(false); // in case the payload already arrived
-        // raise main window
         MW_dialog_message(MwMessage::Raise, {});
     });
     QObject::connect(qApp, &QApplication::aboutToQuit, [&]
@@ -496,9 +463,7 @@ int main(int argc, char* argv[]) {
                                 "Diagnostics were saved to: %1").arg(Logging::LogDir()));
     }
 
-    // Deliver a deeplink and any files passed on the command line (cold start), then
-    // replay whatever arrived during startup (e.g. a macOS FileOpen event before the
-    // window existed).
+    // The Flush calls replay whatever arrived before the window existed (e.g. a macOS FileOpen event).
     if (!launchDeeplink.isEmpty()) Deeplink_Submit(launchDeeplink);
     Deeplink_FlushPending();
     LaunchFiles_Submit(launchFiles);

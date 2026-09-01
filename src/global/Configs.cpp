@@ -28,7 +28,6 @@
 #include <sys/stat.h>
 #endif
 
-    // System Utils
 namespace Configs {
     void initDB(const std::string& dbPath) {
         dataManager = new DatabaseManager(dbPath);

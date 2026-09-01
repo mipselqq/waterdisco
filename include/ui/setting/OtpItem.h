@@ -18,8 +18,8 @@ class OtpItem : public QWidget {
 
 public:
     enum class Mode {
-        Manage,  // full row with the hover actions
-        ReadOnly // compact row for the tray popup: no actions, tighter metrics
+        Manage,
+        ReadOnly
     };
 
     explicit OtpItem(QWidget *parent, std::shared_ptr<Configs::OtpProfile> profile, QListWidgetItem *item,

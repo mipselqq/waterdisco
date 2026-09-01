@@ -209,9 +209,7 @@ namespace Configs {
     }
 
     namespace {
-        // Tables that make up each logical category. Delete order matters when
-        // foreign keys are on; we copy with them off, but keep child-first order
-        // for clarity and so re-enabling FK checks afterwards stays consistent.
+        // Child-first order: delete order matters once foreign keys are re-enabled.
         const std::vector<std::string> kProfileTables = {"profiles", "groups_order", "groups"};
         const std::vector<std::string> kRouteTables = {"route_rules", "route_profiles"};
         const std::vector<std::string> kSettingsTables = {"settings"};
@@ -238,8 +236,6 @@ namespace Configs {
             return std::find(cols.begin(), cols.end(), column) != cols.end();
         }
 
-        // Replace every row of main.<table> with the rows from bak.<table>,
-        // copying only the columns that exist in both schemas.
         void copyTable(SQLite::Database& d, const std::string& table) {
             if (!tableExists(d, "main", table) || !tableExists(d, "bak", table)) return;
 
@@ -261,9 +257,7 @@ namespace Configs {
     }
 
     void Database::backupSelective(const std::string& destPath, const BackupParts& parts) {
-        // Take a full, WAL-safe snapshot first (same mechanism as backupTo),
-        // then strip the categories the user did not select. entity_ids is
-        // always kept so profile/route IDs stay consistent on restore.
+        // Full snapshot first (WAL-safe, unlike a file copy), then strip the unselected categories.
         {
             SQLite::Database destDb(destPath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
             SQLite::Backup backup(destDb, db);
@@ -304,8 +298,7 @@ namespace Configs {
             if (parts.settings) for (const auto& t : kSettingsTables) copyTable(db, t);
             if (parts.otp) for (const auto& t : kOtpTables) copyTable(db, t);
 
-            // Keep the ID counters ahead of any restored data so freshly created
-            // profiles/groups/routes never collide with restored ones.
+            // Keep the ID counters ahead of restored data so newly created IDs never collide.
             if (parts.profiles || parts.routes) {
                 const bool bakIds = tableExists(db, "bak", "entity_ids");
                 db.exec(

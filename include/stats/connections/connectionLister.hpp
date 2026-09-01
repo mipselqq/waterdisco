@@ -38,10 +38,10 @@ namespace Stats
         QString protocol;
         QString domain;
         QString process;     // basename, e.g. chrome.exe
-        QString processPath; // full path (icon lookup etc.)
+        QString processPath;
         long long closedAtMs = 0; // 0 while live
-        long long uploadSpeed = 0;   // bytes/sec, derived by the lister
-        long long downloadSpeed = 0; // bytes/sec, derived by the lister
+        long long uploadSpeed = 0;   // bytes/sec
+        long long downloadSpeed = 0;
     };
 
     class ConnectionLister
@@ -55,24 +55,24 @@ namespace Stats
 
         void ForceUpdate();
 
-        // Tell the lister whether its connections view is currently visible. While
-        // it is, the loop polls at 1 Hz; otherwise it relaxes to a slower cadence
-        // (off-view polling only feeds the per-app traffic stats). Switching to
-        // visible wakes the loop immediately so the table starts refreshing at once.
+        // Selects the 1 Hz vs relaxed poll cadence; switching to visible wakes the loop at once.
         void SetInView(bool inView);
 
         void stopLoop();
 
         void setSort(ConnectionSort newSort);
 
+        // Restores a persisted pair as-is; setSort() would read the repeat as a direction flip.
+        void restoreSort(ConnectionSort newSort, bool ascending);
+
         ConnectionSort getSort() const { return sort; }
+
+        bool isSortAscending() const { return asc; }
 
     private:
         void update();
 
-        // Last byte/time sample per live connection id, used to derive an
-        // instantaneous up/down rate by diffing cumulative counters. Self-prunes
-        // each poll (rebuilt from the current active set) so it stays bounded.
+        // Rebuilt from the active set on every poll, so it self-prunes.
         struct SpeedSample
         {
             qint64 upload = 0;
@@ -85,9 +85,7 @@ namespace Stats
 
         QMutex mu;
 
-        // Interruptible poll sleep: the loop waits on waitCond_ for the current
-        // interval; SetInView(true) / stopLoop() wake it early. inView_ selects the
-        // active (1 Hz) vs relaxed cadence.
+        // Interruptible poll sleep: SetInView(true) and stopLoop() wake it early.
         QMutex waitMu_;
         QWaitCondition waitCond_;
         std::atomic<bool> inView_{false};
@@ -100,10 +98,7 @@ namespace Stats
 
         bool asc = false;
 
-        // Per-app traffic diffing: last seen cumulative (up, down) per live
-        // connection id, and the set of closed-connection ids already counted
-        // (the closed ring is non-draining, so we dedup by id). Both self-prune
-        // each poll, so they stay bounded and survive core restarts cleanly.
+        // The core's closed ring is non-draining, so closed ids must be deduped; both are rebuilt each poll.
         QHash<QString, QPair<qint64, qint64>> lastBytes_;
         QSet<QString> accountedClosed_;
     };

@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -14,6 +15,9 @@
 #include <QTemporaryDir>
 
 #include "3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.hpp"
+#include "include/api/RPC.h"
+#include "include/configs/generate.h"
+#include "include/global/Configs.hpp"
 #include "include/global/HTTPRequestHelper.hpp"
 #include "include/global/AppStateArchive.hpp"
 #include "include/global/Logger.hpp"
@@ -105,8 +109,7 @@ void MainWindow::on_commitDataRequest() {
     }
     settings->splitter_state = ui->splitter->saveState().toBase64();
 
-    // Backstop for the eager writes in set_spmode_*/UpdateStartedId: this only runs on a
-    // graceful exit, so it must never be the sole place the remembered state is recorded.
+    // Backstop only: this runs on a graceful exit, so it must never be the sole write.
     if (settings->remember_enable && settings->started_id >= 0) settings->remember_id = settings->started_id;
     settings->remember_system_proxy = settings->spmode_system_proxy;
     settings->remember_tun = settings->spmode_vpn;
@@ -181,14 +184,11 @@ void MainWindow::prepare_exit()
     }
     Configs::dataManager->settingsRepo->prepare_exit = true;
     LOG_INFO("prepare_exit started, tearing down proxy/tun/core");
-    //
     if (Configs::dataManager->settingsRepo->spmode_system_proxy) set_system_proxy(false);
     if (Configs::dataManager->settingsRepo->system_dns_set) set_system_dns(false, false);
     RegisterHiddenMenuShortcuts(true);
     RegisterHotkey(true);
-    //
     on_commitDataRequest();
-    //
     Configs::dataManager->settingsRepo->noSave = true; // don't change Configs::dataManager->settingsRepo after this line
     profile_stop(false, true);
 
@@ -205,7 +205,6 @@ void MainWindow::prepare_exit()
 
 void MainWindow::on_menu_exit_triggered() {
     prepare_exit();
-    //
     if (exit_reason == ExitReason::RunUpdater) {
         QDir::setCurrent(QApplication::applicationDirPath());
 #ifdef Q_OS_WIN
@@ -383,6 +382,14 @@ bool MainWindow::StopVPNProcess() {
     return true;
 }
 
+void MainWindow::RestartCore() {
+    runOnThread([=, this]
+    {
+        profile_stop(true, true, true);
+        core_process->Kill();
+    }, DS_cores);
+}
+
 namespace {
 
 bool isNewer(QString assetName) {
@@ -390,8 +397,8 @@ bool isNewer(QString assetName) {
     assetName = assetName.mid(7); // take out Throne-
     QString version;
     auto spl = assetName.split('-');
-    version += spl[0]; // version: 1.2.3
-    if (spl[1].contains("beta") || spl[1].contains("alpha") || spl[1].contains("rc")) version += "."+spl[1]; // .beta.13
+    version += spl[0];
+    if (spl[1].contains("beta") || spl[1].contains("alpha") || spl[1].contains("rc")) version += "."+spl[1];
     auto parts = version.split("."); // [1,2,3,beta,13]
     auto currentParts = QString(NKR_VERSION).replace("-", ".").split('.');
     if (parts.size() < 3 || currentParts.size() < 3)
@@ -401,7 +408,6 @@ bool isNewer(QString assetName) {
     }
     std::vector<int> verNums;
     std::vector<int> currNums;
-    // add base version first
     verNums.push_back(parts[0].toInt());
     verNums.push_back(parts[1].toInt());
     verNums.push_back(parts[2].toInt());
@@ -436,7 +442,6 @@ bool isNewer(QString assetName) {
         if (verNums[i] < currNums[i]) return false;
     }
 
-    // equal base version, check beta-ness
     if (verNums.size() == 5 && currNums.size() == 3) return false;
     if (verNums.size() == 3 && currNums.size() == 5) return true;
     if (verNums.size() == 5 && currNums.size() == 5)
@@ -454,7 +459,107 @@ bool isNewer(QString assetName) {
     return false;
 }
 
+constexpr auto dashboardDownloadURL = "https://github.com/SagerNet/sing-box-dashboard/archive/refs/heads/gh-pages.zip";
+
+bool copyOut(const QString &from, const QString &to) {
+    QFile::remove(to);
+    if (!QFile::copy(from, to)) return false;
+    // Resource files are read-only, and QFile::copy carries that onto the copy.
+    return QFile::setPermissions(to, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                     QFileDevice::ReadGroup | QFileDevice::ReadOther);
+}
+
+bool unpackBundledDashboard(const QDir &dest) {
+    if (!QFile::exists(":/dashboard/index.html")) return false;
+    const QDir bundle(":/dashboard");
+    QDirIterator it(bundle.path(), QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const auto source = it.next();
+        const auto target = dest.filePath(bundle.relativeFilePath(source));
+        if (!dest.mkpath(QFileInfo(target).path()) || !copyOut(source, target)) return false;
+    }
+    return true;
+}
+
 } // namespace
+
+void MainWindow::SeedDashboard() {
+    QDir dashDir(Configs::apiDashboardDir);
+    if (!dashDir.exists() && !QDir().mkpath(Configs::apiDashboardDir)) return;
+    if (!QFile::exists(dashDir.filePath("index.html"))) unpackBundledDashboard(dashDir);
+    // Reinstalling replaces the whole directory, so this cannot be a one-time copy.
+    auto src = QFile(":/Throne/dashboard-bootstrap.html");
+    if (!src.open(QIODevice::ReadOnly)) return;
+    const auto data = src.readAll();
+    src.close();
+    if (auto dest = QFile(dashDir.filePath("throne.html")); dest.open(QIODevice::Truncate | QIODevice::WriteOnly)) {
+        dest.write(data);
+        dest.close();
+    }
+}
+
+void MainWindow::OpenDashboard() {
+    const auto &settings = *Configs::dataManager->settingsRepo;
+    const auto port = settings.core_box_api_port;
+    if (port <= 0) {
+        MessageBoxWarning(software_name, tr("The sing-box API is disabled. Set a listen port in Preferences > Basic Settings > Core."));
+        return;
+    }
+    if (settings.started_id < 0) {
+        MessageBoxWarning(software_name, tr("Start a profile first; the dashboard is served by the running core."));
+        return;
+    }
+
+    const auto show = [this, port] {
+        SeedDashboard();
+        // Fragment, not query: browsers never send it to the server.
+        QUrl url(QString("http://127.0.0.1:%1/dashboard/throne.html").arg(port));
+        url.setFragment(QString("secret=%1&url=127.0.0.1:%2")
+                            .arg(QString::fromUtf8(QUrl::toPercentEncoding(Configs::dataManager->settingsRepo->core_box_api_secret)))
+                            .arg(port),
+                        QUrl::StrictMode);
+        QDesktopServices::openUrl(url);
+    };
+
+    SeedDashboard();
+    if (QFile::exists(QDir(Configs::apiDashboardDir).filePath("index.html"))) {
+        show();
+        return;
+    }
+
+    if (QMessageBox::question(this, tr("Web dashboard"),
+                              tr("The dashboard is not installed yet. Download it now?"))
+        != QMessageBox::StandardButton::Yes) {
+        return;
+    }
+
+    runOnNewThread([=, this] {
+        if (!mu_download_dashboard.tryLock()) {
+            runOnUiThread([=, this] {
+                MessageBoxWarning(tr("Cannot start"), tr("A dashboard download is already running"));
+            });
+            return;
+        }
+        const auto archive = QString("throne-dashboard.zip");
+        auto error = NetworkRequestHelper::DownloadAsset(dashboardDownloadURL, archive, true);
+        if (error.isEmpty()) {
+            bool ok = false;
+            error = API::defaultClient->InstallDashboard(&ok, Configs::GetBasePath() + "/" + archive,
+                                                         QDir(Configs::apiDashboardDir).absolutePath());
+            if (!ok && error.isEmpty()) error = tr("The core did not answer.");
+        }
+        QFile::remove(Configs::GetBasePath() + "/" + archive);
+        mu_download_dashboard.unlock();
+
+        runOnUiThread([=, this] {
+            if (!error.isEmpty()) {
+                MessageBoxWarning(tr("Failed to install the dashboard"), error);
+                return;
+            }
+            show();
+        });
+    });
+}
 
 void MainWindow::CheckUpdate() {
     QString search;
@@ -532,7 +637,6 @@ void MainWindow::CheckUpdate() {
         auto allow_updater = !Configs::dataManager->settingsRepo->flag_use_appdata;
         QMessageBox box(QMessageBox::Question, QObject::tr("Update") + note_pre_release,
                         QObject::tr("Update found: %1\nRelease note:\n%2").arg(assets_name, release_note));
-        //
         QAbstractButton *btn1 = nullptr;
         if (allow_updater) {
             btn1 = box.addButton(QObject::tr("Update"), QMessageBox::AcceptRole);
@@ -540,9 +644,7 @@ void MainWindow::CheckUpdate() {
         QAbstractButton *btn2 = box.addButton(QObject::tr("Open in browser"), QMessageBox::AcceptRole);
         box.addButton(QObject::tr("Close"), QMessageBox::RejectRole);
         box.exec();
-        //
         if (btn1 == box.clickedButton() && allow_updater) {
-            // Download Update
             runOnNewThread([=,this] {
                 if (!mu_download_update.tryLock()) {
                     runOnUiThread([=,this](){

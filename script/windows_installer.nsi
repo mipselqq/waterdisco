@@ -63,6 +63,13 @@ UninstPage custom un.DataPageCreate un.DataPageLeave
 
 !insertmacro MUI_LANGUAGE "English"
 
+VIProductVersion "${APP_VERSION_MAJOR}.${APP_VERSION_MINOR}.${APP_VERSION_PATCH}.${APP_VERSION_BUILD}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "ProductName" "Throne"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "FileDescription" "Throne Setup"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "FileVersion" "${APP_VERSION}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "ProductVersion" "${APP_VERSION}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "LegalCopyright" "Throne"
+
 UninstallText "This will uninstall Throne. Do you wish to continue?"
 UninstallIcon "res\ThroneDel.ico"
 

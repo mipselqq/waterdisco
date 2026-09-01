@@ -49,11 +49,9 @@ func parseConfig(ctx context.Context, configContent []byte) (*option.Options, er
 	return &options, nil
 }
 
-func Create(configContent []byte) (*boxbox.Box, context.CancelFunc, error) {
-	// Build a fresh, independent context per call. Concurrent Create calls (e.g.
-	// several parallel URL tests) must not share one service.Registry, or their
-	// boxes clobber each other's OutboundManager and BatchURLTest panics with
-	// "no outbound with tag ... found". See newBoxContext.
+// onCreated runs between New and Start: the Xray sidecars start first and resolve through this box.
+func Create(configContent []byte, onCreated func(*boxbox.Box)) (*boxbox.Box, context.CancelFunc, error) {
+	// Fresh context per call: concurrent boxes sharing one service.Registry clobber each other's OutboundManager.
 	ctx := newBoxContext()
 	options, err := parseConfig(ctx, configContent)
 	if err != nil {
@@ -73,6 +71,9 @@ func Create(configContent []byte) (*boxbox.Box, context.CancelFunc, error) {
 	if err != nil {
 		cancel()
 		return nil, nil, E.Cause(err, "create service")
+	}
+	if onCreated != nil {
+		onCreated(instance)
 	}
 
 	osSignals := make(chan os.Signal, 1)
@@ -103,7 +104,7 @@ func run() error {
 	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(osSignals)
 	for {
-		instance, cancel, err := Create([]byte{})
+		instance, cancel, err := Create([]byte{}, nil)
 		if err != nil {
 			return err
 		}

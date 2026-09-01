@@ -2,6 +2,7 @@
 #include <QHostInfo>
 #include <utility>
 #include "DialFields.h"
+#include "QUICFields.h"
 #include "multiplex.h"
 #include "TLS.h"
 #include "transport.h"
@@ -41,6 +42,8 @@ namespace Configs
         QString server;
         int server_port = 0;
         bool invalid = false;
+        // Owning profile, stamped by ProfilesRepo; not part of the serialised outbound.
+        int profile_id = -1;
         std::shared_ptr<DialFields> dialFields = std::make_shared<DialFields>();
 
         void ResolveDomainToIP(const std::function<void()> &onFinished) {
@@ -95,11 +98,8 @@ namespace Configs
             return QString("[%1] %2").arg(DisplayType(), DisplayName());
         }
 
-        // Overridden by protocols with their own crypto (WireGuard, SSH, ...);
-        // the default reads TLS/transport (or the Xray stream settings).
         virtual SecurityInfo GetSecurity();
 
-        // GetSecurity() rendered for the type column, warning-prefixed when weak.
         QString DisplaySecurity();
 
     protected:
@@ -121,7 +121,11 @@ namespace Configs
 
         virtual bool MustTLS() { return false; }
 
+        virtual bool HasQUIC() { return false; }
+
         virtual std::shared_ptr<TLS> GetTLS() { return std::make_shared<TLS>(); }
+
+        virtual std::shared_ptr<QUICFields> GetQUIC() { return std::make_shared<QUICFields>(); }
 
         virtual std::shared_ptr<Transport> GetTransport() { return std::make_shared<Transport>(); }
 
@@ -132,6 +136,10 @@ namespace Configs
         virtual std::shared_ptr<xrayMultiplex> GetXrayMultiplex() { return std::make_shared<xrayMultiplex>(); }
 
         virtual bool IsEndpoint() { return false; };
+
+        virtual bool SupportsCredentialStrip() const { return false; }
+
+        virtual void StripCredentials() {}
 
         virtual BuildResult BuildXray() { return {}; }
 
@@ -146,7 +154,6 @@ namespace Configs
             return QStringLiteral("throne://add/") + QString::fromLatin1(b64);
         }
 
-        // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         bool ParseFromClash(const clash::Proxies& object) override;

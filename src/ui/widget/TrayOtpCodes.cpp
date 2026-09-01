@@ -80,7 +80,6 @@ TrayOtpCodes::TrayOtpCodes(QWidget *parent) : QFrame(parent) {
         if (!item && list->count() > 0) item = list->item(0);
         copyCurrent(item);
     });
-    // Deliberately stays open, so several codes can be taken in a row.
     connect(list, &QListWidget::itemClicked, this, [this](const QListWidgetItem *item) { copyCurrent(item); });
 
     ticker = new QTimer(this);

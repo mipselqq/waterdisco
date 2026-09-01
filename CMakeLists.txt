@@ -36,6 +36,8 @@ endif ()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network Multimedia LinguistTools ${QT_DBUS_COMPONENT})
 
+include("cmake/nkr.cmake")
+
 #### Platform Variables ####
 if (APPLE)
     include("cmake/macos/macos.cmake")
@@ -65,7 +67,6 @@ message("[CMAKE_FIND_ROOT_PATH] ${CMAKE_FIND_ROOT_PATH}")
 set(BUILD_SHARED_LIBS OFF)
 
 include("cmake/print.cmake")
-include("cmake/nkr.cmake")
 include("cmake/QHotkey.cmake")
 
 find_package(Threads)
@@ -97,6 +98,10 @@ set(PROJECT_SOURCES
         src/global/CountryHelper.cpp
         include/global/OTP.hpp
         src/global/OTP.cpp
+        include/global/OtpPlaceholder.hpp
+        src/global/OtpPlaceholder.cpp
+        include/global/VpnCredentialOverride.hpp
+        src/global/VpnCredentialOverride.cpp
 
         3rdparty/qrcodegen.cpp
         3rdparty/QtExtKeySequenceEdit.cpp
@@ -104,10 +109,6 @@ set(PROJECT_SOURCES
 
         3rdparty/qv2ray/v2/ui/LogHighlighter.cpp
         3rdparty/qv2ray/v2/ui/QvAutoCompleteTextEdit.cpp
-        3rdparty/qv2ray/v2/ui/widgets/common/QJsonModel.cpp
-        3rdparty/qv2ray/v2/ui/widgets/editors/w_JsonEditor.cpp
-        3rdparty/qv2ray/v2/ui/widgets/editors/w_JsonEditor.hpp
-        3rdparty/qv2ray/v2/ui/widgets/editors/w_JsonEditor.ui
         3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.cpp
         3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.hpp
         3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.cpp
@@ -137,6 +138,8 @@ set(PROJECT_SOURCES
         include/configs/sub/RouteUpdater.hpp
         src/configs/sub/RouteUpdater.cpp
         src/configs/sub/clash.cpp
+        include/configs/sub/vpnFileImport.hpp
+        src/configs/sub/vpnFileImport.cpp
 
         include/sys/Process.hpp
         src/sys/Process.cpp
@@ -174,6 +177,19 @@ set(PROJECT_SOURCES
         src/ui/widget/TrayProfileSelector.cpp
         include/ui/widget/TrayOtpCodes.hpp
         src/ui/widget/TrayOtpCodes.cpp
+        include/ui/widget/json/JsonTree.h
+        src/ui/widget/json/JsonTree.cpp
+        include/ui/widget/json/JsonValidator.h
+        include/ui/widget/json/JsonSchemaValidator.h
+        src/ui/widget/json/JsonSchemaValidator.cpp
+        include/ui/widget/json/SchemaStore.h
+        src/ui/widget/json/SchemaStore.cpp
+        include/ui/widget/json/JsonCodeEdit.h
+        src/ui/widget/json/JsonCodeEdit.cpp
+        include/ui/widget/json/JsonIssueList.h
+        src/ui/widget/json/JsonIssueList.cpp
+        include/ui/widget/json/JsonEditorDialog.h
+        src/ui/widget/json/JsonEditorDialog.cpp
         include/ui/utils/DataViewHtmlGenerator.h
         src/ui/utils/DataViewHtmlGenerator.cpp
         include/ui/utils/ProfilesTableModel.h
@@ -187,6 +203,7 @@ set(PROJECT_SOURCES
         include/ui/utils/ProfilesTableVerticalHeader.h
         src/ui/utils/ProfilesTableVerticalHeader.cpp
         include/ui/utils/ProfilesTableFilterHeader.h
+        include/ui/utils/ConnectionsFilterHeader.h
         include/ui/utils/ScreenQrScanner.h
         src/ui/utils/ScreenQrScanner.cpp
 
@@ -219,6 +236,9 @@ set(PROJECT_SOURCES
         include/ui/profile/edit_mieru.h
         src/ui/profile/edit_mieru.cpp
         include/ui/profile/edit_mieru.ui
+        include/ui/profile/edit_snell.h
+        src/ui/profile/edit_snell.cpp
+        include/ui/profile/edit_snell.ui
         include/ui/profile/edit_tailscale.h
         src/ui/profile/edit_tailscale.cpp
         include/ui/profile/edit_tailscale.ui
@@ -234,6 +254,9 @@ set(PROJECT_SOURCES
         include/ui/profile/edit_hysteria.h
         src/ui/profile/edit_hysteria.cpp
         include/ui/profile/edit_hysteria.ui
+        include/ui/profile/edit_hysteria_realm.h
+        src/ui/profile/edit_hysteria_realm.cpp
+        include/ui/profile/edit_hysteria_realm.ui
         include/ui/profile/edit_tuic.h
         src/ui/profile/edit_tuic.cpp
         include/ui/profile/edit_tuic.ui
@@ -261,6 +284,32 @@ set(PROJECT_SOURCES
         include/ui/profile/edit_wireguard.h
         src/ui/profile/edit_wireguard.cpp
         include/ui/profile/edit_wireguard.ui
+
+        include/ui/profile/edit_wireguard_amnezia.h
+        src/ui/profile/edit_wireguard_amnezia.cpp
+        include/ui/profile/edit_wireguard_amnezia.ui
+
+        include/ui/profile/editor_table_utils.h
+
+        include/ui/profile/edit_openvpn.h
+        src/ui/profile/edit_openvpn.cpp
+        include/ui/profile/edit_openvpn.ui
+
+        include/ui/profile/edit_openvpn_advanced.h
+        src/ui/profile/edit_openvpn_advanced.cpp
+        include/ui/profile/edit_openvpn_advanced.ui
+
+        include/ui/profile/edit_openconnect.h
+        src/ui/profile/edit_openconnect.cpp
+        include/ui/profile/edit_openconnect.ui
+
+        include/ui/profile/edit_openconnect_advanced.h
+        src/ui/profile/edit_openconnect_advanced.cpp
+        include/ui/profile/edit_openconnect_advanced.ui
+
+        include/ui/profile/dialog_vpn_auth.h
+        src/ui/profile/dialog_vpn_auth.cpp
+        include/ui/profile/dialog_vpn_auth.ui
 
         src/ui/setting/dialog_basic_settings.cpp
         include/ui/setting/dialog_basic_settings.h
@@ -305,6 +354,9 @@ set(PROJECT_SOURCES
         src/ui/stats/dialog_runtime_stats.cpp
         include/ui/stats/dialog_runtime_stats.h
         include/ui/stats/dialog_runtime_stats.ui
+        src/ui/stats/dialog_endpoint_details.cpp
+        include/ui/stats/dialog_endpoint_details.h
+        include/ui/stats/dialog_endpoint_details.ui
         src/ui/stats/MiniChartWidget.cpp
         include/ui/stats/MiniChartWidget.h
 
@@ -338,6 +390,7 @@ set(PROJECT_SOURCES
         include/sys/windows/eventHandler.h
         include/configs/baseConfig.h
         include/configs/common/DialFields.h
+        include/configs/common/QUICFields.h
         include/configs/common/TLS.h
         include/configs/common/multiplex.h
         include/configs/common/transport.h
@@ -346,6 +399,7 @@ set(PROJECT_SOURCES
 
         # common impl
         src/configs/common/DialFields.cpp
+        src/configs/common/QUICFields.cpp
         src/configs/common/TLS.cpp
         src/configs/common/multiplex.cpp
         src/configs/common/transport.cpp
@@ -365,11 +419,13 @@ set(PROJECT_SOURCES
         include/configs/outbounds/shadowtls.h
         include/configs/outbounds/anyTLS.h
         include/configs/outbounds/mieru.h
+        include/configs/outbounds/snell.h
         include/configs/outbounds/ssh.h
         
         # outbounds impl
         src/configs/outbounds/anyTLS.cpp
         src/configs/outbounds/mieru.cpp
+        src/configs/outbounds/snell.cpp
         src/configs/outbounds/http.cpp
         src/configs/outbounds/hysteria.cpp
         src/configs/outbounds/shadowsocks.cpp
@@ -385,6 +441,10 @@ set(PROJECT_SOURCES
         src/configs/outbounds/vless.cpp
         src/configs/outbounds/vmess.cpp
         src/configs/outbounds/wireguard.cpp
+        include/configs/outbounds/openvpn.h
+        src/configs/outbounds/openvpn.cpp
+        include/configs/outbounds/openconnect.h
+        src/configs/outbounds/openconnect.cpp
         src/configs/outbounds/custom.cpp
         include/configs/generate.h
         src/configs/generate.cpp
@@ -467,6 +527,22 @@ if (NOT APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)
             PROPERTY AUTORCC_OPTIONS "--compress-algo;zlib;--compress;9;--threshold;5")
 endif ()
 
+file(GLOB_RECURSE DASHBOARD_FILES RELATIVE ${CMAKE_SOURCE_DIR}/res/dashboard ${CMAKE_SOURCE_DIR}/res/dashboard/*)
+# Bracket syntax: in a quoted argument "\\." reaches the regex as ".", matching everything.
+list(FILTER DASHBOARD_FILES EXCLUDE REGEX [[(^|/)\.]])
+if (DASHBOARD_FILES)
+    set(DASHBOARD_QRC_ENTRIES "")
+    foreach (DASHBOARD_FILE ${DASHBOARD_FILES})
+        string(APPEND DASHBOARD_QRC_ENTRIES
+                "        <file alias=\"${DASHBOARD_FILE}\">${CMAKE_SOURCE_DIR}/res/dashboard/${DASHBOARD_FILE}</file>\n")
+    endforeach ()
+    file(WRITE ${CMAKE_BINARY_DIR}/dashboard.qrc
+            "<RCC>\n    <qresource prefix=\"/dashboard\">\n${DASHBOARD_QRC_ENTRIES}    </qresource>\n</RCC>\n")
+    list(APPEND PROJECT_SOURCES ${CMAKE_BINARY_DIR}/dashboard.qrc)
+    set_property(SOURCE ${CMAKE_BINARY_DIR}/dashboard.qrc
+            PROPERTY AUTORCC_OPTIONS "--compress-algo;zlib;--compress;9;--threshold;5")
+endif ()
+
 # Qt exe
 qt_add_executable(Throne
         MANUAL_FINALIZATION
@@ -497,15 +573,12 @@ set_target_properties(Throne PROPERTIES
         MACOSX_BUNDLE_GUI_IDENTIFIER moe.Throne.macosx
         MACOSX_BUNDLE TRUE
         WIN32_EXECUTABLE TRUE
-        UNITY_BUILD ON
 )
+
+if (WIN32 AND MSVC)
+    set_target_properties(Throne PROPERTIES UNITY_BUILD ON)
+endif ()
 set_property(SOURCE "3rdparty/SQLiteCpp/src/sqlite3.c" PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
-# These two translation units both define a private RecolorIcon helper.  Keep
-# them out of unity batches so their anonymous namespaces remain isolated.
-set_property(SOURCE
-    "src/ui/setting/dialog_edit_otp.cpp"
-    "src/ui/setting/OtpItem.cpp"
-    PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
 
 include(CTest)
 if (BUILD_TESTING)

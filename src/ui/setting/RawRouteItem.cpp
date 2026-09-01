@@ -3,6 +3,9 @@
 #include "include/global/Configs.hpp"
 #include "include/database/ProfilesRepo.h"
 #include "include/database/GroupsRepo.h"
+#include "include/ui/widget/json/JsonIssueList.h"
+#include "include/ui/widget/json/SchemaStore.h"
+#include "include/ui/setting/ThemeManager.hpp"
 
 #include <QAbstractItemView>
 #include <QCheckBox>
@@ -21,10 +24,7 @@
 #include <QStringListModel>
 #include <QTextBlock>
 
-// ---------------------------------------------------------------- RawRouteEdit
-
-RawRouteEdit::RawRouteEdit(QWidget* parent) : QPlainTextEdit(parent) {
-    setLineWrapMode(QPlainTextEdit::NoWrap);
+RawRouteEdit::RawRouteEdit(QWidget* parent) : JsonCodeEdit(parent) {
     completer = new QCompleter(this);
     completer->setModel(new QStringListModel(completer));
     completer->setWidget(this);
@@ -82,93 +82,6 @@ void RawRouteEdit::updateCompleter() {
     completer->complete(cr);
 }
 
-QChar RawRouteEdit::charBeforeCursor() const {
-    const QTextCursor tc = textCursor();
-    if (tc.positionInBlock() == 0) return {};
-    return tc.block().text().at(tc.positionInBlock() - 1);
-}
-
-QChar RawRouteEdit::charAfterCursor() const {
-    const QTextCursor tc = textCursor();
-    const QString t = tc.block().text();
-    if (tc.positionInBlock() >= t.length()) return {};
-    return t.at(tc.positionInBlock());
-}
-
-bool RawRouteEdit::handleAutoEdit(QKeyEvent* e) {
-    const int key = e->key();
-    const Qt::KeyboardModifiers mods = e->modifiers();
-    const bool plainOrShift = (mods & ~Qt::ShiftModifier) == 0;
-
-    // Enter: keep the current line's indentation; open a block when between a pair.
-    if ((key == Qt::Key_Return || key == Qt::Key_Enter) && plainOrShift) {
-        QTextCursor tc = textCursor();
-        if (tc.hasSelection()) return false;
-        QString indent;
-        for (const QChar ch : tc.block().text()) {
-            if (ch == ' ' || ch == '\t') indent += ch;
-            else break;
-        }
-        const QChar before = charBeforeCursor();
-        const QChar after = charAfterCursor();
-        const bool pair = (before == '{' && after == '}') || (before == '[' && after == ']');
-        const bool opens = (before == '{' || before == '[');
-        tc.beginEditBlock();
-        if (pair) {
-            tc.insertText("\n" + indent + QStringLiteral("  ") + "\n" + indent);
-            tc.movePosition(QTextCursor::Up);
-            tc.movePosition(QTextCursor::EndOfBlock);
-        } else if (opens) {
-            tc.insertText("\n" + indent + QStringLiteral("  "));
-        } else {
-            tc.insertText("\n" + indent);
-        }
-        tc.endEditBlock();
-        setTextCursor(tc);
-        return true;
-    }
-
-    // Backspace inside an empty pair removes both halves.
-    if (key == Qt::Key_Backspace && mods == Qt::NoModifier) {
-        const QChar before = charBeforeCursor();
-        const QChar after = charAfterCursor();
-        if ((before == '{' && after == '}') || (before == '[' && after == ']') || (before == '"' && after == '"')) {
-            QTextCursor tc = textCursor();
-            tc.deletePreviousChar();
-            tc.deleteChar();
-            setTextCursor(tc);
-            return true;
-        }
-        return false;
-    }
-
-    const QString t = e->text();
-    if (t.isEmpty()) return false;
-    const QChar typed = t.at(0);
-
-    // Typing a closing bracket/quote right before its match just steps over it.
-    if ((typed == '}' || typed == ']' || typed == '"') && charAfterCursor() == typed) {
-        QTextCursor tc = textCursor();
-        tc.movePosition(QTextCursor::Right);
-        setTextCursor(tc);
-        return true;
-    }
-
-    // Auto-close an opening bracket/quote and place the cursor inside.
-    if (typed == '{' || typed == '[' || typed == '"') {
-        if (textCursor().hasSelection()) return false;
-        if (typed == '"' && charAfterCursor().isLetterOrNumber()) return false;
-        const QChar close = typed == '{' ? QChar('}') : (typed == '[' ? QChar(']') : QChar('"'));
-        QTextCursor tc = textCursor();
-        tc.insertText(QString(typed) + close);
-        tc.movePosition(QTextCursor::Left);
-        setTextCursor(tc);
-        return true;
-    }
-
-    return false;
-}
-
 void RawRouteEdit::keyPressEvent(QKeyEvent* e) {
     if (completer->popup()->isVisible()) {
         switch (e->key()) {
@@ -178,22 +91,15 @@ void RawRouteEdit::keyPressEvent(QKeyEvent* e) {
             case Qt::Key_Tab:
             case Qt::Key_Backtab:
                 e->ignore();
-                return; // let the popup handle it
+                return;
             default:
                 break;
         }
     }
 
-    if (handleAutoEdit(e)) {
-        updateCompleter();
-        return;
-    }
-
-    QPlainTextEdit::keyPressEvent(e);
+    JsonCodeEdit::keyPressEvent(e);
     updateCompleter();
 }
-
-// ---------------------------------------------------------------- RawRouteItem
 
 RawRouteItem::RawRouteItem(QWidget* parent, const std::shared_ptr<Configs::RouteProfile>& routeChain) : QDialog(parent) {
     setWindowTitle(tr("Raw routing profile"));
@@ -215,6 +121,12 @@ RawRouteItem::RawRouteItem(QWidget* parent, const std::shared_ptr<Configs::Route
     layout->addWidget(preventCheck);
 
     jsonEdit = new RawRouteEdit(this);
+    if (auto validator = JsonEdit::SingBoxValidator(JsonEdit::SingBox::Route)) {
+        // Throne writes profile ids where sing-box writes outbound tags; TranslateRawOutbounds swaps them at build time.
+        validator->AllowExtraType(QStringLiteral("outbound"), JsonEdit::ValueType::Number);
+        validator->AllowExtraType(QStringLiteral("final"), JsonEdit::ValueType::Number);
+        jsonEdit->setValidator(validator);
+    }
     jsonEdit->setPlainText(chain->rawRoute.isEmpty()
         ? QStringLiteral("{\n"
                          "  \"rules\": [\n"
@@ -228,8 +140,6 @@ RawRouteItem::RawRouteItem(QWidget* parent, const std::shared_ptr<Configs::Route
         : chain->rawRoute);
     layout->addWidget(jsonEdit, 1);
 
-    // outbound suggestions: same display as the structured route editor's outbound selector —
-    // plain proxy/direct/warp-bypass, then "[Group] Name" in group order. Only the id is inserted.
     QList<QPair<QString, QString>> items;
     items.append({QStringLiteral("proxy"), QString::number(-1)});
     items.append({QStringLiteral("direct"), QString::number(-2)});
@@ -247,30 +157,24 @@ RawRouteItem::RawRouteItem(QWidget* parent, const std::shared_ptr<Configs::Route
     }
     jsonEdit->setOutboundItems(items);
 
+    issueList = new JsonEdit::JsonIssueList(this);
+    issueList->attach(jsonEdit);
+    layout->addWidget(issueList);
+
     validateLabel = new QLabel(this);
     layout->addWidget(validateLabel);
-    auto validate = [this] {
-        QJsonParseError err{};
-        QJsonDocument::fromJson(jsonEdit->toPlainText().toUtf8(), &err);
-        if (err.error == QJsonParseError::NoError) {
-            validateLabel->setText(tr("Valid JSON"));
-            validateLabel->setStyleSheet(QStringLiteral("color: #2e7d32;"));
-        } else {
-            validateLabel->setText(tr("Invalid JSON: %1 (offset %2)").arg(err.errorString()).arg(err.offset));
-            validateLabel->setStyleSheet(QStringLiteral("color: #c62828;"));
-        }
+    const auto refreshStatus = [this] {
+        validateLabel->setText(jsonEdit->statusText());
+        const auto &tk = themeManager->tokens;
+        validateLabel->setStyleSheet(QStringLiteral("color: %1;")
+                                         .arg((jsonEdit->hasErrors() ? tk.danger : tk.success).name()));
     };
-    connect(jsonEdit, &QPlainTextEdit::textChanged, this, validate);
-    validate();
+    connect(jsonEdit, &JsonEdit::JsonCodeEdit::issuesChanged, this, refreshStatus);
+    refreshStatus();
 
     auto* formatBtn = new QPushButton(tr("Format JSON"), this);
     connect(formatBtn, &QPushButton::clicked, this, [this] {
-        const auto doc = QJsonDocument::fromJson(jsonEdit->toPlainText().toUtf8());
-        if (!doc.isObject()) {
-            MessageBoxInfo(tr("Raw route"), tr("The route must be a valid JSON object"));
-            return;
-        }
-        jsonEdit->setPlainText(QJsonObject2QString(doc.object(), false));
+        if (!jsonEdit->formatDocument()) MessageBoxInfo(tr("Raw route"), tr("The route must be a valid JSON object"));
     });
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, this);
@@ -287,7 +191,7 @@ RawRouteItem::RawRouteItem(QWidget* parent, const std::shared_ptr<Configs::Route
 }
 
 void RawRouteItem::accept() {
-    chain->name = nameEdit->text();
+    chain->name = nameEdit->text().trimmed();
     if (chain->name.isEmpty()) {
         MessageBoxWarning(tr("Invalid operation"), tr("Cannot create Route Profile with empty name"));
         return;

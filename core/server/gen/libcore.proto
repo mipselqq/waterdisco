@@ -12,6 +12,7 @@ service LibcoreService {
   rpc QueryURLTest(EmptyReq) returns (QueryURLTestResponse);
   rpc QueryStats(EmptyReq) returns (QueryStatsResp);
   rpc QueryConnections(EmptyReq) returns (QueryConnectionsResp);
+  rpc CloseConnections(CloseConnectionsRequest) returns (CloseConnectionsResponse);
   //
   rpc SetSystemDNS(SetSystemDNSRequest) returns (EmptyResp);
   //
@@ -26,9 +27,15 @@ service LibcoreService {
   rpc QueryIPTest(EmptyReq) returns (QueryIPTestResponse);
   //
   rpc GenWgKeyPair(EmptyReq) returns (GenWgKeyPairResponse);
+
+  rpc InstallDashboard(InstallDashboardRequest) returns (ErrorResp);
   //
   rpc QueryAutoSelectors(EmptyReq) returns (QueryAutoSelectorsResponse);
   rpc AutoSelectorAction(AutoSelectorActionRequest) returns (ErrorResp);
+  //
+  rpc QueryVPNStatus(VPNStatusRequest) returns (VPNStatusResponse);
+  rpc SubmitVPNChallenge(SubmitVPNChallengeRequest) returns (ErrorResp);
+  rpc CancelVPNChallenge(SubmitVPNChallengeRequest) returns (ErrorResp);
 }
 
 message EmptyReq {}
@@ -50,12 +57,9 @@ message LoadConfigReq {
   optional bool need_xray = 9 [default = false];
   optional string xray_config = 10 [default = ""];
   optional string tun_ipv4_cidr = 11 [default = ""];
-  // Address of sing-box's loopback DNS-in (e.g. "127.0.0.1:15353") used by the
-  // live Xray instance to resolve outbound server domains. Empty => no outbound
-  // DNS wiring (test/validation fallback).
-  optional string xray_outbound_dns_address = 12 [default = ""];
-  // Xray-style domain strategy (e.g. "UseIP", "UseIPv4v6") applied to outbound
-  // domain resolution when xray_outbound_dns_address is set.
+  reserved 12;
+  reserved "xray_outbound_dns_address";
+  // Xray-style strategy (e.g. "UseIP") for resolution through the box's dns-direct transport; empty => unwired.
   optional string xray_outbound_dns_strategy = 13 [default = ""];
   // Keep the Xray instance cold until something dials it. Set for auto-selector
   // profiles, whose pools can hold Xray members that only get probed once a
@@ -98,10 +102,99 @@ message TestReq {
   // Seeds in-batch fall-short cancellation so each chunk uses global, not local,
   // best measurements.
   optional int32 fall_short_best_ms = 12 [default = 0];
+  // Inspected inside the same test box: it dies with the RPC, so no later query can.
+  repeated string vpn_endpoint_tags = 13;
+  // Bounded wait for those tags to leave `connecting`; 0 picks the core default.
+  optional int32 vpn_status_timeout_ms = 14 [default = 0];
+  // See LoadConfigReq; empty leaves Xray on the OS resolver, which a running TUN owns.
+  optional string xray_outbound_dns_strategy = 15 [default = ""];
 }
 
 message TestResp {
   repeated URLTestResp results = 1;
+  // Only for vpn_endpoint_tags whose URL probe genuinely failed.
+  repeated VPNEndpointStatus vpn_status = 2;
+}
+
+message VPNChallengeChoice {
+  optional string value = 1 [default = ""];
+  optional string label = 2 [default = ""];
+}
+
+message VPNChallengeField {
+  optional string submission_key = 1 [default = ""];
+  optional string name = 2 [default = ""];
+  optional string label = 3 [default = ""];
+  // text | password | select
+  optional string kind = 4 [default = ""];
+  optional string value = 5 [default = ""];
+  repeated VPNChallengeChoice options = 6;
+}
+
+// The endpoint is parked waiting for a human; nothing moves until Submit/Cancel.
+message VPNChallenge {
+  optional string endpoint_tag = 1 [default = ""];
+  optional string id = 2 [default = ""];
+  // openvpn: credentials|secret|message|open-url   openconnect: form|browser
+  optional string kind = 3 [default = ""];
+  optional string username = 4 [default = ""];
+  optional string message = 5 [default = ""];
+  optional string banner = 6 [default = ""];
+  optional string error = 7 [default = ""];
+  optional string url = 8 [default = ""];
+  // false => the answer is a secret and must be masked.
+  optional bool echo = 9 [default = false];
+  optional int64 deadline = 10 [default = 0];
+  repeated VPNChallengeField fields = 11;
+}
+
+// One openvpn/openconnect endpoint's tunnel state.
+message VPNEndpointStatus {
+  optional string tag = 1 [default = ""];
+  // connecting | auth-pending | connected | error
+  optional string state = 2 [default = ""];
+  optional string error = 3 [default = ""];
+  optional bool connected = 4 [default = false];
+  // Present only while connected.
+  repeated string ipv4 = 5;
+  repeated string ipv6 = 6;
+  repeated string dns = 7;
+  optional int32 mtu = 8 [default = 0];
+  optional int64 connected_since = 9 [default = 0];
+  optional string server = 10 [default = ""];
+  // openvpn: tunnel network; openconnect: transport.
+  optional string network = 11 [default = ""];
+  // Server-advertised routes, i.e. what a `preferred_by` route rule matches.
+  repeated string routes = 12;
+  repeated string excluded_routes = 13;
+  // Every suffix `preferred_by` matches: search domains plus pushed split-DNS suffixes.
+  repeated string search_domains = 14;
+  // openvpn only; openconnect reports its transport in `network` instead.
+  optional string cipher = 15 [default = ""];
+  optional VPNChallenge challenge = 16;
+  // `error` is a rejected login; neither core prompts for config-supplied credentials.
+  optional bool auth_failed = 17 [default = false];
+}
+
+message VPNStatusRequest {
+  repeated string endpoint_tags = 1;
+  // Wait this long for a tag still handshaking; 0 answers with the current state.
+  optional int32 timeout_ms = 2 [default = 0];
+}
+
+message VPNStatusResponse {
+  repeated VPNEndpointStatus results = 1;
+}
+
+// Answers the challenge `challenge_id` on `endpoint_tag`: openvpn reads
+// username/password/secret, openconnect reads form_values keyed by submission_key.
+message SubmitVPNChallengeRequest {
+  optional string endpoint_tag = 1 [default = ""];
+  optional string challenge_id = 2 [default = ""];
+  optional string username = 3 [default = ""];
+  optional string password = 4 [default = ""];
+  optional string secret = 5 [default = ""];
+  map<string, string> form_values = 6;
 }
 
 message QueryStatsResp{
@@ -132,6 +225,17 @@ message ConnectionMetaData {
   optional string process_path = 11 [default = ""]; // full path (icon lookup etc.)
   repeated string chain = 12;                        // outbound chain, for later use
   optional int64 closed_at = 13 [default = 0];       // 0 while live
+}
+
+// Ids come from a previous QueryConnections; ones that already closed are a
+// no-op, so a stale table never turns into an error.
+message CloseConnectionsRequest {
+  repeated string ids = 1;
+}
+
+message CloseConnectionsResponse {
+  optional int32 closed = 1 [default = 0];
+  optional string error = 2 [default = ""];
 }
 
 message SetSystemDNSRequest {
@@ -168,6 +272,8 @@ message SpeedTestRequest {
   optional bool dynamic_fall_short = 15 [default = false];
   optional int32 fall_short_best_ms = 16 [default = 0];
   optional int32 fall_short_best_download_ms = 17 [default = 0];
+  // See TestReq.xray_outbound_dns_strategy.
+  optional string xray_outbound_dns_strategy = 18 [default = ""];
 }
 
 message SpeedTestResult {
@@ -310,4 +416,10 @@ message AutoSelectorActionRequest {
   // recheck = force a full sweep now; select = pin the group to `member`
   optional string action = 2 [default = ""];
   optional string member = 3 [default = ""];
+}
+
+// Throne downloads the archive (proxy settings apply there); the core has the zip reader.
+message InstallDashboardRequest {
+  optional string archive_path = 1 [default = ""];
+  optional string target_dir = 2 [default = ""];
 }

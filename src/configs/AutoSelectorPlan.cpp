@@ -38,15 +38,11 @@ namespace Configs
             return filters;
         }
 
-        // A stored result counts only while it is inside the selector's validity
-        // window. Outside it the member is treated exactly like an untested one,
-        // so it gets re-measured instead of ranked on a stale number.
         bool hasFreshResult(const std::shared_ptr<Profile> &member, const autoSelector *selector, qint64 now)
         {
             if (member == nullptr || member->latency == 0) return false;
             if (selector->resultValidityMins <= 0) return false;
-            // Results written before the timestamp column existed carry 0; treat
-            // them as expired rather than as infinitely fresh.
+            // Rows written before the timestamp column existed carry 0: expired, not fresh.
             if (member->latency_at <= 0) return false;
             return (now - member->latency_at) <= static_cast<qint64>(selector->resultValidityMins) * 60;
         }
@@ -59,20 +55,18 @@ namespace Configs
             if (member == nullptr || member->outbound == nullptr) return AutoSelectorSkip::Missing;
             if (member->type == "chain" || member->type == "autoselector") return AutoSelectorSkip::MetaType;
             if (member->type == "tailscale") return AutoSelectorSkip::Tailscale;
+            if (member->type == "openvpn" || member->type == "openconnect")
+                return AutoSelectorSkip::ManagementEndpoint;
             if (member->outbound->IsExtraCore()) return AutoSelectorSkip::ExtraCore;
             if (member->type == "custom") {
                 const auto custom = member->Custom();
                 if (custom == nullptr) return AutoSelectorSkip::Missing;
-                // Only a sing-box full config is excluded: it wants the whole box,
-                // whereas an Xray one just gets an instance of its own.
+                // Only a sing-box full config is excluded; an Xray one gets its own instance.
                 if (custom->type != Custom::CustomOutbound && custom->type != Custom::CustomXrayOutbound
                     && custom->type != Custom::CustomXrayFullConfig) {
                     return AutoSelectorSkip::FullConfig;
                 }
-                // Members share one config, and the Xray ones share a single
-                // sidecar. A profile whose JSON does not parse builds into an
-                // empty outbound that fails the whole thing rather than just
-                // itself, so it must never reach the pool.
+                // A member whose JSON does not parse builds into an empty outbound that fails the shared build.
                 if (QString2QJsonObject(custom->config).isEmpty()) return AutoSelectorSkip::Malformed;
             }
             if (filters.hasName && !filters.name.match(member->outbound->DisplayName()).hasMatch()) {
@@ -81,18 +75,13 @@ namespace Configs
             if (!filters.countries.isEmpty() && !filters.countries.contains(member->test_country.toUpper())) {
                 return AutoSelectorSkip::CountryFilter;
             }
-            // Only a *fresh* failure keeps a member out: an old one says nothing
-            // about the server today and would exile it permanently.
+            // Only a fresh failure excludes a member; an old one would exile it permanently.
             if (selector->excludeUnavailable && member->latency < 0 && hasFreshResult(member, selector, now))
                 return AutoSelectorSkip::Unavailable;
             return AutoSelectorSkip::None;
         }
 
-        // Mirrors entIDListtoEntList's transition budget: a member's chain may
-        // hand off sing-box -> Xray and back at most once. The group's landing
-        // and front proxies are part of that chain, so a member sitting in the
-        // other core between two of them blows the budget — and the build fails
-        // on the whole profile rather than on the member. Count it here instead.
+        // Mirrors entIDListtoEntList's budget: a chain may hand off sing-box <-> Xray at most once.
         int coreTransitions(const std::shared_ptr<Profile> &landing,
                             const std::shared_ptr<Profile> &member,
                             const std::shared_ptr<Profile> &front)
@@ -108,8 +97,7 @@ namespace Configs
             return transitions;
         }
 
-        // chainScanError's rules, applied per member: reaching them through
-        // buildOutboundChain would fail the whole build instead of this one.
+        // chainScanError's rules per member: hitting them in buildOutboundChain fails the whole build.
         bool xrayFullConfigFitsChain(const std::shared_ptr<Profile> &landing,
                                      const std::shared_ptr<Profile> &front)
         {
@@ -119,9 +107,7 @@ namespace Configs
                    && !landing->outbound->IsExtraCore();
         }
 
-        // Ranking key: measured members first (fastest first), then untested,
-        // then anything known to have failed. Untested beats failed so a fresh
-        // subscription still gets explored rather than written off.
+        // Untested (1) outranks failed (2) so a fresh subscription still gets explored.
         int latencyRank(int latency)
         {
             if (latency > 0) return 0;
@@ -129,7 +115,6 @@ namespace Configs
             return 2;
         }
 
-        // The latency to rank on: an expired result reads as "never measured".
         int effectiveLatency(const std::shared_ptr<Profile> &member, const autoSelector *selector, qint64 now)
         {
             return hasFreshResult(member, selector, now) ? member->latency : 0;
@@ -140,7 +125,6 @@ namespace Configs
             return effectiveLatency(dataManager->profilesRepo->GetProfile(id), selector, now);
         }
 
-        // Shared comparator so the plan's ordering and a post-test re-rank agree.
         bool byLatency(int left, int right, const autoSelector *selector, qint64 now)
         {
             const int leftLatency = effectiveLatencyOf(left, selector, now);
@@ -200,9 +184,7 @@ namespace Configs
             return members;
         }
 
-        // Order members: those already ranked in the persisted pool keep their
-        // position, newcomers are appended by measured latency. Stable ordering
-        // matters — it is the core's ranking prior.
+        // The persisted order is the core's ranking prior: keep it, append newcomers by latency.
         QList<int> orderMembers(const QList<int> &members, const QList<int> &persistedPool,
                                 const autoSelector *selector, qint64 now)
         {
@@ -237,6 +219,7 @@ namespace Configs
             case AutoSelectorSkip::FullConfig: return QObject::tr("full config profile");
             case AutoSelectorSkip::Malformed: return QObject::tr("config does not parse");
             case AutoSelectorSkip::Tailscale: return QObject::tr("Tailscale profile");
+            case AutoSelectorSkip::ManagementEndpoint: return QObject::tr("OpenVPN or OpenConnect profile");
             case AutoSelectorSkip::NameFilter: return QObject::tr("filtered out by name");
             case AutoSelectorSkip::CountryFilter: return QObject::tr("filtered out by country");
             case AutoSelectorSkip::Unavailable: return QObject::tr("last test failed");
@@ -277,9 +260,6 @@ namespace Configs
         plan.pool = ordered;
         plan.build = ordered.mid(0, std::min<qsizetype>(ordered.size(), selector->buildLimit));
 
-        // Choosing which members to build only matters once there are more of
-        // them than fit; below that everything is built and ranking is the
-        // core's problem, not ours.
         if (ordered.size() > selector->buildLimit) {
             int unranked = 0;
             for (int id : plan.build) {
@@ -296,8 +276,6 @@ namespace Configs
         auto selector = ent->AutoSelector();
         if (selector == nullptr) return {};
         selector->Normalize();
-        // Rank against everything eligible, not just the current pool: a member
-        // that fell out of the cap last time deserves another chance.
         return eligibleMembers(ent, selector, nullptr);
     }
 
@@ -316,9 +294,6 @@ namespace Configs
                 needed << id;
                 continue;
             }
-            // A result inside the validity window is reused whatever it says —
-            // including a failure, which the ranking simply sorts last. Outside
-            // it, the member reads as unmeasured and is tested again.
             if (effectiveLatencyOf(id, selector, now) == 0) needed << id;
         }
         return needed;
@@ -331,8 +306,6 @@ namespace Configs
         if (selector == nullptr) return {};
 
         auto members = eligibleMembers(ent, selector, nullptr);
-        // A fresh measurement supersedes the old ranking, so order purely by
-        // latency here rather than preserving the previous pool.
         const auto now = QDateTime::currentSecsSinceEpoch();
         std::stable_sort(members.begin(), members.end(),
                          [selector, now](int left, int right) { return byLatency(left, right, selector, now); });

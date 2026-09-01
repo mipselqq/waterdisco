@@ -4,12 +4,9 @@
 #include "Utils.hpp"
 #include "include/database/DatabaseManager.h"
 
-// Carried over from srslist.h, which used to be included here.
 #include <array>
 #include <string_view>
 #include <utility>
-
-// Switch core support
 
 namespace Configs {
     void initDB(const std::string& dbPath);

@@ -27,9 +27,6 @@ public:
         QList<int> profileIds;
     };
 
-    // Column order of the proxy table. Everything that indexes the table by
-    // column (sorting, header menus, saved widths, the filter header) refers to
-    // these instead of raw numbers.
     enum Column {
         ColNumber = 0,
         ColStartup,
@@ -46,8 +43,6 @@ public:
         ColumnCount,
     };
 
-    // Filterable fields, held in memory so filtering never pages profiles in one
-    // at a time through the LRU cache below.
     struct FilterKey {
         QString type;
         QString address;
@@ -90,7 +85,6 @@ public:
     // group. New main-window code uses setGroupSections().
     void refreshTable(const QList<int> &ids = {}, bool mayNeedReset = false);
 
-    // Invalidate one row so the view repaints (e.g. after latency/traffic update).
     void refreshProfileId(int profileId);
 
     void emplaceProfiles(int row1, int row2);

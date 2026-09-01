@@ -18,8 +18,6 @@ public:
     std::function<void(const QString &)> set_edit_text_serverAddress;
     std::function<void(const QString &)> set_edit_text_serverPort;
 
-    // cached editor
-
     std::function<void()> editor_cache_updated;
 
     virtual QList<QPair<QPushButton *, QString>> get_editor_cached() { return {}; };

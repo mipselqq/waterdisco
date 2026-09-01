@@ -2,31 +2,25 @@
 
 #include <QString>
 
-// Registration of the "throne://" URL scheme with the OS, and of the app as a
-// handler for config files ("Open with Throne"). Both describe the same install
-// to the same OS registry, so they are written together.
-//
-// The file handling is additive everywhere: Throne joins the "open with" list of
-// the common config types, and never takes over an extension the user already
-// has an application for.
-//
-// The app is distributed as a portable zip, so there is no installer step and
-// the executable path changes whenever the user moves or updates the folder.
-// Registration therefore runs at startup, needs no elevation, and self-heals:
-// we keep a mirror of the last-written state in settings (url_scheme_mirror)
-// and only touch the OS when the current desired state differs from it.
+// Portable install: the exe path moves, so registration re-runs at startup and is diffed against the settings mirror (url_scheme_mirror).
 
-// Per-platform: an opaque string identifying the registration for the current
-// install location (e.g. the launch command on Windows, the exec target on
-// Linux, the bundle path on macOS), prefixed with a revision of the registration
-// itself so that adding entries re-registers installs that never moved.
-// Compared against the stored mirror. Returns empty if the scheme cannot be
-// registered in the current environment.
+// Opaque per-platform state, revision-prefixed so that adding entries re-registers installs that never moved; empty when unsupported.
 QString UrlScheme_DesiredState();
 
-// Per-platform: (re)write the OS registration for the current install location.
+// Per-platform: whether the OS registration still points at this install; the mirror cannot see another install taking the shared entries over.
+bool UrlScheme_IsCurrent();
+
 void UrlScheme_Apply();
 
-// Common: register only if the desired state differs from the stored mirror,
-// then update the mirror. A no-op when nothing changed.
+// Per-platform inverse of Apply(): drops only what we wrote, leaving associations owned by other apps alone.
+void UrlScheme_Remove();
+
+bool UrlScheme_IsSupported();
+
+// Startup path, skipped entirely while auto registration is off.
 void UrlScheme_RegisterIfNeeded();
+
+// Basic Settings buttons; both move the mirror so startup neither redoes nor undoes them.
+bool UrlScheme_Install();
+
+void UrlScheme_Uninstall();

@@ -15,14 +15,11 @@ import (
 	"github.com/xtls/xray-core/core"
 )
 
-// How often the gate looks for an instance that has gone idle, and the floor on
-// that once a short idle window pulls it down.
 const (
 	gateSweepInterval    = 15 * time.Second
 	minGateSweepInterval = 2 * time.Second
 )
 
-// Keeps shutdown within about half the idle window instead of a fixed tick late.
 func sweepIntervalFor(idle time.Duration) time.Duration {
 	if idle <= 0 || idle/2 >= gateSweepInterval {
 		return gateSweepInterval
@@ -33,24 +30,8 @@ func sweepIntervalFor(idle time.Duration) time.Duration {
 	return minGateSweepInterval
 }
 
-// Gate keeps an Xray instance cold until traffic actually needs it.
-//
-// An auto-selector pool can hold Xray members that sit in the bench tier and
-// get dialed once every bench cycle; keeping a live instance (plus a handler
-// per member) resident the whole time is pure overhead. The gate takes over the
-// loopback ports sing-box was told to dial, moves Xray's own inbounds onto
-// fresh ports behind them, and only builds the instance once a connection
-// arrives.
-//
-// Owning the listening socket for the whole life of the config is the point: a
-// dial that lands while the instance is down must not hit a closed port, which
-// the auto-selector would read as a dead member rather than a cold one.
-//
-// UDP needs no gate of its own. Xray answers a SOCKS5 UDP ASSOCIATE with a
-// per-session ephemeral hub on its own address, so datagrams never touch the
-// inbound port to begin with. The association's TCP control connection does run
-// through the gate and counts as active traffic, so the instance can never be
-// shut down out from under a live UDP session.
+// The gate owns the inbound ports for the whole life of the config: a dial landing while the instance is down must not hit a closed port.
+// No UDP gate: Xray serves SOCKS5 UDP ASSOCIATE from a per-session ephemeral hub, and the association's TCP control connection keeps the instance from being swept.
 type Gate struct {
 	config  string
 	idle    time.Duration
@@ -63,8 +44,7 @@ type Gate struct {
 	instance *core.Instance
 	closed   bool
 
-	// conns is nil once the gate is closed, which is also how a connection
-	// accepted during teardown learns to give up.
+	// conns is nil once the gate is closed, which is how a connection accepted during teardown learns to give up.
 	connsMu sync.Mutex
 	conns   map[net.Conn]struct{}
 
@@ -79,13 +59,7 @@ type gateBridge struct {
 
 type gateAddrPair struct{ gate, target string }
 
-// StartGate moves every inbound in the config onto a fresh port, takes over the
-// ports they used to listen on, and returns a gate with no instance running
-// yet. The config is validated up front so a broken profile still fails at
-// Start time rather than on some later dial. prepare runs on each instance
-// before it starts and must apply everything the caller would have applied to
-// an eagerly created one (egress interface, outbound DNS). An idle of 0 keeps
-// the instance resident once it has started.
+// prepare must apply to each instance everything an eagerly created one would get (egress interface, outbound DNS); idle 0 keeps it resident.
 func StartGate(config string, idle time.Duration, prepare func(*core.Instance) error) (*Gate, error) {
 	rewritten, pairs, err := remapInbounds(config)
 	if err != nil {
@@ -122,10 +96,7 @@ func StartGate(config string, idle time.Duration, prepare func(*core.Instance) e
 	return gate, nil
 }
 
-// remapInbounds rewrites each inbound onto a free port on the same address and
-// reports the (original, new) address pairs. Only the inbounds array is decoded
-// and re-encoded, so the rest of the config — including any hand-written
-// outbound JSON — reaches Xray byte for byte as it arrived.
+// Only the inbounds array is decoded and re-encoded, so hand-written outbound JSON reaches Xray byte for byte.
 func remapInbounds(config string) (string, []gateAddrPair, error) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(config), &root); err != nil {
@@ -141,9 +112,7 @@ func remapInbounds(config string) (string, []gateAddrPair, error) {
 		return "", nil, errors.New("xray gate: config has no inbounds to gate")
 	}
 
-	// Hold every probe open until the whole set is chosen: released ephemeral
-	// ports get handed straight back out, so probing one at a time can deal the
-	// same port to two inbounds.
+	// Hold every probe open until the whole set is chosen: a released ephemeral port gets dealt straight back out.
 	var probes []net.Listener
 	defer func() {
 		for _, probe := range probes {
@@ -159,9 +128,6 @@ func remapInbounds(config string) (string, []gateAddrPair, error) {
 		}
 		port, ok := inbound["port"].(float64)
 		if !ok || port <= 0 {
-			// Every inbound has to be gated. One left on its own port would
-			// take connections while the instance is down, which is exactly the
-			// closed-port failure the gate exists to prevent.
 			return "", nil, errors.New("xray gate: inbound without a fixed port cannot be gated")
 		}
 		probe, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
@@ -189,8 +155,7 @@ func remapInbounds(config string) (string, []gateAddrPair, error) {
 	return string(out), pairs, nil
 }
 
-// Instance is the live instance, or nil while the gate is cold. Callers use it
-// to push runtime changes (the egress interface) onto whatever is up now.
+// nil while the gate is cold.
 func (g *Gate) Instance() *core.Instance {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -246,8 +211,7 @@ func (g *Gate) handle(conn net.Conn, target string) {
 		_ = conn.Close()
 	}()
 
-	// Counted before the instance is even up: the sweeper must not decide the
-	// gate is idle while a connection is still being set up.
+	// Counted before the instance is up, or the sweeper could call the gate idle mid-setup.
 	g.active.Add(1)
 	g.touch()
 	defer func() {
@@ -280,9 +244,7 @@ func (g *Gate) handle(conn net.Conn, target string) {
 	<-done
 }
 
-// relay copies until EOF and then half-closes the destination, so a peer that
-// has finished sending can still receive. Closing both ends on the first EOF
-// would truncate any download whose request body ended early.
+// Half-closes dst on EOF; closing both ends on the first EOF would truncate a download whose request body ended early.
 func relay(dst, src net.Conn, done chan<- struct{}) {
 	defer func() { done <- struct{}{} }()
 	_, _ = io.Copy(dst, src)
@@ -349,8 +311,7 @@ func (g *Gate) touch() {
 	g.lastUse.Store(time.Now().UnixNano())
 }
 
-// track registers a connection so Close can tear it down, and reports false
-// once the gate is closed and nothing will come back for it.
+// Reports false once the gate is closed and nothing will come back for the connection.
 func (g *Gate) track(conn net.Conn) bool {
 	g.connsMu.Lock()
 	defer g.connsMu.Unlock()

@@ -13,6 +13,7 @@
 #include "include/database/GroupsRepo.h"
 #include "include/ui/group/dialog_edit_group.h"
 #include "include/ui/mainWindow/MainWindowInternal.h"
+#include "include/ui/mainWindow/TestRunner.h"
 
 void MainWindow::show_group(int gid) {
     const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);

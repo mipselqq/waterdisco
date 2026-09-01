@@ -139,8 +139,7 @@ bool AutoRun_IsEnabled() {
     return false;
 }
 
-// Tasks registered by older versions carry priority 7 (BELOW_NORMAL_PRIORITY_CLASS); a missing element means the
-// same, since that is Task Scheduler's default. A deliberate bump to a higher priority is left alone.
+// Older tasks carry priority 7, and a missing element means the same; a deliberate bump to a higher priority is left alone.
 bool autoRun_priorityIsStale(const QString &xml) {
     static const QRegularExpression re("<Priority>\\s*(\\d+)\\s*</Priority>");
     auto match = re.match(xml);

@@ -1,6 +1,7 @@
 #include "include/ui/stats/dialog_runtime_stats.h"
 
 #include "include/ui/mainwindow.h"
+#include "include/ui/stats/dialog_endpoint_details.h"
 #include "include/api/RPC.h"
 #include "include/stats/traffic/TrafficLooper.hpp"
 #include "include/database/DatabaseManager.h"
@@ -9,33 +10,29 @@
 #include "include/global/HTTPRequestHelper.hpp"
 #include "include/global/CountryHelper.hpp"
 
+#include <QBrush>
 #include <QColor>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
+#include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QScreen>
 #include <QStringList>
+#include <QPushButton>
+#include <QTableWidget>
 #include <QTimer>
 
-namespace {
-    const QColor kRuntimeThroneColor(0x4F, 0x8A, 0xF7); // blue
-    const QColor kRuntimeCoreColor(0x34, 0xC9, 0x8A);   // green
+#include <algorithm>
 
-    QString humanizeDuration(qint64 s) {
-        if (s < 0) s = 0;
-        const qint64 d = s / 86400; s %= 86400;
-        const qint64 h = s / 3600;  s %= 3600;
-        const qint64 m = s / 60;    s %= 60;
-        QStringList parts;
-        if (d > 0) parts << QStringLiteral("%1d").arg(d);
-        if (h > 0) parts << QStringLiteral("%1h").arg(h);
-        if (m > 0) parts << QStringLiteral("%1m").arg(m);
-        if (d == 0 && h == 0) parts << QStringLiteral("%1s").arg(s);
-        return parts.join(QLatin1Char(' '));
-    }
+namespace {
+    const QColor kRuntimeThroneColor = Stats::kStatsAccentColor;
+    const QColor kRuntimeCoreColor = Stats::kStatsHealthyColor;
 
     QString formatCpu(const Sys::ProcessMetrics::Sample& s) {
         return s.ok ? QString::number(s.cpuPercent, 'f', 1) + QStringLiteral("%") : QStringLiteral("—");
@@ -51,6 +48,7 @@ DialogRuntimeStats::DialogRuntimeStats(QWidget* parent) : QDialog(parent), ui(ne
 
     ui->rootGrid->setColumnStretch(0, 1);
     ui->rootGrid->setColumnStretch(1, 1);
+    ui->rootGrid->setRowStretch(0, 1);
     ui->processLayout->setStretch(1, 1);
     ui->processLayout->setStretch(2, 1);
 
@@ -64,6 +62,19 @@ DialogRuntimeStats::DialogRuntimeStats(QWidget* parent) : QDialog(parent), ui(ne
                                      .arg(kRuntimeThroneColor.name(), "Waterdisco"));
     ui->labelCoreName->setText(QStringLiteral("<span style=\"color:%1\">●</span> %2")
                                    .arg(kRuntimeCoreColor.name(), tr("Core")));
+
+    ui->groupEndpoints->setVisible(false);
+    auto* endpoints = ui->endpointsTable;
+    endpoints->verticalHeader()->setVisible(false);
+    endpoints->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    endpoints->setSelectionBehavior(QAbstractItemView::SelectRows);
+    endpoints->setSelectionMode(QAbstractItemView::SingleSelection);
+    endpoints->horizontalHeader()->setStretchLastSection(false);
+    endpoints->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    endpoints->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    endpoints->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    connect(endpoints, &QTableWidget::itemDoubleClicked, this,
+            [this](QTableWidgetItem*) { openEndpointDetails(selectedEndpointTag()); });
 
     timer_ = new QTimer(this);
     timer_->setInterval(1000);
@@ -114,24 +125,21 @@ void DialogRuntimeStats::refreshLive() {
             ? last + static_cast<qint64>(interval) * 60 - QDateTime::currentSecsSinceEpoch()
             : 0;
         if (remaining <= 0) return DialogRuntimeStats::tr("Due now");
-        return DialogRuntimeStats::tr("in %1").arg(humanizeDuration(remaining));
+        return DialogRuntimeStats::tr("in %1").arg(Stats::HumanizeDuration(remaining));
     };
     auto* settings = Configs::dataManager->settingsRepo.get();
     ui->vSubUpdate->setText(nextUpd(settings->sub_auto_update, settings->sub_auto_update_last));
     ui->vRouteUpdate->setText(nextUpd(settings->route_auto_update, settings->route_auto_update_last));
 
-    // --- On-disk size of the databases (main + stats, incl. WAL/SHM sidecars) ---
     qint64 dbBytes = 0;
     const QDir dir(QDir::currentPath());
     for (const QFileInfo& fi : dir.entryInfoList(QStringList{QStringLiteral("throne*.db*")}, QDir::Files))
         dbBytes += fi.size();
     ui->vDbSize->setText(ReadableSize(dbBytes));
 
-    // --- Throne uptime ---
     const qint64 up = appStartEpoch > 0 ? QDateTime::currentSecsSinceEpoch() - appStartEpoch : 0;
-    ui->vUptime->setText(humanizeDuration(up));
+    ui->vUptime->setText(Stats::HumanizeDuration(up));
 
-    // --- Running config identity + button-free egress probe (on change or every 30s) ---
     const QString cfgName = mw ? mw->GetRunningConfigName() : QString();
     const qint64 nowSecs = QDateTime::currentSecsSinceEpoch();
     if (cfgName.isEmpty()) {
@@ -173,10 +181,138 @@ void DialogRuntimeStats::refreshLive() {
             });
         });
     }
+
+    if (!vpnBusy_.exchange(true)) {
+        QPointer<DialogRuntimeStats> self(this);
+        runOnNewThread([self]() {
+            bool ok = false;
+            // Empty tag list = every live endpoint; 0 ms = current state, never wait.
+            const auto status = API::defaultClient->QueryVPNStatus(&ok, {}, 0);
+            QList<Stats::VpnEndpointView> views;
+            if (ok) {
+                views.reserve(static_cast<qsizetype>(status.results.size()));
+                for (const auto& result : status.results) views << Stats::MakeVpnEndpointView(result);
+            }
+            runOnUiThread([self, views]() {
+                if (!self) return;
+                self->applyEndpoints(views);
+                self->vpnBusy_.store(false);
+            });
+        });
+    }
+}
+
+QString DialogRuntimeStats::selectedEndpointTag() const {
+    const auto* selection = ui->endpointsTable->selectionModel();
+    const auto rows = selection != nullptr ? selection->selectedRows() : QModelIndexList{};
+    if (rows.isEmpty()) return {};
+    const auto* item = ui->endpointsTable->item(rows.first().row(), 0);
+    return item == nullptr ? QString() : item->data(Qt::UserRole).toString();
+}
+
+// A table's size hint ignores its rows, and the header's geometry is meaningless before show.
+void DialogRuntimeStats::fitEndpointTable() {
+    auto* table = ui->endpointsTable;
+    // Rows keep the vertical header's default section size until asked.
+    table->resizeRowsToContents();
+    // A cell widget is invisible to resizeRowsToContents, so the button sets the floor.
+    for (int row = 0; row < table->rowCount(); row++) {
+        if (auto* cell = table->cellWidget(row, 2))
+            table->setRowHeight(row, std::max(table->rowHeight(row), cell->sizeHint().height()));
+    }
+    const int shown = std::min(table->rowCount(), 4);
+    int height = table->horizontalHeader()->sizeHint().height() + 2 * table->frameWidth();
+    for (int row = 0; row < shown; row++) height += table->rowHeight(row);
+    table->setFixedHeight(height);
+}
+
+void DialogRuntimeStats::applyEndpoints(const QList<Stats::VpnEndpointView>& views) {
+    endpointViews_ = views;
+
+    if (views.isEmpty()) {
+        ui->groupEndpoints->setVisible(false);
+        ui->endpointsTable->setRowCount(0);
+        endpointTags_.clear();
+        if (details_) details_->markGone();
+        return;
+    }
+
+    QStringList tags;
+    tags.reserve(views.size());
+    for (const auto& view : views) tags << view.tag;
+
+    ui->groupEndpoints->setVisible(true);
+
+    auto* table = ui->endpointsTable;
+    const bool rebuilt = tags != endpointTags_;
+    if (rebuilt) {
+        const QString keep = selectedEndpointTag();
+        endpointTags_ = tags;
+        table->setRowCount(static_cast<int>(views.size()));
+        for (int row = 0; row < views.size(); row++) {
+            for (int column = 0; column < 3; column++) {
+                if (table->item(row, column) == nullptr) table->setItem(row, column, new QTableWidgetItem());
+            }
+            table->item(row, 0)->setData(Qt::UserRole, views[row].tag);
+            auto* details = new QPushButton(tr("Details"), table);
+            const QString tag = views[row].tag;
+            connect(details, &QPushButton::clicked, this, [this, tag]() { openEndpointDetails(tag); });
+            table->setCellWidget(row, 2, details);
+        }
+        const auto keptRow = static_cast<int>(tags.indexOf(keep));
+        if (!keep.isEmpty() && keptRow >= 0) table->selectRow(keptRow);
+        else if (!keep.isEmpty()) table->clearSelection();
+    }
+
+    for (int row = 0; row < views.size(); row++) {
+        const auto& view = views[row];
+        table->item(row, 0)->setText(view.displayName);
+        table->item(row, 1)->setText(Stats::VpnStateText(view.state));
+        table->item(row, 1)->setForeground(QBrush(Stats::VpnStateColor(view.state)));
+        const QString hint = view.error.isEmpty() ? view.tag : view.tag + QLatin1Char(0x0a) + view.error;
+        table->item(row, 0)->setToolTip(hint);
+        table->item(row, 1)->setToolTip(hint);
+    }
+    if (rebuilt) fitEndpointTable();
+
+    if (details_) {
+        const auto found = std::find_if(views.cbegin(), views.cend(),
+                                        [this](const Stats::VpnEndpointView& view) {
+                                            return view.tag == details_->tag();
+                                        });
+        if (found != views.cend()) details_->applyStatus(*found);
+        else details_->markGone();
+    }
+
+    if (!endpointsGrown_) {
+        endpointsGrown_ = true;
+        const auto* scr = screen() != nullptr ? screen() : QGuiApplication::primaryScreen();
+        if (scr != nullptr) resize(size().expandedTo(sizeHint()).boundedTo(scr->availableGeometry().size()));
+    }
+}
+
+void DialogRuntimeStats::openEndpointDetails(const QString& tag) {
+    if (tag.isEmpty()) return;
+    const auto found = std::find_if(endpointViews_.cbegin(), endpointViews_.cend(),
+                                    [&tag](const Stats::VpnEndpointView& view) { return view.tag == tag; });
+    if (found == endpointViews_.cend()) return;
+
+    if (details_ && details_->tag() == tag) {
+        details_->raise();
+        details_->activateWindow();
+        return;
+    }
+    if (details_) details_->close();
+
+    details_ = new DialogEndpointDetails(*found, this);
+    details_->setAttribute(Qt::WA_DeleteOnClose);
+    details_->show();
+    details_->raise();
+    details_->activateWindow();
 }
 
 void DialogRuntimeStats::probeEgress() {
-    if (probing_.exchange(true)) return; // a probe is already running
+    if (probing_.exchange(true)) return;
 
     auto* mw = GetMainWindow();
     if (mw == nullptr || mw->GetRunningConfigName().isEmpty()) {
@@ -184,14 +320,12 @@ void DialogRuntimeStats::probeEgress() {
         return;
     }
 
-    // Immediate feedback while the (blocking) probe runs.
     ui->vPing->setText(QStringLiteral("…"));
     if (ui->vOutIp->text() == QStringLiteral("—")) ui->vOutIp->setText(QStringLiteral("…"));
     if (ui->vCountry->text() == QStringLiteral("—")) ui->vCountry->setText(QStringLiteral("…"));
 
     QPointer<DialogRuntimeStats> self(this);
     runOnNewThread([self]() {
-        // Ping: latency of the live instance (same call as "test current").
         QString pingText;
         {
             libcore::TestReq req;
@@ -201,16 +335,17 @@ void DialogRuntimeStats::probeEgress() {
             const auto res = API::defaultClient->Test(&ok, req);
             if (ok && !res.results.empty()) {
                 const int lat = res.results[0].latency_ms.value();
-                pingText = lat > 0 ? QStringLiteral("%1 ms").arg(lat) : DialogRuntimeStats::tr("Unavailable");
+                const auto vpnText = lat > 0 ? QString() : MainWindow::liveVpnConnectOkText();
+                pingText = lat > 0 ? QStringLiteral("%1 ms").arg(lat)
+                                   : (vpnText.isEmpty() ? DialogRuntimeStats::tr("Unavailable") : vpnText);
             } else {
                 pingText = DialogRuntimeStats::tr("N/A");
             }
         }
 
-        // Out IP + country: ip-api through the running proxy (as done at profile start).
         QString ipText = DialogRuntimeStats::tr("N/A");
         QString countryText = DialogRuntimeStats::tr("N/A");
-        bool egressOk = false; // did the lookup yield a real out IP?
+        bool egressOk = false;
         const auto resp = NetworkRequestHelper::HttpGet(QStringLiteral("http://ip-api.com/json/"), false, true);
         if (resp.error.isEmpty()) {
             const QJsonDocument doc = QJsonDocument::fromJson(resp.data);

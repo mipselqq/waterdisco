@@ -3,25 +3,25 @@
 #include <QDialog>
 #include <QHash>
 #include <QPair>
-#include <QPlainTextEdit>
 #include <memory>
 
 #include "include/database/entities/RouteProfile.h"
+#include "include/ui/widget/json/JsonCodeEdit.h"
 
 class QLineEdit;
 class QCheckBox;
 class QCompleter;
 class QLabel;
 
-// JSON editor with a context-aware outbound completer: while the cursor is in the value of
-// an "outbound" or "final" key it suggests "[id] Name" entries and inserts just the id.
-class RawRouteEdit : public QPlainTextEdit {
+namespace JsonEdit {
+    class JsonIssueList;
+}
+
+class RawRouteEdit : public JsonEdit::JsonCodeEdit {
     Q_OBJECT
 
 public:
     explicit RawRouteEdit(QWidget* parent = nullptr);
-    // Each item is a (display, id) pair: the popup shows the display text (e.g. "[Group] Name")
-    // while only the id is inserted into the document.
     void setOutboundItems(const QList<QPair<QString, QString>>& items);
 
 protected:
@@ -33,16 +33,10 @@ private slots:
 private:
     [[nodiscard]] bool outboundContext(QString* partial) const;
     void updateCompleter();
-    // Code-editor conveniences (auto-close brackets/quotes, skip-over, pair-delete,
-    // indentation-preserving newline). Returns true when it consumed the key event.
-    bool handleAutoEdit(QKeyEvent* e);
-    [[nodiscard]] QChar charBeforeCursor() const;
-    [[nodiscard]] QChar charAfterCursor() const;
     QCompleter* completer = nullptr;
     QHash<QString, QString> outboundIdByDisplay; // popup display text -> id to insert
 };
 
-// Editor for a "raw" routing profile: a full sing-box route object as JSON.
 class RawRouteItem : public QDialog {
     Q_OBJECT
 
@@ -61,5 +55,6 @@ private:
     QLineEdit* nameEdit = nullptr;
     RawRouteEdit* jsonEdit = nullptr;
     QCheckBox* preventCheck = nullptr;
+    JsonEdit::JsonIssueList* issueList = nullptr;
     QLabel* validateLabel = nullptr;
 };

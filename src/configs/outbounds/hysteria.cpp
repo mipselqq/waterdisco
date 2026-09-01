@@ -23,6 +23,35 @@ namespace Configs {
         return result;
     }
 
+    // The core only checks realm's required fields when it first dials, so emit them unconditionally.
+    static QJsonObject buildRealmObject(const hysteria &out)
+    {
+        QJsonObject realm;
+        realm["server_url"] = out.realm_server_url;
+        if (!out.realm_token.isEmpty()) realm["token"] = out.realm_token;
+        realm["realm_id"] = out.realm_id;
+        if (!out.realm_stun_servers.isEmpty()) realm["stun_servers"] = QListStr2QJsonArray(out.realm_stun_servers);
+        if (out.realm_ip_version == 4 || out.realm_ip_version == 6) realm["ip_version"] = out.realm_ip_version;
+        // Hole punching over IPv6 has no gateway mapping to make; the core rejects the pair.
+        if (out.realm_port_mapping && out.realm_ip_version != 6) {
+            QJsonObject portMapping{{"enabled", true}};
+            if (!out.realm_port_mapping_timeout.isEmpty()) portMapping["timeout"] = out.realm_port_mapping_timeout;
+            if (!out.realm_port_mapping_lifetime.isEmpty()) portMapping["lifetime"] = out.realm_port_mapping_lifetime;
+            realm["port_mapping"] = portMapping;
+        }
+        if (!out.realm_http_client.isEmpty()) realm["http_client"] = out.realm_http_client;
+        return realm;
+    }
+
+    // realm replaces the server address; the core refuses a config carrying both (hop_interval is fine).
+    static void applyRealmObject(QJsonObject &object, const hysteria &out)
+    {
+        object.remove("server");
+        object.remove("server_port");
+        object.remove("server_ports");
+        object["realm"] = buildRealmObject(out);
+    }
+
     bool hysteria::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);
@@ -61,6 +90,20 @@ namespace Configs {
             if (query.hasQueryItem("obfs-password")) {
                 obfs = query.queryItemValue("obfs-password", QUrl::FullyDecoded);
             }
+            if (query.hasQueryItem("obfs")) {
+                obfs_type = query.queryItemValue("obfs");
+            }
+            else if (query.hasQueryItem("min_packet_size") || query.hasQueryItem("max_packet_size")) {
+                obfs_type = "gecko";
+            }
+            else {
+                obfs_type = "salamander";
+            }
+            if (query.hasQueryItem("min_packet_size")) min_packet_size = query.queryItemValue("min_packet_size").toInt();
+            if (query.hasQueryItem("max_packet_size")) max_packet_size = query.queryItemValue("max_packet_size").toInt();
+            if (query.hasQueryItem("hop_interval_max")) hop_interval_max = query.queryItemValue("hop_interval_max");
+            if (query.hasQueryItem("bbr_profile")) bbr_profile = query.queryItemValue("bbr_profile");
+            if (query.hasQueryItem("disable_chrome_parrot")) disable_chrome_parrot = query.queryItemValue("disable_chrome_parrot") == "true";
         }
         
         if (query.hasQueryItem("upmbps")) up_mbps = query.queryItemValue("upmbps").toInt();
@@ -72,7 +115,8 @@ namespace Configs {
         
         tls->ParseFromLink(link);
         tls->enabled = true; // Hysteria always uses tls
-        
+        quic->ParseFromLink(link);
+
         if (server_port == 0 && server_ports.isEmpty()) server_port = 443;
 
         return true;
@@ -112,11 +156,35 @@ namespace Configs {
             if (object.contains("obfs")) {
                 auto obfsObj = object["obfs"].toObject();
                 if (obfsObj.contains("password")) obfs = obfsObj["password"].toString();
+                if (obfsObj.contains("type")) obfs_type = obfsObj["type"].toString();
+                else obfs_type = "salamander";
+                if (obfsObj.contains("min_packet_size")) min_packet_size = obfsObj["min_packet_size"].toInt();
+                if (obfsObj.contains("max_packet_size")) max_packet_size = obfsObj["max_packet_size"].toInt();
             }
             if (object.contains("obfsPassword")) obfs = object["obfsPassword"].toString();
             if (object.contains("password")) password = object["password"].toString();
+            if (object.contains("hop_interval_max")) hop_interval_max = object["hop_interval_max"].toString();
+            if (object.contains("bbr_profile")) bbr_profile = object["bbr_profile"].toString();
+            if (object.contains("disable_chrome_parrot")) disable_chrome_parrot = object["disable_chrome_parrot"].toBool();
+            if (object["realm"].isObject()) {
+                auto realmObj = object["realm"].toObject();
+                realm_enabled = true;
+                realm_server_url = realmObj["server_url"].toString();
+                realm_token = realmObj["token"].toString();
+                realm_id = realmObj["realm_id"].toString();
+                // Listable: the core accepts a bare string as well as an array.
+                if (realmObj["stun_servers"].isArray()) realm_stun_servers = QJsonArray2QListString(realmObj["stun_servers"].toArray());
+                else if (realmObj.contains("stun_servers")) realm_stun_servers = {realmObj["stun_servers"].toString()};
+                realm_ip_version = realmObj["ip_version"].toInt();
+                auto portMapping = realmObj["port_mapping"].toObject();
+                realm_port_mapping = portMapping["enabled"].toBool();
+                realm_port_mapping_timeout = portMapping["timeout"].toString();
+                realm_port_mapping_lifetime = portMapping["lifetime"].toString();
+                realm_http_client = realmObj["http_client"].toObject();
+            }
         }
         if (object.contains("tls")) tls->ParseFromJson(object["tls"].toObject());
+        quic->ParseFromJson(object);
         return true;
     }
 
@@ -195,6 +263,9 @@ namespace Configs {
 
     QString hysteria::ExportToLink()
     {
+        // No hysteria2:// form carries realm, so callers fall back to the throne:// JSON link.
+        if (RealmActive()) return {};
+
         QUrl url;
         QUrlQuery query;
         url.setScheme(protocol_version == "1" ? "hysteria" : "hysteria2");
@@ -218,8 +289,14 @@ namespace Configs {
                 url.setUserName(password);
             }
             if (!obfs.isEmpty()) {
+                query.addQueryItem("obfs", QUrl::toPercentEncoding(obfs_type));
                 query.addQueryItem("obfs-password", QUrl::toPercentEncoding(obfs));
+                if (min_packet_size > 0) query.addQueryItem("min_packet_size", QString::number(min_packet_size));
+                if (max_packet_size > 0) query.addQueryItem("max_packet_size", QString::number(max_packet_size));
             }
+            if (!hop_interval_max.isEmpty()) query.addQueryItem("hop_interval_max", hop_interval_max);
+            if (!bbr_profile.isEmpty()) query.addQueryItem("bbr_profile", bbr_profile);
+            if (disable_chrome_parrot) query.addQueryItem("disable_chrome_parrot", "true");
         }
         
         if (up_mbps > 0) query.addQueryItem("upmbps", QString::number(up_mbps));
@@ -228,6 +305,7 @@ namespace Configs {
         if (!hop_interval.isEmpty()) query.addQueryItem("hop_interval", hop_interval);
         
         mergeUrlQuery(query, tls->ExportToLink());
+        mergeUrlQuery(query, quic->ExportToLink());
         mergeUrlQuery(query, outbound::ExportToLink());
         
         if (!query.isEmpty()) url.setQuery(query);
@@ -273,18 +351,36 @@ namespace Configs {
         } else {
             if (!obfs.isEmpty()) {
                 object["obfs"] = QJsonObject{
-                    {"type", "salamander"},
+                    {"type", obfs_type},
                     {"password", obfs},
+                    {"min_packet_size", min_packet_size},
+                    {"max_packet_size", max_packet_size},
                 };
             }
             if (!password.isEmpty()) object["password"] = password;
+            if (!hop_interval_max.isEmpty()) object["hop_interval_max"] = hop_interval_max;
+            if (!bbr_profile.isEmpty()) object["bbr_profile"] = bbr_profile;
+            if (disable_chrome_parrot) object["disable_chrome_parrot"] = true;
+            if (RealmActive()) applyRealmObject(object, *this);
         }
         object["tls"] = tls->ExportToJson();
+        mergeJsonObjects(object, quic->ExportToJson());
         return object;
     }
 
     QJsonObject hysteria::ExportIdentity()
     {
+        if (RealmActive()) {
+            // outbound::ExportIdentity() falls back to the whole config when there is no server.
+            QJsonObject object{
+                {"protocol_version", protocol_version},
+                {"realm_server_url", realm_server_url},
+                {"realm_id", realm_id},
+            };
+            if (auto t = tls->ExportIdentity(); !t.isEmpty()) object["tls"] = t;
+            return object;
+        }
+
         auto object = outbound::ExportIdentity();
         object["protocol_version"] = protocol_version;
         if (!server_ports.isEmpty()) object["server_ports"] = server_ports.join(",");
@@ -312,15 +408,46 @@ namespace Configs {
             if (disable_mtu_discovery) object["disable_mtu_discovery"] = disable_mtu_discovery;
         } else {
             if (!obfs.isEmpty()) {
-                object["obfs"] = QJsonObject{
-                    {"type", "salamander"},
-                    {"password", obfs},
-                };
+                if (obfs_type == "salamander") {
+                    object["obfs"] = QJsonObject{
+                        {"type", obfs_type},
+                        {"password", obfs},
+                    };
+                }
+                else if (obfs_type == "gecko") {
+                    object["obfs"] = QJsonObject{
+                        {"type", obfs_type},
+                        {"password", obfs},
+                        {"min_packet_size", min_packet_size},
+                        {"max_packet_size", max_packet_size},
+                    };
+                }
+                else {
+                    object["obfs"] = QJsonObject{
+                        {"type", "salamander"},
+                        {"password", obfs},
+                    };
+                }
             }
             if (!password.isEmpty()) object["password"] = password;
+            // sing-box randomizes the hop interval within [hop_interval, hop_interval_max]; it rejects a max without a min.
+            if (!hop_interval_max.isEmpty() && !hop_interval.isEmpty()) object["hop_interval_max"] = hop_interval_max;
+            // An unknown profile makes sing-box refuse to start, so drop anything a subscription made up.
+            if (hysteriaBBRProfiles.contains(bbr_profile)) object["bbr_profile"] = bbr_profile;
+            if (disable_chrome_parrot) object["disable_chrome_parrot"] = true;
+            if (RealmActive()) applyRealmObject(object, *this);
         }
         object["tls"] = tls->Build().object;
+        mergeJsonObjects(object, quic->Build().object);
         return {object, ""};
+    }
+
+    QString hysteria::DisplayAddress()
+    {
+        if (!RealmActive()) return outbound::DisplayAddress();
+        auto host = QUrl(realm_server_url).host();
+        if (host.isEmpty()) host = realm_server_url;
+        return realm_id.isEmpty() ? host : realm_id + "@" + host;
     }
 
     QString hysteria::DisplayType()

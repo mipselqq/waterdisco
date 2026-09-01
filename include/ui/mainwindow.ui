@@ -679,6 +679,11 @@ QTabBar::tab:selected {
                    <string>Click to sort by speed; right-click to choose total/down/up</string>
                   </property>
                  </column>
+                 <column>
+                  <property name="text">
+                   <string notr="true"/>
+                  </property>
+                 </column>
                 </widget>
                </item>
               </layout>
@@ -937,6 +942,7 @@ QTabBar::tab:selected {
      <string>Tools</string>
     </property>
     <addaction name="actionAuto_Selector"/>
+    <addaction name="menu_open_dashboard"/>
     <addaction name="actionSpeedtest_Current"/>
     <addaction name="separator"/>
     <addaction name="menu_otp_manager"/>
@@ -1303,6 +1309,11 @@ QTabBar::tab:selected {
   <action name="menu_open_config_folder">
    <property name="text">
     <string>Open Config Folder</string>
+   </property>
+  </action>
+  <action name="menu_open_dashboard">
+   <property name="text">
+    <string>Open Web dashboard</string>
    </property>
   </action>
   <action name="actionfake_4">

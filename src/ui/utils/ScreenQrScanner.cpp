@@ -40,7 +40,7 @@ namespace ScreenQr {
             return qEnvironmentVariable("XDG_SESSION_TYPE") == "wayland"
                    || qEnvironmentVariable("WAYLAND_DISPLAY").contains("wayland", Qt::CaseInsensitive);
         }
-    } // namespace
+    }
 
     QPixmap GrabScreen(QScreen *screen, bool &ok) {
         QPixmap p;

@@ -42,7 +42,7 @@ namespace Configs_network {
 
         static QString GetHeader(const QList<QPair<QByteArray, QByteArray>> &header, const QString &name);
 
-        static QString DownloadAsset(const QString &url, const QString &fileName);
+        static QString DownloadAsset(const QString &url, const QString &fileName, bool useProxy = false);
     };
 } // namespace Configs_network
 

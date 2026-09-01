@@ -40,21 +40,17 @@ func TestConfigAutoRedirectMark(t *testing.T) {
 			want:   4660,
 		},
 		{
-			// option.FwMark marshals as a hex string, so a config round-tripped
-			// through sing-box comes back in that form.
+			// option.FwMark marshals as a hex string, so a round-tripped config comes back in that form.
 			name:   "hex string output mark",
 			config: `{"inbounds":[{"type":"tun","auto_redirect":true,"auto_redirect_output_mark":"0x1234"}]}`,
 			want:   4660,
 		},
 		{
-			// The Tun is emitted after dns-in and hijack in the real config.
 			name:   "tun found behind other inbounds",
 			config: `{"inbounds":[{"type":"direct","tag":"dns-in"},{"type":"mixed"},{"type":"tun","auto_redirect":true}]}`,
 			want:   tun.DefaultAutoRedirectOutputMark,
 		},
 		{
-			// A raw profile can carry an inbound this probe does not model; it
-			// must not cost the Tun behind it its exemption.
 			name:   "unexpected inbound shape is skipped, not fatal",
 			config: `{"inbounds":[{"type":"tun","auto_redirect":["nonsense"]},{"type":"tun","auto_redirect":true}]}`,
 			want:   tun.DefaultAutoRedirectOutputMark,
@@ -73,8 +69,6 @@ func TestConfigAutoRedirectMark(t *testing.T) {
 	}
 }
 
-// The gate is what keeps a mark off platforms where SO_MARK and auto_redirect do
-// not exist, so assert it rather than the parse it delegates to.
 func TestAutoRedirectMarkForIsLinuxOnly(t *testing.T) {
 	config := []byte(`{"inbounds":[{"type":"tun","auto_redirect":true}]}`)
 	want := uint32(0)

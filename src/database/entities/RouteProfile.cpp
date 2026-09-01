@@ -7,13 +7,14 @@
 
 #include "include/database/ProfilesRepo.h"
 
+#include "include/configs/common/OutboundFactory.h"
+#include "include/configs/generate.h"
 #include "include/global/Configs.hpp"
 
 namespace Configs {
     bool isOutboundIDValid(int id) {
         switch (id) {
             case -1:
-                return true;
             case -2:
                 return true;
             default:
@@ -24,15 +25,11 @@ namespace Configs {
     int getOutboundID(const QString& name) {
         if (name == "proxy") return -1;
         if (name == "direct") return -2;
-        if (auto profile = Configs::dataManager->profilesRepo->GetProfileByName(name)) return profile->id;
+        if (const auto &profile = Configs::dataManager->profilesRepo->GetProfileByName(name)) return profile->id;
 
         return INVALID_ID;
     }
 
-    // --- Raw routing profile outbound helpers ---
-    // In a raw profile the user references outbounds by numeric id in `outbound` (anywhere,
-    // including nested logical rules) and the top-level `final`. These walk the JSON to
-    // collect / translate those ids.
     static void collectRawOutboundIdsRec(const QJsonValue& node, QList<int>& out) {
         if (node.isObject()) {
             const QJsonObject o = node.toObject();
@@ -82,8 +79,6 @@ namespace Configs {
         return translateRawOutboundsRec(route, outboundMap).toObject();
     }
 
-    // Import-side remap: source ids -> local ids by matching the exported name, predefined
-    // negatives kept, unresolved -> proxy.
     static QJsonValue remapRawOutboundsByNameRec(const QJsonValue& node, const QJsonObject& names, QString* warnings) {
         if (node.isObject()) {
             const QJsonObject o = node.toObject();
@@ -208,7 +203,7 @@ namespace Configs {
 
     void RouteProfile::reset_simple_rule(std::shared_ptr<RouteRule>& rule) {
         auto cleanRules = get_simple_rules();
-        for (auto r : cleanRules) {
+        for (auto &r : cleanRules) {
             if (r->type == rule->type) {
                 rule = std::move(r);
                 return;
@@ -230,16 +225,14 @@ namespace Configs {
         remoteURL = other.remoteURL;
         autoUpdate = other.autoUpdate;
         remoteLastUpdate = other.remoteLastUpdate;
+        endpointProfileIDs = other.endpointProfileIDs;
     }
 
     static void appendWarning(QString* warnings, const QString& msg) {
         if (warnings) warnings->append(msg + "\n");
     }
 
-    // Parse one rule JSON object into a RouteRule. Tolerant by design (for sharing): an
-    // outbound that can't be resolved on this machine falls back to proxy with a warning
-    // rather than failing the whole import. The schema-only keys (name/type) are skipped
-    // here and applied by the caller.
+    // name/type are schema-only keys: skipped here, applied by the caller.
     static std::shared_ptr<RouteRule> parse_rule_object(const QJsonObject& obj, QString* warnings) {
         auto rule = std::make_shared<RouteRule>();
         for (const auto& key: obj.keys()) {
@@ -289,8 +282,6 @@ namespace Configs {
             }
             const QJsonObject ro = item.toObject();
             auto rule = parse_rule_object(ro, warnings);
-            // Preserve an explicit name if the array carries one (our exported rules do); plain
-            // sing-box rule arrays have no name, so those still get a stable placeholder.
             const QString nm = ro.value("name").toString();
             rule->name = nm.isEmpty() ? ("imported rule #" + Int2String(ruleID++)) : nm;
             rules << rule;
@@ -299,18 +290,160 @@ namespace Configs {
         return rules;
     }
 
-    QJsonObject RouteProfile::ToShareObject() {
+    // The repo hands back the live profile, so strip a round-tripped clone of it instead.
+    static QJsonObject routeProfileStrippedConfig(const std::shared_ptr<Profile>& ent) {
+        const std::shared_ptr<outbound> clone(NewOutboundByType(ent->type));
+        if (clone->invalid) return {};
+        clone->ParseFromJson(ent->outbound->ExportToJson());
+        clone->StripCredentials();
+        return clone->ExportToJson();
+    }
+
+    // A chain also carries its hops in `list` order, so hops[i] describes config["list"][i].
+    static QJsonObject routeProfileEndpointToJson(int id, QString* warnings) {
+        const auto ent = Configs::dataManager->profilesRepo->GetProfile(id);
+        if (ent == nullptr || ent->outbound == nullptr) {
+            appendWarning(warnings, QString("endpoint profile id %1 no longer exists, not shared").arg(id));
+            return {};
+        }
+        const QString label = ent->outbound->DisplayTypeAndName();
+        QList<std::shared_ptr<Profile>> hops;
+        if (const auto ch = ent->Chain(); ch != nullptr) {
+            for (const int hopID: ch->list) {
+                if (auto hop = Configs::dataManager->profilesRepo->GetProfile(hopID);
+                    hop != nullptr && hop->outbound != nullptr) hops << hop;
+            }
+            if (hops.isEmpty() || hops.size() != ch->list.size()) {
+                appendWarning(warnings, QString("endpoint %1 has missing hops, not shared").arg(label));
+                return {};
+            }
+        }
+        auto strippable = [](const std::shared_ptr<Profile>& p) {
+            return p->outbound->SupportsCredentialStrip();
+        };
+        if (!strippable(ent) || !std::all_of(hops.begin(), hops.end(), strippable)) {
+            appendWarning(warnings, QString("endpoint %1 uses a protocol whose credentials cannot be cleared, not shared").arg(label));
+            return {};
+        }
+
+        QJsonObject entry;
+        entry["id"] = id;
+        entry["config"] = routeProfileStrippedConfig(ent);
+        if (!hops.isEmpty()) {
+            QJsonArray hopArr;
+            for (const auto& hop: hops) {
+                hopArr.append(QJsonObject{{"id", hop->id}, {"config", routeProfileStrippedConfig(hop)}});
+            }
+            entry["hops"] = hopArr;
+        }
+        return entry;
+    }
+
+    static QJsonArray routeProfileEndpointsToJson(const QList<int>& ids, QString* warnings) {
+        QJsonArray arr;
+        for (const int id: ids) {
+            if (auto entry = routeProfileEndpointToJson(id, warnings); !entry.isEmpty()) arr.append(entry);
+        }
+        return arr;
+    }
+
+    static QString routeProfileIdentityKey(const std::shared_ptr<Profile>& ent) {
+        return ent->type + "|" + QString::fromUtf8(QJsonDocument(ent->outbound->ExportIdentity()).toJson(QJsonDocument::Compact));
+    }
+
+    static int routeProfileMatchLocal(const std::shared_ptr<Profile>& candidate) {
+        const QString key = routeProfileIdentityKey(candidate);
+        for (const int id: Configs::dataManager->profilesRepo->GetProfileIdsByType(candidate->type)) {
+            const auto ent = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (ent == nullptr || ent->outbound == nullptr) continue;
+            if (routeProfileIdentityKey(ent) == key) return id;
+        }
+        return -1;
+    }
+
+    // hopMap rewrites a chain's machine-local hop ids onto the ones created here.
+    static int routeProfileAdoptConfig(const QJsonObject& config, QString* warnings, const QMap<int, int>* hopMap) {
+        auto ent = ProfilesRepo::NewProfile(config.value("type").toString());
+        if (ent == nullptr || ent->outbound == nullptr || ent->outbound->invalid) {
+            appendWarning(warnings, QString("shared endpoint uses unknown protocol \"%1\", dropped").arg(config.value("type").toString()));
+            return -1;
+        }
+        ent->outbound->ParseFromJson(config);
+        if (const auto ch = ent->Chain(); ch != nullptr) {
+            QList<int> mapped;
+            for (const int hopID: ch->list) {
+                if (hopMap == nullptr || !hopMap->contains(hopID)) return -1;
+                mapped << hopMap->value(hopID);
+            }
+            ch->list = mapped;
+        }
+        if (const int existing = routeProfileMatchLocal(ent); existing >= 0) return existing;
+        if (!Configs::dataManager->profilesRepo->AddProfile(ent)) {
+            appendWarning(warnings, QString("could not create endpoint profile \"%1\"").arg(ent->outbound->DisplayName()));
+            return -1;
+        }
+        appendWarning(warnings, QString("created endpoint profile %1").arg(ent->outbound->DisplayTypeAndName()));
+        return ent->id;
+    }
+
+    static int routeProfileAdoptEndpoint(const QJsonObject& entry, QString* warnings) {
+        QMap<int, int> hopMap;
+        for (const auto& item: entry.value("hops").toArray()) {
+            const QJsonObject hop = item.toObject();
+            const int original = hop.value("id").toInt(INVALID_ID);
+            const int local = original == INVALID_ID ? -1 : routeProfileAdoptConfig(hop.value("config").toObject(), warnings, nullptr);
+            if (local < 0) {
+                appendWarning(warnings, "a shared endpoint chain has an unusable hop, dropped");
+                return -1;
+            }
+            hopMap[original] = local;
+        }
+        return routeProfileAdoptConfig(entry.value("config").toObject(), warnings, &hopMap);
+    }
+
+    // *idMap is original id -> local id, so the paired rules can be remapped.
+    static QList<int> routeProfileEndpointsFromJson(const QJsonArray& arr, QString* warnings, bool materialize, QMap<int, int>* idMap) {
+        QList<int> ids;
+        for (const auto& item: arr) {
+            int originalID = INVALID_ID;
+            int localID = -1;
+            if (item.isDouble()) {
+                originalID = item.toInt(INVALID_ID);
+                localID = originalID;
+            } else if (item.isObject()) {
+                const QJsonObject entry = item.toObject();
+                originalID = entry.value("id").toInt(INVALID_ID);
+                if (!materialize) continue;
+                if (originalID != INVALID_ID) localID = routeProfileAdoptEndpoint(entry, warnings);
+            }
+            if (originalID == INVALID_ID || localID < 0 || ids.contains(localID)) continue;
+            const auto profile = Configs::dataManager->profilesRepo->GetProfile(localID);
+            if (!CanBeAuxEndpoint(profile)) {
+                appendWarning(warnings, QString("endpoint profile id %1 not usable here, dropped").arg(originalID));
+                continue;
+            }
+            ids << localID;
+            if (idMap) (*idMap)[originalID] = localID;
+        }
+        return ids;
+    }
+
+    QJsonObject RouteProfile::ToShareObject(QString* warnings) {
         QJsonObject root;
         root["kind"] = "throne-route-profile";
         root["v"] = 1;
         root["name"] = name;
+        QJsonArray endpointsArr;
+        if (!endpointProfileIDs.isEmpty()) {
+            endpointsArr = routeProfileEndpointsToJson(endpointProfileIDs, warnings);
+            if (!endpointsArr.isEmpty()) root["endpoints"] = endpointsArr;
+        }
         if (isRaw) {
             root["raw"] = true;
             root["prevent_modifications"] = preventModifications;
             const auto routeObj = QString2QJsonObject(rawRoute);
             root["route"] = routeObj;
-            // carry an id->name map of the referenced server profiles so the importer can
-            // re-resolve them by name on another machine.
+            // id -> name of the referenced server profiles, so the importer can re-resolve them on another machine.
             QJsonObject names;
             for (const int oid : CollectRawOutboundIds(routeObj)) {
                 if (oid < 0) continue; // predefined outbounds (proxy/direct/warp-bypass) are stable
@@ -321,24 +454,28 @@ namespace Configs {
             return root;
         }
         root["default_outbound"] = outboundIDToString(defaultOutboundID);
+        QSet<int> sharedEndpoints;
+        for (const auto& entry: endpointsArr) sharedEndpoints << entry.toObject().value("id").toInt(INVALID_ID);
         QJsonArray rulesArr;
         for (const auto& rule: Rules) {
-            if (rule->type != custom && rule->isEmpty()) continue; // drop unused simple-rule stubs
+            if (rule->type != custom && rule->isEmpty()) continue;
+            // a rule and its endpoint drop or survive together
+            if (rule->type == endpointPreferredBy && !sharedEndpoints.contains(rule->outboundID)) continue;
             auto obj = rule->to_share_json();
-            if (obj.isEmpty()) continue; // outbound profile missing on this machine
+            if (obj.isEmpty()) continue;
             rulesArr.append(obj);
         }
         root["rules"] = rulesArr;
         return root;
     }
 
-    QString RouteProfile::ToShareLink() {
-        const auto json = QJsonDocument(ToShareObject()).toJson(QJsonDocument::Compact);
+    QString RouteProfile::ToShareLink(QString* warnings) {
+        const auto json = QJsonDocument(ToShareObject(warnings)).toJson(QJsonDocument::Compact);
         const auto b64 = json.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
         return QStringLiteral("throne://route/") + QString::fromLatin1(b64);
     }
 
-    std::shared_ptr<RouteProfile> RouteProfile::FromShareInput(const QString& input, QString* fatalError, QString* warnings, bool* wasOldArray) {
+    std::shared_ptr<RouteProfile> RouteProfile::FromShareInput(const QString& input, QString* fatalError, QString* warnings, bool* wasOldArray, bool materializeEndpoints) {
         if (wasOldArray) *wasOldArray = false;
         QString text = input.trimmed();
         if (text.isEmpty()) {
@@ -346,7 +483,6 @@ namespace Configs {
             return nullptr;
         }
 
-        // throne://route/<base64> deep link
         if (text.startsWith("throne://route/", Qt::CaseInsensitive)) {
             const QUrl u(text);
             if (!u.isValid()) {
@@ -360,7 +496,6 @@ namespace Configs {
             }
         }
 
-        // Resolve to JSON: try raw first, then base64 (url-safe, then standard).
         QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8());
         if (doc.isNull()) {
             doc = QJsonDocument::fromJson(QByteArray::fromBase64(text.toUtf8(), QByteArray::Base64UrlEncoding));
@@ -372,7 +507,6 @@ namespace Configs {
             return nullptr;
         }
 
-        // New schema: a tagged object carrying the whole profile.
         if (doc.isObject()) {
             const QJsonObject root = doc.object();
             if (root.value("kind").toString() != QStringLiteral("throne-route-profile")) {
@@ -385,6 +519,7 @@ namespace Configs {
                 profile->isRaw = true;
                 profile->name = root.value("name").toString();
                 profile->preventModifications = root.value("prevent_modifications").toBool();
+                profile->endpointProfileIDs = routeProfileEndpointsFromJson(root.value("endpoints").toArray(), warnings, materializeEndpoints, nullptr);
                 QJsonObject routeObj = root.value("route").toObject();
                 routeObj = remapRawOutboundsByName(routeObj, root.value("outbound_names").toObject(), warnings);
                 profile->rawRoute = QJsonObject2QString(routeObj, false);
@@ -394,20 +529,27 @@ namespace Configs {
             profile->id = -1;
             profile->name = root.value("name").toString();
             profile->defaultOutboundID = stringToOutboundID(root.value("default_outbound").toString());
+            QMap<int, int> endpointIDMap;
+            profile->endpointProfileIDs = routeProfileEndpointsFromJson(root.value("endpoints").toArray(), warnings, materializeEndpoints, &endpointIDMap);
             int fallbackNum = 1;
             for (const auto& v: root.value("rules").toArray()) {
                 if (!v.isObject()) continue;
                 const QJsonObject ro = v.toObject();
-                auto rule = parse_rule_object(ro, warnings);
-                rule->type = tokenToRuleType(ro.value("type").toString());
+                const ruleType type = tokenToRuleType(ro.value("type").toString());
+                // an endpoint rule's outbound is the sharer's profile id; it must survive the proxy fallback
+                auto rule = parse_rule_object(ro, type == endpointPreferredBy ? nullptr : warnings);
+                rule->type = type;
+                if (type == endpointPreferredBy) {
+                    rule->outboundID = endpointIDMap.value(ro.value("outbound").toInt(INVALID_ID), INVALID_ID);
+                }
                 rule->name = ro.value("name").toString();
                 if (rule->name.isEmpty()) rule->name = "rule_" + Int2String(fallbackNum++);
                 profile->Rules << rule;
             }
+            profile->SyncEndpointRules();
             return profile;
         }
 
-        // Legacy schema: a bare array of rules (no name / default outbound).
         if (doc.isArray()) {
             QString fe;
             auto rules = parseJsonArray(doc.array(), &fe, warnings);
@@ -482,6 +624,11 @@ namespace Configs {
             if (item->type != custom && item->isEmpty()) continue;
             auto outboundTag = QString();
             if (outboundMap.contains(item->outboundID)) outboundTag = outboundMap[item->outboundID];
+            // an endpoint that left the list has no tag to gate on; skip instead of aborting the build
+            if (!forView && item->type == endpointPreferredBy && outboundTag.isEmpty()) {
+                MW_show_log("Skipping an endpoint rule whose endpoint is no longer in the routing profile");
+                continue;
+            }
             auto rule_json = item->get_rule_json(forView, outboundTag);
             if (rule_json.empty()) {
                 MW_show_log("Aborted generating routing section, an error has occurred");
@@ -499,6 +646,34 @@ namespace Configs {
         return res;
     }
 
+    std::shared_ptr<RouteRule> RouteProfile::MakeEndpointRule(int endpointProfileID) {
+        auto rule = std::make_shared<RouteRule>();
+        rule->type = endpointPreferredBy;
+        rule->outboundID = endpointProfileID;
+        rule->name = ruleTypeToString(endpointPreferredBy);
+        if (const auto prof = Configs::dataManager->profilesRepo->GetProfile(endpointProfileID);
+            prof != nullptr && prof->outbound != nullptr)
+            rule->name = QObject::tr("%1 route prefer").arg(prof->outbound->DisplayName());
+        return rule;
+    }
+
+    void RouteProfile::SyncEndpointRules() {
+        if (isRaw) return;
+        QList<std::shared_ptr<RouteRule>> kept;
+        QSet<int> paired;
+        for (const auto& rule: Rules) {
+            if (rule->type == endpointPreferredBy) {
+                if (!endpointProfileIDs.contains(rule->outboundID) || paired.contains(rule->outboundID)) continue;
+                paired << rule->outboundID;
+            }
+            kept << rule;
+        }
+        for (const int id: endpointProfileIDs) {
+            if (!paired.contains(id)) kept << MakeEndpointRule(id);
+        }
+        Rules = kept;
+    }
+
     std::shared_ptr<RouteProfile> RouteProfile::GetDefaultChain() {
         auto defaultChain = std::make_shared<RouteProfile>();
         defaultChain->name = "Default";
@@ -513,12 +688,13 @@ namespace Configs {
     std::shared_ptr<QList<int>> RouteProfile::get_used_outbounds() {
         auto res = std::make_shared<QList<int>>();
         if (isRaw) {
-            // referenced outbounds come from the raw route JSON (so they get built and
-            // their server domains added to direct DNS, exactly like structured rules).
+            // Raw ids must be collected too, so their servers get built and their domains added to direct DNS.
             *res = CollectRawOutboundIds(QString2QJsonObject(rawRoute));
             return res;
         }
         for (const auto& item: Rules) {
+            // its id names an endpoint built from endpointProfileIDs, not a routing outbound
+            if (item->type == endpointPreferredBy) continue;
             res->push_back(item->outboundID);
         }
         return res;
@@ -604,9 +780,8 @@ namespace Configs {
         for (const auto& item: Rules) {
             if (item->action == "route" && item->outboundID == directID) continue;
             if (item->action != "route" && item->action != "reject") continue;
-            // ip_is_private covers every range the Tun bypass carves out, so it
-            // hijacks all of them at once.
-            if (item->ip_is_private) res << tunBypassablePrivateRanges();
+            // ip_is_private covers every range the Tun bypass carves out, so it hijacks all of them at once.
+            if (item->ip_is_private) res << dataManager->settingsRepo->vpn_private_ranges;
             for (const auto& cidr: item->ip_cidr) res << cidr;
         }
         return res;
@@ -704,8 +879,9 @@ namespace Configs {
         for (auto t : types) {
             ResetSimpleRule(t);
         }
-        for (const auto& raw : items) {
-            if (raw.trimmed().isEmpty()) continue;
+        for (const auto& rawLine : items) {
+            const QString raw = rawLine.trimmed();
+            if (raw.isEmpty()) continue;
             auto type = get_rule_type(raw, action);
             if (type == custom) {
                 res += "invalid rule:" + raw + "\n";
@@ -742,8 +918,8 @@ namespace Configs {
     {
         auto colonIdx = content.indexOf(':');
         if (colonIdx == -1) return false;
-        const QString& address = content.mid(colonIdx+1);
-        const QString& subType = content.left(colonIdx);
+        const QString address = content.mid(colonIdx+1).trimmed();
+        const QString subType = content.left(colonIdx).trimmed();
         if (subType == "domain") {
             if (!rule->domain.contains(address)) rule->domain.append(address);
             return true;
@@ -770,8 +946,8 @@ namespace Configs {
     bool RouteProfile::add_simple_process_rule(const QString& content, const std::shared_ptr<RouteRule>& rule)
     {
         if (!content.contains(":")) return false;
-        auto prefix = content.first(content.indexOf(':'));
-        const QString& address = content.section(':', 1);
+        const QString prefix = content.first(content.indexOf(':')).trimmed();
+        const QString address = content.section(':', 1).trimmed();
         if (prefix == "processPath")
         {
             if (!rule->process_path.contains(address)) rule->process_path.append(address);
@@ -787,7 +963,7 @@ namespace Configs {
     }
 
     std::shared_ptr<RouteRule> RouteProfile::get_simple_rule_by_type(ruleType type) {
-        for (auto r : Rules) {
+        for (const auto &r : Rules) {
             if (r->type == type) return r;
         }
         return nullptr;

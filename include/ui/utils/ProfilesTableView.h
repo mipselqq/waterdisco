@@ -4,7 +4,6 @@
 #include <QSize>
 #include <functional>
 
-// Table view for the profiles list: drag-drop reorder and custom vertical header.
 class ProfilesTableView : public QTableView {
     Q_OBJECT
 public:

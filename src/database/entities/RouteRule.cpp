@@ -7,21 +7,34 @@
 #include "include/global/Configs.hpp"
 
 namespace Configs {
-    QJsonArray get_as_array(const QList<QString>& str, bool castToNum = false, const std::function<QString(QString)>& converter = nullptr) {
-        QJsonArray res;
-        for (const auto &item: str) {
-            auto conv = converter ? converter(item) : item;
-            if (castToNum) res.append(conv.toInt());
-            else res.append(conv);
+    template<typename Converter = std::nullptr_t>
+    QJsonArray get_as_array(const QList<QString>& str, bool castToNum = false, Converter converter = nullptr)
+    {
+        QJsonArray result;
+
+        // Last gate before the core: heals values already stored with stray whitespace.
+        for (const QString& raw : str) {
+            const QString item = raw.trimmed();
+            if (item.isEmpty()) continue;
+            const QString converted = [&] {
+                if constexpr (std::is_same_v<Converter, std::nullptr_t>)
+                    return item;
+                else
+                    return converter(item);
+            }();
+
+            if (castToNum)
+                result.append(converted.toInt());
+            else
+                result.append(converted);
         }
-        return res;
+
+        return result;
     }
 
-    bool isValidStrArray(const QStringList& arr) {
-        for (const auto& item: arr) {
-            if (!item.trimmed().isEmpty()) return true;
-        }
-        return false;
+    static bool isValidStrArray(const QStringList& arr) {
+        return std::ranges::any_of(arr,
+                                   [](const QString& item) { return !QStringView(item).trimmed().isEmpty(); });
     }
 
     RouteRule::RouteRule(const RouteRule& other) {
@@ -55,6 +68,8 @@ namespace Configs {
         no_drop = other.no_drop;
         override_address = other.override_address;
         override_port = other.override_port;
+        tls_spoof = other.tls_spoof;
+        tls_spoof_method = other.tls_spoof_method;
         sniffers << other.sniffers;
         sniffOverrideDest = other.sniffOverrideDest;
         strategy = other.strategy;
@@ -66,9 +81,25 @@ namespace Configs {
     QJsonObject RouteRule::get_rule_json(bool forView, const QString& outboundTag) {
         QJsonObject obj;
 
-        if (!ip_version.isEmpty()) obj["ip_version"] = ip_version.toInt();
-        if (!network.isEmpty()) obj["network"] = network;
-        if (!protocol.isEmpty()) obj["protocol"] = protocol;
+        // Placeholder rule: it persists only the endpoint id, the gate comes from its resolved tag.
+        if (type == endpointPreferredBy) {
+            QString tag = outboundTag;
+            if (forView) {
+                const auto prof = Configs::dataManager->profilesRepo->GetProfile(outboundID);
+                if (prof == nullptr || prof->outbound == nullptr) return {};
+                tag = prof->outbound->DisplayName();
+            }
+            if (tag.isEmpty()) return {};
+            return QJsonObject{
+                {"preferred_by", QJsonArray{tag}},
+                {"action", "route"},
+                {"outbound", tag},
+            };
+        }
+
+        if (!ip_version.trimmed().isEmpty()) obj["ip_version"] = ip_version.trimmed().toInt();
+        if (!network.trimmed().isEmpty()) obj["network"] = network.trimmed();
+        if (!protocol.trimmed().isEmpty()) obj["protocol"] = protocol.trimmed();
         if (isValidStrArray(inbound)) obj["inbound"] = get_as_array(inbound);
         if (isValidStrArray(domain)) obj["domain"] = get_as_array(domain);
         if (isValidStrArray(domain_suffix)) obj["domain_suffix"] = get_as_array(domain_suffix);
@@ -93,7 +124,6 @@ namespace Configs {
             else
                 obj["rule_set"] = get_as_array(rule_set, false, get_rule_set_name);
         if (invert) obj["invert"] = invert;
-        // fix action type
         if (action == "route")
         {
             if (outboundID == -3) action = "reject";
@@ -103,13 +133,19 @@ namespace Configs {
 
         if (action == "reject")
         {
-            if (!rejectMethod.isEmpty()) obj["reject_method"] = rejectMethod;
+            if (!rejectMethod.trimmed().isEmpty()) obj["reject_method"] = rejectMethod.trimmed();
             if (no_drop) obj["no_drop"] = no_drop;
         }
         if (action == "route" || action == "route-options" || action == "bypass")
         {
-            if (!override_address.isEmpty()) obj["override_address"] = override_address;
-            if (override_port.toInt() > 0) obj["override_port"] = override_port.toInt();
+            if (!override_address.trimmed().isEmpty()) obj["override_address"] = override_address.trimmed();
+            if (override_port.trimmed().toInt() > 0) obj["override_port"] = override_port.trimmed().toInt();
+            if (!tls_spoof.trimmed().isEmpty())
+            {
+                obj["tls_spoof"] = tls_spoof.trimmed();
+                // the method only qualifies a spoof, the core rejects it standalone
+                if (!tls_spoof_method.trimmed().isEmpty()) obj["tls_spoof_method"] = tls_spoof_method.trimmed();
+            }
 
             if (action == "route" || action == "bypass")
             {
@@ -142,16 +178,22 @@ namespace Configs {
         }
         if (action == "resolve")
         {
-            if (!strategy.isEmpty()) obj["strategy"] = strategy;
+            if (!strategy.trimmed().isEmpty()) obj["strategy"] = strategy.trimmed();
         }
 
         return obj;
     }
 
     QJsonObject RouteRule::to_share_json() {
-        // Faithful, portable representation of a single rule for sharing: the sing-box
-        // fields with outbound as a portable string (no adblock injection), plus our own
-        // name + type token so simple/advanced rules round-trip.
+        // Same key space as the endpoints list, so a rule and its endpoint drop or survive together.
+        if (type == endpointPreferredBy) {
+            return QJsonObject{
+                {"name", name},
+                {"type", ruleTypeToToken(type)},
+                {"outbound", outboundID},
+            };
+        }
+        // forView=true renders outbound as a portable string and skips the adblock injection.
         QJsonObject obj = get_rule_json(true);
         if (obj.isEmpty()) return obj; // outbound profile missing; caller skips it
         obj["name"] = name;
@@ -188,6 +230,7 @@ namespace Configs {
                 if (attr == QStringLiteral("override_address")) return rule.override_address.isEmpty();
                 if (attr == QStringLiteral("override_port"))
                     return rule.override_port.isEmpty() || rule.override_port.trimmed().isEmpty() || rule.override_port.toInt() <= 0;
+                if (attr == QStringLiteral("tls_spoof")) return rule.tls_spoof.isEmpty();
                 return !isValidStrArray(rule.get_current_value_string(attr));
         }
         return true;
@@ -222,6 +265,8 @@ namespace Configs {
         else if (attr == QStringLiteral("no_drop")) no_drop = false;
         else if (attr == QStringLiteral("override_address")) override_address.clear();
         else if (attr == QStringLiteral("override_port")) override_port.clear();
+        else if (attr == QStringLiteral("tls_spoof")) tls_spoof.clear();
+        else if (attr == QStringLiteral("tls_spoof_method")) tls_spoof_method.clear();
         else if (attr == QStringLiteral("override_destination")) sniffOverrideDest = false;
         else if (attr == QStringLiteral("strategy")) strategy.clear();
     }
@@ -264,6 +309,8 @@ namespace Configs {
             "outbound",
             "override_address",
             "override_port",
+            "tls_spoof",
+            "tls_spoof_method",
             "method",
             "no_drop",
             "override_destination",
@@ -286,6 +333,7 @@ namespace Configs {
             fieldName == "action" ||
             fieldName == "method" ||
             fieldName == "strategy" ||
+            fieldName == "tls_spoof_method" ||
             fieldName == "outbound") return select;
 
         return text;
@@ -321,6 +369,10 @@ namespace Configs {
             resp.prepend("");
             return resp;
         }
+        if (fieldName == "tls_spoof_method")
+        {
+            return {"", "wrong-sequence", "wrong-checksum", "wrong-ack", "wrong-md5", "wrong-timestamp"};
+        }
         return {};
     }
 
@@ -353,6 +405,14 @@ namespace Configs {
         if (fieldName == "override_port")
         {
             return {override_port};
+        }
+        if (fieldName == "tls_spoof")
+        {
+            return {tls_spoof};
+        }
+        if (fieldName == "tls_spoof_method")
+        {
+            return {tls_spoof_method};
         }
         if (fieldName == "outbound")
         {
@@ -399,24 +459,27 @@ namespace Configs {
         return nullptr;
     }
 
-    QStringList filterEmpty(const QStringList& base) {
+    static QStringList filterEmpty(const QStringList& base) {
         QStringList res;
         for (const auto& item: base) {
-            if (item.trimmed().isEmpty()) continue;
-            res << item.trimmed();
+            if (const auto trimmed = item.trimmed(); !trimmed.isEmpty()) {
+                res << trimmed;
+            }
         }
         return res;
     }
 
     void RouteRule::set_field_value(const QString& fieldName, const QStringList& value) {
+        // Imported rules can carry an empty array for a scalar field, so never index blindly.
+        const QString scalar = value.isEmpty() ? QString() : value[0].trimmed();
         if (fieldName == "ip_version") {
-            ip_version = value[0];
+            ip_version = scalar;
         }
         if (fieldName == "network") {
-            network = value[0];
+            network = scalar;
         }
         if (fieldName == "protocol") {
-            protocol = value[0];
+            protocol = scalar;
         }
         if (fieldName == "inbound") {
             inbound = filterEmpty(value);
@@ -437,13 +500,13 @@ namespace Configs {
             source_ip_cidr = filterEmpty(value);
         }
         if (fieldName == "source_ip_is_private") {
-            source_ip_is_private = value[0]=="true";
+            source_ip_is_private = scalar=="true";
         }
         if (fieldName == "ip_cidr") {
             ip_cidr = filterEmpty(value);
         }
         if (fieldName == "ip_is_private") {
-            ip_is_private = value[0]=="true";
+            ip_is_private = scalar=="true";
         }
         if (fieldName == "source_port") {
             source_port = filterEmpty(value);
@@ -476,44 +539,53 @@ namespace Configs {
             rule_set = filterEmpty(value);
         }
         if (fieldName == "invert") {
-            invert = value[0]=="true";
+            invert = scalar=="true";
         }
         if (fieldName == "action")
         {
-            action = value[0];
+            action = scalar;
         }
         if (fieldName == "method")
         {
-            rejectMethod = value[0];
+            rejectMethod = scalar;
         }
         if (fieldName == "no_drop")
         {
-            no_drop = value[0]=="true";
+            no_drop = scalar=="true";
         }
         if (fieldName == "override_address")
         {
-            override_address = value[0];
+            override_address = scalar;
         }
         if (fieldName == "override_port")
         {
-            override_port = value[0];
+            override_port = scalar;
+        }
+        if (fieldName == "tls_spoof")
+        {
+            tls_spoof = scalar;
+        }
+        if (fieldName == "tls_spoof_method")
+        {
+            tls_spoof_method = scalar;
         }
         if (fieldName == "override_destination")
         {
-            sniffOverrideDest = value[0]=="true";
+            sniffOverrideDest = scalar=="true";
         }
         if (fieldName == "strategy")
         {
-            strategy = value[0];
+            strategy = scalar;
         }
         if (fieldName == "outbound")
         {
-            outboundID = value[0].toInt();
+            outboundID = scalar.toInt();
         }
     }
 
     bool RouteRule::isEmpty() {
         if (type != custom) {
+            if (type == endpointPreferredBy) return false;
             if (type == simpleAddressProxy || type == simpleAddressBypass || type == simpleAddressBlock || type == simpleAddressWarpBypass) {
                 return domain.empty() &&
                     domain_suffix.empty() &&
@@ -533,21 +605,11 @@ namespace Configs {
 
     bool RouteRule::canEditAttr(const QString &attr) {
         if (type == custom) return true;
+        if (type == endpointPreferredBy) return false;
         if (type == simpleAddressProxy || type == simpleAddressBypass || type == simpleAddressBlock || type == simpleAddressWarpBypass) {
             return attr == "domain" || attr == "domain_suffix" || attr == "domain_keyword" || attr == "domain_regex" || attr == "rule_set" || attr == "ip_cidr";
         } else {
             return attr == "process_path" || attr == "process_name";
         }
-    }
-
-    std::shared_ptr<RouteRule> RouteRule::get_processPath_direct_rule(QString processPath)
-    {
-        auto res = std::make_shared<RouteRule>();
-        res->name = "AutoGenerated direct extra core";
-        res->action = "route";
-        res->outboundID = -2;
-        res->process_path = {processPath};
-
-        return res;
     }
 }

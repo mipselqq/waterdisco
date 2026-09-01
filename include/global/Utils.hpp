@@ -13,9 +13,7 @@
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
 #include <QStyleHints>
 #endif
-//
 
-// OS
 enum osType
 {
     unknown = 0,
@@ -58,40 +56,32 @@ inline QString getOSString() {
 inline QString software_name;
 inline QString software_core_name;
 
-// Epoch-seconds when the app started; set once in main(). Read by the Runtime
-// Stats panel to display Throne's uptime.
+// Epoch-seconds, set once in main().
 inline qint64 appStartEpoch = 0;
 
-// MainWindow functions
 class QWidget;
 inline QWidget *mainwindow;
 inline std::function<void(QString)> MW_show_log;
 inline std::function<void(QString)> MW_show_core_log;
 
-// Commands delivered to the main window from anywhere in the app via
-// MW_dialog_message. The accompanying QStringList carries command-specific
-// arguments; recognized tokens live in the MwArg namespace below.
 enum class MwMessage {
-    UpdateSettings,       // settings were edited; args: MwArg settings-change tokens
-    RestartProgram,       // restart the whole application
-    Raise,                // bring the main window to the front
-    UpdateShortcuts,      // global hotkeys were reconfigured
-    ProfileChanged,       // a profile was saved; arg MwArg::RestartProxy when it is running
-    GroupsChanged,        // groups were added/removed/edited; refresh the group tabs
-    SubscriptionFinished, // a subscription import finished; arg MwArg::Quiet to skip the count line
-    SubscriptionNewGroup, // the updater created a new group
-    // A subscription refresh changed a group's servers. Args: { group id, then
-    // the id of every profile it deleted or replaced in place }. Auto selectors
-    // resolve their members from the group, so this is the only notice they get.
+    UpdateSettings,       // args: MwArg settings-change tokens
+    RestartProgram,
+    Raise,
+    UpdateShortcuts,
+    ProfileChanged,       // arg MwArg::RestartProxy when the saved profile is running
+    GroupsChanged,
+    SubscriptionFinished, // arg MwArg::Quiet skips the import-count line
+    SubscriptionNewGroup,
+    // args: { group id, then the id of every profile it deleted or replaced in place }
     SubscriptionGroupChanged,
-    CoreCrashed,          // the external core process died
-    CoreStarted,          // the core came up; args: { startedProfileId }
+    CoreCrashed,
+    CoreStarted,          // args: { startedProfileId }
 };
 
 // String tokens carried in a MwMessage's argument list.
 namespace MwArg {
-    // UpdateSettings: which settings changed. Each controls what gets reloaded
-    // and whether restarting the proxy/tun/program is offered.
+    // UpdateSettings args.
     inline const QString Route        = QStringLiteral("route");
     inline const QString Vpn          = QStringLiteral("vpn");
     inline const QString NeedRestart  = QStringLiteral("needRestart");
@@ -101,43 +91,33 @@ namespace MwArg {
     inline const QString TrayIcon     = QStringLiteral("trayIcon");
     inline const QString MaxLogLines  = QStringLiteral("maxLogLines");
     inline const QString DisableAdmin = QStringLiteral("disableAdmin");
-    // A proxy-table display option changed (e.g. show-config-security), so the
-    // list must be re-rendered and its auto-sized columns recomputed.
     inline const QString ProfileListDisplay = QStringLiteral("profileListDisplay");
-    // ProfileChanged: the saved profile is the running one, so offer a proxy restart.
+    // ProfileChanged arg.
     inline const QString RestartProxy = QStringLiteral("restartProxy");
-    // SubscriptionFinished: a detailed diff was already logged, so skip the import-count line.
+    // SubscriptionFinished arg.
     inline const QString Quiet        = QStringLiteral("quiet");
 }
 
 inline std::function<void(MwMessage, QStringList)> MW_dialog_message;
-// Handles a "throne://" deeplink. Set by MainWindow; marshals to the UI thread.
+// Set by MainWindow; marshals to the UI thread.
 inline std::function<void(QString)> MW_handle_deeplink;
 
-// Imports config files the OS handed us ("Open with Throne"). Set by MainWindow;
-// marshals to the UI thread.
+// Set by MainWindow; marshals to the UI thread.
 inline std::function<void(QStringList)> MW_import_files;
 
-// Deeplink plumbing (see Utils.cpp). Delivery channels feed URLs in here; the
-// pending buffer covers URLs that arrive before the main window exists.
+// The pending buffer covers URLs arriving before the main window exists.
 QString Deeplink_ExtractFromArgs(const QStringList &args);
 void Deeplink_Submit(const QString &url);
 void Deeplink_FlushPending();
 
-// Same plumbing for files opened with the app. Paths arrive as launch arguments,
-// as a second instance's hand-off, or (macOS) as a file-open event, and may be
-// given either as a path or as a file:// URL.
+// Paths may be given either as a plain path or as a file:// URL.
 QStringList LaunchFiles_ExtractFromArgs(const QStringList &args, const QDir &launchDir);
 void LaunchFiles_Submit(const QStringList &paths);
 void LaunchFiles_FlushPending();
 
-// Dispatchers
-
 class QThread;
 inline QThread *DS_cores;
 inline QThread *LogThread;
-
-// String
 
 #define FIRST_OR_SECOND(a, b) a.isEmpty() ? b : a
 
@@ -145,29 +125,23 @@ inline const QString UNICODE_LRO = QString::fromUtf8(QByteArray::fromHex("E280AD
 
 #define Int2String(num) QString::number(num)
 
-inline QString SubStrBefore(QString str, const QString &sub) {
-    if (!str.contains(sub)) return str;
-    return str.left(str.indexOf(sub));
+inline QString SubStrBefore(const QString &str, const QString &sub) {
+    const qsizetype pos = str.indexOf(sub);
+    return pos == -1 ? str : str.left(pos);
 }
 
-inline QString SubStrAfter(QString str, const QString &sub) {
-    if (!str.contains(sub)) return str;
-    return str.right(str.length() - str.indexOf(sub) - sub.length());
+inline QString SubStrAfter(const QString &str, const QString &sub) {
+    const qsizetype pos = str.indexOf(sub);
+    return pos == -1 ? str : str.right(str.length() - pos - sub.length());
 }
 
 QString QStringList2Command(const QStringList &list);
 
 QStringList SplitLines(const QString &_string);
 
-QStringList SplitLinesSkipSharp(const QString &_string, int maxLine = 0);
-
 QStringList SplitAndTrim(const QString& raw, const QString& seperator, bool keepEmpty = true);
 
-// Base64
-
 QByteArray DecodeB64IfValid(const QString &input, QByteArray::Base64Options options = QByteArray::Base64Option::Base64Encoding);
-
-// URL
 
 class QUrlQuery;
 
@@ -176,8 +150,6 @@ QString GetQueryValue(const QUrlQuery &q, const QString &key, const QString &def
 QString GetRandomString(int randomStringLength);
 
 quint64 GetRandomUint64();
-
-// JSON
 
 class QJsonObject;
 class QJsonArray;
@@ -211,13 +183,9 @@ QList<QString> QJsonArray2QListString(const QJsonArray &arr);
 
 QJsonArray QString2QJsonArray(const QString& str);
 
-// Files
-
 QByteArray ReadFile(const QString &path);
 
 QString ReadFileText(const QString &path);
-
-// Validators
 
 bool IsIpAddress(const QString &str);
 
@@ -225,12 +193,10 @@ bool IsIpAddressV4(const QString &str);
 
 bool IsIpAddressV6(const QString &str);
 
-// [2001:4860:4860::8888] -> 2001:4860:4860::8888
 inline QString UnwrapIPV6Host(QString &str) {
     return str.replace("[", "").replace("]", "");
 }
 
-// [2001:4860:4860::8888] or 2001:4860:4860::8888 -> [2001:4860:4860::8888]
 inline QString WrapIPV6Host(QString &str) {
     if (!IsIpAddressV6(str)) return str;
     return "[" + UnwrapIPV6Host(str) + "]";
@@ -247,18 +213,9 @@ inline QString DisplayDest(const QString& dest, QString domain)
     return dest + " (" + domain + ")";
 }
 
-// Format & Misc
-
-// Reserve free TCP ports by binding and releasing them. `address` must be the
-// interface the caller is going to bind, because "is this port free" is a different
-// question per interface — and because listen()'s own default is the dual-stack
-// any-address, which Windows refuses outright on a host with IPv6 disabled. An empty
-// address means any interface. Both return 0 / a 0 entry when no port could be
-// reserved; callers must treat that as an error rather than emit it into a config.
+// Returns 0 when no port could be reserved; pass the interface you will bind (Windows rejects the dual-stack any-address with IPv6 off).
 int MkPort(const QString &address = {});
 
-// Defaults to loopback: every caller reserves ports for the sing-box <-> Xray socks
-// bridges, which listen on 127.0.0.1.
 QList<int> MkManyPorts(int num, const QString &address = "127.0.0.1");
 
 QString DisplayTime(long long time, int formatType = 0);
@@ -284,8 +241,6 @@ inline bool IsValidPort(int port) {
     return InRange(port, 1, 65535);
 }
 
-// UI
-
 QWidget *GetMessageBoxParent();
 
 int MessageBoxWarning(const QString &title, const QString &text);
@@ -299,8 +254,6 @@ int MessageBoxCheck(const QString &title, const QString &text, const QString &ch
 void ActivateWindow(QWidget *w);
 
 void HideWindow(QWidget *w);
-
-//
 
 void runOnUiThread(const std::function<void()> &callback, bool wait = false);
 

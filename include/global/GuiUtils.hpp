@@ -1,10 +1,6 @@
 #pragma once
 
-// Utils
-
 #define QRegExpValidator_Number new QRegularExpressionValidator(QRegularExpression("^[0-9]+$"), this)
-
-// Save&Load
 
 #define P_C_LOAD_STRING(a) CACHE.a = bean->a;
 #define P_C_SAVE_STRING(a) bean->a = CACHE.a;
@@ -62,14 +58,7 @@
         Configs::dataManager->settingsRepo->i = -ui->i->text().toInt(); \
     }
 
-#define C_EDIT_JSON_ALLOW_EMPTY(a)                                    \
-    auto editor = new JsonEditor(QString2QJsonObject(CACHE.a), this); \
-    auto result = editor->OpenEditor();                               \
-    CACHE.a = QJsonObject2QString(result, true);                      \
-    if (result.isEmpty()) CACHE.a = "";                               \
-    editor->deleteLater();
-
-//
+#define C_EDIT_JSON_ALLOW_EMPTY(a, schemaRef)                                            auto editor = new JsonEdit::JsonEditorDialog(QString2QJsonObject(CACHE.a), this);     editor->SetValidator(JsonEdit::SingBoxValidator(schemaRef));                          auto result = editor->OpenEditor();                                                   CACHE.a = QJsonObject2QString(result, true);                                          if (result.isEmpty()) CACHE.a = "";                                                   editor->deleteLater();
 
 #define ADD_ASTERISK(parent)                                         \
     for (auto label: parent->findChildren<QLabel *>()) {             \

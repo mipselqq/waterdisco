@@ -11,13 +11,9 @@ namespace Stats {
     TrafficStatsManager* trafficStatsManager = new TrafficStatsManager;
 
     namespace {
-        // Minute-resolution history is kept for this window; older data lives in
-        // the hour tier only. Fixed (the retention *setting* governs the hour
-        // tier). 48h.
+        // Fixed: the retention setting governs the hour tier, not this window.
         constexpr long long kMinuteWindowSecs = 48LL * 3600LL;
-        // How often the background loop downsamples + prunes. Frequent enough to
-        // keep the minute tier from growing unbounded, cheap enough to ignore.
-        constexpr unsigned long kRollupIntervalMs = 10UL * 60UL * 1000UL; // 10 min
+        constexpr unsigned long kRollupIntervalMs = 10UL * 60UL * 1000UL;
 
         long long alignMinute(long long secs) { return (secs / 60) * 60; }
     }
@@ -29,8 +25,7 @@ namespace Stats {
 
     void TrafficStatsManager::Init() {
         if (started.exchange(true)) return;
-        // Catch-up pass first (downsample anything that aged past the minute
-        // window while the app was closed), then keep doing it on a slow cadence.
+        // Catch-up pass first: downsample whatever aged past the window while the app was closed.
         runOnNewThread([this] {
             runRollupOnce();
             while (true) {
@@ -98,8 +93,6 @@ namespace Stats {
             auto& d = appAccum[processName];
             d.up += up;
             d.down += down;
-            // Only touch app_meta on first sighting this session or when the
-            // path changes — avoids a DB write every poll for every active app.
             if (!path.isEmpty()) {
                 const auto it = appMetaSeen.constFind(processName);
                 if (it == appMetaSeen.constEnd() || it.value() != path) {

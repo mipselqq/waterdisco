@@ -11,8 +11,7 @@ import (
 	"github.com/sagernet/sing/service"
 )
 
-// autoSelectors returns every running auto-selector group, keyed by tag. The
-// live box owns them, so an absent box simply means "none".
+// The live box owns them, so an absent box simply means "none".
 func autoSelectors() map[string]group.AutoSelectorGroup {
 	found := make(map[string]group.AutoSelectorGroup)
 	box := currentBox()
@@ -89,8 +88,7 @@ func autoSelectorStatusToProto(status group.AutoSelectorStatus) *gen.AutoSelecto
 	return out
 }
 
-// QueryAutoSelectors is an idempotent snapshot — unlike QueryStats it clears no
-// core-side counters, so any number of consumers may poll it.
+// Idempotent: unlike QueryStats it clears no core-side counters, so any number of consumers may poll it.
 func (s *server) QueryAutoSelectors(ctx context.Context, _ *gen.EmptyReq) (*gen.QueryAutoSelectorsResponse, error) {
 	out := &gen.QueryAutoSelectorsResponse{}
 	for _, selector := range autoSelectors() {
@@ -124,8 +122,7 @@ func (s *server) AutoSelectorAction(ctx context.Context, in *gen.AutoSelectorAct
 			selector.CheckOutbounds()
 		}
 	case "select":
-		// An empty member releases the pin and hands the group back to automatic
-		// selection, so the UI needs no second action for it.
+		// An empty member releases the pin and hands the group back to automatic selection.
 		member := in.GetMember()
 		for _, selector := range targets {
 			if !selector.SelectOutbound(member) {

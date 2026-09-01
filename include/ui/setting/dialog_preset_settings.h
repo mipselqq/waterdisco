@@ -20,4 +20,8 @@ public:
 
 private:
     Ui::DialogPresetSettings *ui;
+
+public slots:
+
+    void accept() override;
 };

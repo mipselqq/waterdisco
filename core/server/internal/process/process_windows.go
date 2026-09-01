@@ -6,30 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
-// startChild launches the extra process de-elevated to the unprivileged
-// interactive user when the Core runs elevated, else as-is.
-//
-// Windows has no setuid: a UAC-elevated parent spawns children with its own
-// elevated admin token. We obtain a non-elevated primary token for the real
-// user and launch the child with it.
-//
-// We deliberately do NOT use Go's exec.Cmd + SysProcAttr.Token: that routes
-// through CreateProcessAsUser, which requires SeAssignPrimaryTokenPrivilege — a
-// privilege a UAC-elevated administrator does not hold (only SYSTEM does), so it
-// fails with ERROR_PRIVILEGE_NOT_HELD ("a required privilege is not held by the
-// client"). We instead call CreateProcessWithTokenW, which needs only
-// SeImpersonatePrivilege, held by elevated admins.
-// See https://github.com/throneproj/Throne/issues/1482.
+// exec.Cmd+SysProcAttr.Token routes through CreateProcessAsUser, needing SeAssignPrimaryTokenPrivilege that elevated admins lack; CreateProcessWithTokenW needs only SeImpersonatePrivilege (#1482).
 func startChild(path string, args []string, noOut bool) (running, error) {
 	self, err := selfToken()
 	if err != nil {
@@ -38,7 +27,7 @@ func startChild(path string, args []string, noOut bool) (running, error) {
 	defer self.Close()
 
 	if !self.IsElevated() {
-		return startCmd(newCmd(path, args, noOut)) // not elevated, run as-is
+		return startCmd(newCmd(path, args, noOut))
 	}
 
 	tok, err := unprivilegedToken(self)
@@ -50,23 +39,34 @@ func startChild(path string, args []string, noOut bool) (running, error) {
 	return startWithToken(path, args, noOut, tok)
 }
 
+// CreateProcessWithTokenW is served by the Secondary Logon service, which some systems disable; CreateProcessAsUser then still works for a Core running as SYSTEM.
+func startWithToken(path string, args []string, noOut bool, tok windows.Token) (running, error) {
+	run, err := startWithTokenW(path, args, noOut, tok)
+	if err == nil {
+		return run, nil
+	}
+	cmd := newCmd(path, args, noOut)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Token:         syscall.Token(tok),
+		HideWindow:    true,
+		CreationFlags: windows.CREATE_NO_WINDOW,
+	}
+	run, asUserErr := startCmd(cmd)
+	if asUserErr != nil {
+		return nil, errors.Join(err, fmt.Errorf("CreateProcessAsUser: %w", asUserErr))
+	}
+	return run, nil
+}
+
 var procCreateProcessWithTokenW = windows.NewLazySystemDLL("advapi32.dll").NewProc("CreateProcessWithTokenW")
 
-// startWithToken launches path+args under tok via CreateProcessWithTokenW, with
-// stdout/stderr funnelled into the Throne log and no console window.
-//
-// CreateProcessWithTokenW does not inherit arbitrary handles, but for a 64-bit
-// child the secondary-logon service still duplicates the three std handles into
-// it, so redirected output works without leaking any other handle to the
-// de-privileged child.
-func startWithToken(path string, args []string, noOut bool, tok windows.Token) (running, error) {
+// CreateProcessWithTokenW inherits no arbitrary handles, but the secondary-logon service still duplicates the three std handles into a 64-bit child.
+func startWithTokenW(path string, args []string, noOut bool, tok windows.Token) (running, error) {
 	exe, err := exec.LookPath(path)
 	if err != nil {
 		return nil, err
 	}
 
-	// stdout/stderr: the child writes the (inheritable) write ends; we read the
-	// read ends. stdin is the null device so the child has a valid handle.
 	outR, outW, err := os.Pipe()
 	if err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func startWithToken(path string, args []string, noOut bool, tok windows.Token) (
 		return nil, err
 	}
 
-	// dwLogonFlags 0: don't load the user profile (the old launch didn't either).
+	// dwLogonFlags 0: don't load the user profile.
 	const createFlags = windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NO_WINDOW
 	var pi windows.ProcessInformation
 	r1, _, e1 := procCreateProcessWithTokenW.Call(
@@ -130,8 +130,7 @@ func startWithToken(path string, args []string, noOut bool, tok windows.Token) (
 	runtime.KeepAlive(appName)
 	runtime.KeepAlive(cmdLine)
 	runtime.KeepAlive(envBlock)
-	// Our copies of the child's ends are no longer needed; closing the write
-	// ends is what lets the read ends see EOF when the child exits.
+	// Closing our write ends is what lets the read ends see EOF when the child exits.
 	closeAll(outW, errW, nul)
 	if r1 == 0 {
 		closeAll(outR, errR)
@@ -151,9 +150,7 @@ func startWithToken(path string, args []string, noOut bool, tok windows.Token) (
 	return &tokenRunner{hProcess: pi.Process, done: done}, nil
 }
 
-// tokenRunner is the running handle for a child launched via
-// CreateProcessWithTokenW: it owns the process handle and waits for the two
-// stdout/stderr pumps (signalled on done) to drain before reporting exit.
+// done receives once per output pump; Wait must drain both before closing the handle.
 type tokenRunner struct {
 	mu       sync.Mutex
 	hProcess windows.Handle
@@ -168,8 +165,8 @@ func (t *tokenRunner) Wait() error {
 		return nil
 	}
 	_, err := windows.WaitForSingleObject(h, windows.INFINITE)
-	<-t.done // stdout drained
-	<-t.done // stderr drained
+	<-t.done
+	<-t.done
 	t.mu.Lock()
 	if t.hProcess != 0 {
 		_ = windows.CloseHandle(t.hProcess)
@@ -179,8 +176,7 @@ func (t *tokenRunner) Wait() error {
 	return err
 }
 
-// Kill terminates the child. It is a no-op once Wait has reaped the process, so
-// the handle that Wait closes is never used after it is closed.
+// No-op once Wait has reaped the process, so the handle Wait closed is never reused.
 func (t *tokenRunner) Kill() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -190,7 +186,6 @@ func (t *tokenRunner) Kill() error {
 	return windows.TerminateProcess(t.hProcess, 1)
 }
 
-// makeInheritable marks f's handle inheritable so it can be handed to the child.
 func makeInheritable(f *os.File) error {
 	return windows.SetHandleInformation(windows.Handle(f.Fd()),
 		windows.HANDLE_FLAG_INHERIT, windows.HANDLE_FLAG_INHERIT)
@@ -202,8 +197,6 @@ func closeAll(files ...*os.File) {
 	}
 }
 
-// makeEnvBlock builds a CREATE_UNICODE_ENVIRONMENT block: each "k=v" UTF-16
-// encoded and NUL-terminated, the whole list terminated by one more NUL.
 func makeEnvBlock(env []string) ([]uint16, error) {
 	var block []uint16
 	for _, e := range env {
@@ -216,7 +209,7 @@ func makeEnvBlock(env []string) ([]uint16, error) {
 		}
 		block = append(block, u...) // u already ends in NUL
 	}
-	block = append(block, 0) // terminate the block
+	block = append(block, 0)
 	if len(block) == 1 {
 		block = append(block, 0) // an empty environment still needs a double NUL
 	}
@@ -230,27 +223,44 @@ func selfToken() (windows.Token, error) {
 	return tok, err
 }
 
-// unprivilegedToken returns a primary token for the real, non-elevated user,
-// trying in order: the UAC linked token of the same user (the common
-// elevated-admin case), the active console session user, then the interactive
-// shell (explorer.exe) user (covers a SYSTEM service).
+type tokenSource struct {
+	name string
+	get  func(windows.Token) (windows.Token, error)
+}
+
+// Ordered best-first: the linked token is exactly what the user would run with without UAC, the session/shell tokens cover a Core running as SYSTEM, and the restricted self token always works because it needs nothing outside this process.
+var tokenSources = []tokenSource{
+	{"linked token", linkedToken},
+	{"session token", sessionToken},
+	{"shell token", shellToken},
+	{"restricted self token", restrictedSelfToken},
+}
+
 func unprivilegedToken(self windows.Token) (windows.Token, error) {
-	if t, err := linkedToken(self); err == nil {
-		return t, nil
+	var errs []error
+	for _, src := range tokenSources {
+		tok, err := src.get(self)
+		if err == nil {
+			log.Printf("%s: dropping privileges via %s", extraCorePrefix, src.name)
+			return tok, nil
+		}
+		errs = append(errs, fmt.Errorf("%s: %w", src.name, err))
 	}
-	if t, err := consoleSessionToken(); err == nil {
-		return t, nil
-	}
-	if t, err := shellToken(); err == nil {
-		return t, nil
-	}
-	return 0, errors.New("no linked, console-session, or shell token available")
+	return 0, errors.Join(errs...)
 }
 
 func linkedToken(self windows.Token) (windows.Token, error) {
-	linked, err := self.GetLinkedToken()
+	return unelevated(self)
+}
+
+// Primary duplicate of src, or of its linked token when src itself is elevated.
+func unelevated(src windows.Token) (windows.Token, error) {
+	if !src.IsElevated() {
+		return primaryToken(src)
+	}
+	linked, err := src.GetLinkedToken()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("elevated token has no linked token: %w", err)
 	}
 	defer linked.Close()
 	if linked.IsElevated() {
@@ -259,36 +269,245 @@ func linkedToken(self windows.Token) (windows.Token, error) {
 	return primaryToken(linked)
 }
 
-func consoleSessionToken() (windows.Token, error) {
-	session := windows.WTSGetActiveConsoleSessionId()
-	if session == 0xFFFFFFFF {
-		return 0, errors.New("no active console session")
+// WTSQueryUserToken needs SeTcbPrivilege, so this only ever succeeds when the Core runs as SYSTEM.
+func sessionToken(windows.Token) (windows.Token, error) {
+	sessions := candidateSessions()
+	if len(sessions) == 0 {
+		return 0, errors.New("no active session")
 	}
-	var tok windows.Token
-	if err := windows.WTSQueryUserToken(session, &tok); err != nil {
-		return 0, err
+	var errs []error
+	for _, id := range sessions {
+		var raw windows.Token
+		if err := windows.WTSQueryUserToken(id, &raw); err != nil {
+			errs = append(errs, fmt.Errorf("session %d: %w", id, err))
+			continue
+		}
+		tok, err := unelevated(raw)
+		raw.Close()
+		if err == nil {
+			return tok, nil
+		}
+		errs = append(errs, fmt.Errorf("session %d: %w", id, err))
 	}
-	defer tok.Close()
-	return primaryToken(tok)
+	return 0, errors.Join(errs...)
 }
 
-func shellToken() (windows.Token, error) {
-	pid, err := findProcess("explorer.exe")
-	if err != nil {
-		return 0, err
+// Every explorer.exe is tried, nearest session first: a second signed-in user or a restarted shell otherwise makes the single candidate we used to pick arbitrary (#1794).
+func shellToken(windows.Token) (windows.Token, error) {
+	pids := shellCandidates(findProcesses("explorer.exe"), candidateSessions())
+	if len(pids) == 0 {
+		return 0, errors.New("no explorer.exe in a usable session")
 	}
-	proc, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-	if err != nil {
-		return 0, err
+	var errs []error
+	for _, pid := range pids {
+		raw, err := openProcessToken(pid)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("pid %d: %w", pid, err))
+			continue
+		}
+		tok, err := unelevated(raw)
+		raw.Close()
+		if err == nil {
+			return tok, nil
+		}
+		errs = append(errs, fmt.Errorf("pid %d: %w", pid, err))
 	}
-	defer windows.CloseHandle(proc)
+	return 0, errors.Join(errs...)
+}
 
-	var tok windows.Token
-	if err := windows.OpenProcessToken(proc, windows.TOKEN_DUPLICATE|windows.TOKEN_QUERY, &tok); err != nil {
+// Last resort, built the way UAC builds its filtered token: no privileges, admin groups deny-only, medium integrity. Same user and session as us, so the child keeps a working profile and %TEMP%.
+func restrictedSelfToken(self windows.Token) (windows.Token, error) {
+	primary, err := primaryToken(self)
+	if err != nil {
 		return 0, err
 	}
-	defer tok.Close()
-	return primaryToken(tok)
+	defer primary.Close()
+
+	groups, err := primary.GetTokenGroups()
+	if err != nil {
+		return 0, err
+	}
+	restricted, err := createRestrictedToken(primary, adminGroups(groups))
+	runtime.KeepAlive(groups)
+	if err != nil {
+		return 0, err
+	}
+	// Duplication preserves the disabled SIDs and deleted privileges, and pins the access mask the integrity change below needs.
+	tok, err := primaryToken(restricted)
+	restricted.Close()
+	if err != nil {
+		return 0, err
+	}
+	if err = setMediumIntegrity(tok); err != nil {
+		tok.Close()
+		return 0, fmt.Errorf("cannot lower integrity level: %w", err)
+	}
+	if tok.IsElevated() {
+		tok.Close()
+		return 0, errors.New("restricted token is still elevated")
+	}
+	return tok, nil
+}
+
+// Only groups actually present in the token: CreateRestrictedToken rejects a SID the token does not carry.
+func adminGroups(groups *windows.Tokengroups) []windows.SIDAndAttributes {
+	var out []windows.SIDAndAttributes
+	for _, g := range groups.AllGroups() {
+		if isAdminSid(g.Sid) {
+			out = append(out, windows.SIDAndAttributes{Sid: g.Sid})
+		}
+	}
+	return out
+}
+
+// The domain-relative admin RIDs need the manual check; IsWellKnown cannot match them without a domain SID.
+func isAdminSid(sid *windows.SID) bool {
+	if sid == nil || !sid.IsValid() {
+		return false
+	}
+	if sid.IsWellKnown(windows.WinBuiltinAdministratorsSid) {
+		return true
+	}
+	n := sid.SubAuthorityCount()
+	if n < 2 || sid.SubAuthority(0) != 21 {
+		return false
+	}
+	switch sid.SubAuthority(uint32(n) - 1) {
+	case 512, 518, 519, 520: // Domain, Schema, Enterprise Admins, Group Policy Creator Owners
+		return true
+	}
+	return false
+}
+
+var procCreateRestrictedToken = windows.NewLazySystemDLL("advapi32.dll").NewProc("CreateRestrictedToken")
+
+const (
+	disableMaxPrivilege = 0x1
+	luaToken            = 0x4
+)
+
+func createRestrictedToken(src windows.Token, disable []windows.SIDAndAttributes) (windows.Token, error) {
+	call := func(flags uintptr) (windows.Token, error) {
+		var sids *windows.SIDAndAttributes
+		if len(disable) > 0 {
+			sids = &disable[0]
+		}
+		var tok windows.Token
+		r1, _, e1 := procCreateRestrictedToken.Call(
+			uintptr(src),
+			flags,
+			uintptr(len(disable)),
+			uintptr(unsafe.Pointer(sids)),
+			0, 0, 0, 0,
+			uintptr(unsafe.Pointer(&tok)),
+		)
+		runtime.KeepAlive(disable)
+		if r1 == 0 {
+			return 0, e1
+		}
+		return tok, nil
+	}
+	if tok, err := call(disableMaxPrivilege | luaToken); err == nil {
+		return tok, nil
+	}
+	return call(disableMaxPrivilege)
+}
+
+func setMediumIntegrity(tok windows.Token) error {
+	sid, err := windows.CreateWellKnownSid(windows.WinMediumLabelSid)
+	if err != nil {
+		return err
+	}
+	label := windows.Tokenmandatorylabel{
+		Label: windows.SIDAndAttributes{Sid: sid, Attributes: windows.SE_GROUP_INTEGRITY},
+	}
+	return windows.SetTokenInformation(tok, windows.TokenIntegrityLevel,
+		(*byte)(unsafe.Pointer(&label)), label.Size())
+}
+
+// Our own session first, then the physical console, then any other active one; deduplicated, best first.
+func candidateSessions() []uint32 {
+	var out []uint32
+	add := func(id uint32) {
+		if id == 0 || id == 0xFFFFFFFF {
+			return
+		}
+		for _, seen := range out {
+			if seen == id {
+				return
+			}
+		}
+		out = append(out, id)
+	}
+	if id, ok := processSession(windows.GetCurrentProcessId()); ok {
+		add(id)
+	}
+	add(windows.WTSGetActiveConsoleSessionId())
+	for _, id := range activeSessions() {
+		add(id)
+	}
+	return out
+}
+
+func activeSessions() []uint32 {
+	var info *windows.WTS_SESSION_INFO
+	var count uint32
+	if err := windows.WTSEnumerateSessions(0, 0, 1, &info, &count); err != nil {
+		return nil
+	}
+	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(info)))
+
+	var out []uint32
+	for _, s := range unsafe.Slice(info, count) {
+		if s.State == windows.WTSActive {
+			out = append(out, s.SessionID)
+		}
+	}
+	return out
+}
+
+func processSession(pid uint32) (uint32, bool) {
+	var id uint32
+	if err := windows.ProcessIdToSessionId(pid, &id); err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+// Keeps only shells in a session we care about, nearest first: another signed-in user's token would put the child in their session, where our config file is unreachable.
+func shellCandidates(pids []uint32, prefer []uint32) []uint32 {
+	if len(prefer) == 0 {
+		return pids
+	}
+	out := make([]uint32, 0, len(pids))
+	for _, want := range prefer {
+		for _, pid := range pids {
+			if id, ok := processSession(pid); ok && id == want {
+				out = append(out, pid)
+			}
+		}
+	}
+	return out
+}
+
+// OpenProcessToken documents PROCESS_QUERY_INFORMATION; the limited right also works on modern Windows and is all a hardened process will hand out.
+func openProcessToken(pid uint32) (windows.Token, error) {
+	var errs []error
+	for _, access := range []uint32{windows.PROCESS_QUERY_INFORMATION, windows.PROCESS_QUERY_LIMITED_INFORMATION} {
+		proc, err := windows.OpenProcess(access, false, pid)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		var tok windows.Token
+		err = windows.OpenProcessToken(proc, windows.TOKEN_DUPLICATE|windows.TOKEN_QUERY, &tok)
+		_ = windows.CloseHandle(proc)
+		if err == nil {
+			return tok, nil
+		}
+		errs = append(errs, err)
+	}
+	return 0, errors.Join(errs...)
 }
 
 func primaryToken(src windows.Token) (windows.Token, error) {
@@ -308,27 +527,25 @@ func primaryToken(src windows.Token) (windows.Token, error) {
 	return dup, nil
 }
 
-func findProcess(name string) (uint32, error) {
+func findProcesses(name string) []uint32 {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
-		return 0, err
+		return nil
 	}
 	defer windows.CloseHandle(snap)
 
+	var out []uint32
 	var entry windows.ProcessEntry32
 	entry.Size = uint32(unsafe.Sizeof(entry))
 	for err = windows.Process32First(snap, &entry); err == nil; err = windows.Process32Next(snap, &entry) {
 		if strings.EqualFold(windows.UTF16ToString(entry.ExeFile[:]), name) {
-			return entry.ProcessID, nil
+			out = append(out, entry.ProcessID)
 		}
 	}
-	return 0, fmt.Errorf("process %q not found", name)
+	return out
 }
 
-// createSecureConfigFile creates the extra-process config file. On Windows
-// %TEMP% is a per-user directory and creating a symlink needs a privilege
-// unprivileged users lack, so an ordinary O_CREATE|O_EXCL temp file (the
-// default of os.CreateTemp) already creates a clean, un-hijackable file.
+// %TEMP% is per-user and symlink creation needs a privilege, so os.CreateTemp's O_CREATE|O_EXCL file is already un-hijackable.
 func createSecureConfigFile() (*os.File, string, error) {
 	f, err := os.CreateTemp("", "throne-extra-*.conf")
 	if err != nil {
@@ -337,13 +554,7 @@ func createSecureConfigFile() (*os.File, string, error) {
 	return f, f.Name(), nil
 }
 
-// makeConfigReadable best-effort grants the local Users group read access so a
-// de-privileged child can read the config. To avoid a path swap between
-// creation and the ACL change, it reopens the file WITHOUT following a reparse
-// point and verifies (by volume + file id) that it is the very object we
-// created before touching the DACL through that handle. A failure is
-// non-fatal: with the linked-token path the child is the same user at lower
-// integrity and can already read it.
+// Best-effort: every failure returns nil, since on the linked-token path the child is the same user and can already read the file.
 func makeConfigReadable(f *os.File) error {
 	usersSid, err := windows.CreateWellKnownSid(windows.WinBuiltinUsersSid)
 	if err != nil {
@@ -382,10 +593,7 @@ func makeConfigReadable(f *os.File) error {
 	return nil
 }
 
-// reopenSameObject opens f's path for DACL editing (WRITE_DAC|READ_CONTROL)
-// without following a final reparse point, then confirms it is the same
-// filesystem object as f (same volume + file id, not a reparse point). This
-// defeats a symlink/path swap performed after the file was created.
+// Reopens without following a final reparse point and re-checks volume+file id, defeating a path swap made after creation.
 func reopenSameObject(f *os.File) (windows.Handle, error) {
 	namep, err := windows.UTF16PtrFromString(f.Name())
 	if err != nil {

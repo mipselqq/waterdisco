@@ -54,6 +54,10 @@ namespace Configs
         auto url = QUrl(link);
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query());
+        const auto transport = query.queryItemValue("type");
+        // sing-box has no equivalent of the raw HTTP header, so these must go to Xray.
+        const bool rawHttp = (transport.isEmpty() || transport == "tcp" || transport == "raw")
+                             && query.queryItemValue("headerType") == "http";
 
         if (dataManager->settingsRepo->xray_vless_preference == Xray::AllVLESS
             || query.queryItemValue("type") == "xhttp"
@@ -321,11 +325,13 @@ namespace Configs
         if (headers.length()%2 != 0) {
             return "";
         }
+        QStringList formatted;
+        formatted.reserve(headers.length()/2);
+
         for (int i=0;i<headers.length();i+=2) {
-            result += headers[i]+"=";
-            result += "\""+headers[i+1]+"\" ";
+            formatted.append(QStringLiteral("%1=\"%2\"").arg(headers.at(i), headers.at(i + 1)));
         }
-        return result;
+        return formatted.join(' ');
     }
 
     QStringList parseHeaderPairs(const QString& rawHeader) {

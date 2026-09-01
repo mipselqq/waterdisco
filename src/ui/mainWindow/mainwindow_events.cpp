@@ -38,11 +38,9 @@ void MainWindow::changeEvent(QEvent *event) {
     const QEvent::Type type = event->type();
 
     if (type == QEvent::FontChange) {
-        // masterLogBrowser keeps its monospace family but follows the user's point size
         applyLogBrowserFont();
 
-        // QStyleSheetStyle caches font-dependent metrics and does not invalidate them on
-        // FontChange; toggling the stylesheet through "" forces a repolish.
+        // QStyleSheetStyle caches font metrics and ignores FontChange; toggling the stylesheet repolishes.
         auto refreshStylesheetCache = [](QWidget *w) {
             const QString ss = w->styleSheet();
             if (ss.isEmpty()) return;
@@ -53,9 +51,16 @@ void MainWindow::changeEvent(QEvent *event) {
         for (QWidget *w : allChildren) {
             refreshStylesheetCache(w);
         }
+        // Tab chrome lives in the app sheet now (ThemeManager owns it), and the loop above only
+        // reaches widget-level ones, so the tab bars would keep their stale metrics without this.
+        // Re-setting the same sheet only repolishes; clearing it first would run setStyle() and
+        // refill Qt's per-class platform font table over the font we are reacting to (#1829).
+        const QString appSheet = qApp->styleSheet();
+        if (!appSheet.isEmpty()) {
+            qApp->setStyleSheet(appSheet);
+        }
 
-        // No per-widget stylesheet here, so force a real FontChange via a different point
-        // size (Qt skips setFont when unchanged), then return to inheriting from qApp.
+        // Qt skips setFont when unchanged, so bump the point size to force a real FontChange.
         auto forceFontReapply = [](QWidget *w) {
             if (!w) return;
             const QFont currentFont = QApplication::font();
@@ -67,8 +72,7 @@ void MainWindow::changeEvent(QEvent *event) {
         };
         forceFontReapply(ui->profilesTableView);
 
-        // The toolButton widths and the window floor were derived from the old
-        // font; redo them now that the stylesheet caches above are clean.
+        // Redo the widths now that the stylesheet caches above are clean.
         applyTopBarMetrics();
         syncInfoPanelTop();
     }
@@ -76,13 +80,13 @@ void MainWindow::changeEvent(QEvent *event) {
         type == QEvent::PaletteChange ||
         type == QEvent::StyleChange) {
         scheduleProxyListRefresh();
+        refreshConnectionCloseIcons();
     }
     if (type == QEvent::WindowStateChange) {
         syncConnectionViewState();
     }
     if (type == QEvent::ActivationChange) {
-        // Stamped here, not from WindowDeactivate in eventFilter(): that only reaches
-        // visible filtered children, so state-dependent widgets could drop it.
+        // Not stamped from WindowDeactivate in eventFilter(): that only reaches visible filtered children.
         if (isActiveWindow()) sinceWindowDeactivated.invalidate();
         else sinceWindowDeactivated.start();
     }
@@ -173,8 +177,6 @@ void MainWindow::dropEvent(QDropEvent* event)
         for (const QUrl &url : mimeData->urls()) {
             if (url.isLocalFile()) paths << url.toLocalFile();
         }
-        // Remote urls (a link dragged out of a browser) carry no file and fall
-        // through to the text handler below.
         if (!paths.isEmpty()) {
             importFromFiles(paths);
             event->acceptProposedAction();
@@ -192,8 +194,7 @@ void MainWindow::dropEvent(QDropEvent* event)
 }
 
 void MainWindow::openTraySelector(bool routing) {
-    // Recreate on each open so it always shows fresh data. A previous one (if the user
-    // reopened quickly) closes itself; WA_DeleteOnClose frees it and the QPointer clears.
+    // Recreated on each open; WA_DeleteOnClose frees the old one and clears the QPointer.
     if (traySelector) traySelector->close();
 
     TrayProfileSelector::Callbacks cb;

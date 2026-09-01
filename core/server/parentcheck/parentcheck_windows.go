@@ -75,14 +75,7 @@ func getParentExePath(pid int) (string, error) {
 	return getDrivePath(windows.UTF16ToString(buf[:size])), nil
 }
 
-// resolveFinalPath returns the canonical filesystem path for path, with every
-// reparse point (symlink, junction, mount point) resolved. Returns the input
-// unchanged on any failure.
-//
-// We can't use filepath.EvalSymlinks: Go 1.23+ no longer reports
-// IO_REPARSE_TAG_MOUNT_POINT (NTFS junctions) as ModeSymlink, so EvalSymlinks
-// bails out with ENOTDIR when it traverses one — e.g. the "current" junction
-// Scoop creates under %SCOOP%\apps\<app>.
+// Not filepath.EvalSymlinks: Go 1.23+ stopped reporting NTFS junctions as ModeSymlink, so it bails with ENOTDIR on one (e.g. Scoop's "current").
 func resolveFinalPath(path string) string {
 	pathPtr, err := windows.UTF16PtrFromString(path)
 	if err != nil {
@@ -90,7 +83,7 @@ func resolveFinalPath(path string) string {
 	}
 	h, err := windows.CreateFile(
 		pathPtr,
-		0, // no access requested; we only need a handle to query the final path
+		0, // no access requested; a handle is enough to query the final path
 		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
 		nil,
 		windows.OPEN_EXISTING,
@@ -117,8 +110,7 @@ func resolveFinalPath(path string) string {
 		}
 	}
 	resolved := windows.UTF16ToString(buf[:n])
-	// GetFinalPathNameByHandle always returns extended-length form; turn
-	// \\?\UNC\server\share back into \\server\share, and strip \\?\ otherwise.
+	// GetFinalPathNameByHandle always returns the extended-length form.
 	if strings.HasPrefix(resolved, `\\?\UNC\`) {
 		return `\\` + resolved[len(`\\?\UNC\`):]
 	}

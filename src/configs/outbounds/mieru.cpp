@@ -8,7 +8,6 @@
 
 namespace Configs {
     namespace {
-        // Split the user-entered comma-separated port ranges into a JSON string array.
         QJsonArray splitServerPorts(const QString& raw) {
             QJsonArray arr;
             for (auto part : raw.split(',', Qt::SkipEmptyParts)) {
@@ -21,10 +20,7 @@ namespace Configs {
 
     bool mieru::ParseFromLink(const QString& link)
     {
-        // We support mieru's "simple" sharing link (mierus://user:pass@host?...).
-        // The "standard" mieru:// link is a base64-encoded protobuf blob with no
-        // authority/query that cannot be mapped onto our fields; reject it here so
-        // it is discarded cleanly instead of imported as a garbage profile.
+        // Only mieru's "simple" link is mappable; the "standard" base64-protobuf link is rejected here.
         auto url = QUrl(link);
         if (!url.isValid() || url.host().isEmpty() || url.query().isEmpty()) return false;
         auto query = QUrlQuery(url.query());
@@ -33,15 +29,11 @@ namespace Configs {
         username = url.userName();
         password = url.password();
 
-        // mieru pairs every port with its own protocol; we only model a single
-        // transport, so adopt the first one advertised.
+        // mieru pairs every port with its own protocol; we model one transport, so take the first.
         const auto protocols = query.allQueryItemValues("protocol");
         if (!protocols.isEmpty()) transport = protocols.first().toUpper();
 
-        // mieru lists each port (single or range) as a repeated "port" item. Map
-        // the first single port to server_port (the shared address:port field) and
-        // keep the rest in server_ports, normalising any extra single port to an
-        // "N-N" range since the core only accepts ranges in server_ports.
+        // The core only accepts ranges in server_ports, so an extra single port becomes "N-N".
         QStringList ranges;
         bool haveSinglePort = false;
         server_port = 0;
@@ -90,11 +82,7 @@ namespace Configs {
 
     QString mieru::ExportToLink()
     {
-        // Emit mieru's "simple" sharing link:
-        //   mierus://user:pass@host?profile=...&port=...&protocol=...
-        // mieru carries no authority port, so every port (the single server_port
-        // plus each server_ports range) is emitted as a repeated "port" item, each
-        // paired with a matching "protocol" so the two lists line up.
+        // mieru carries no authority port: every port is a repeated "port" item paired with a "protocol".
         QUrl url;
         QUrlQuery query;
         url.setScheme("mierus");

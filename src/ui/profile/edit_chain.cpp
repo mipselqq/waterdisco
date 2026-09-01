@@ -38,10 +38,7 @@ bool EditChain::onEnd() {
         auto e = Configs::dataManager->profilesRepo->GetProfile(id);
         if (e != nullptr && e->outbound != nullptr && e->outbound->IsExtraCore()) {
             extracoreCount++;
-            // A profile using an extra core must be the outermost detour,
-            // which corresponds to the top of the chain list (index 0). This
-            // is the only position where its local socks server (127.0.0.1)
-            // can be reached directly.
+            // An extra core is reachable only at 127.0.0.1, so it must be the outermost detour (index 0).
             if (i != 0) {
                 MessageBoxWarning(software_name, tr("Profiles that use an extra core can only be the final hop in the chain. Move it to the top of the list."));
                 return false;
@@ -65,11 +62,6 @@ void EditChain::on_select_profile_clicked() {
     });
 }
 
-// Whether a profile may be a hop, warning when the reason is worth explaining.
-// A chain is a fixed route, while an auto selector moves to another member
-// whenever the current one degrades — nesting one would give the chain a hop
-// that changes underneath it, so it is refused here instead of failing later at
-// build time with a message that points at the wrong thing.
 static bool acceptChainHop(const std::shared_ptr<Configs::Profile> &ent) {
     if (ent == nullptr || ent->type == "chain") return false;
     if (ent->type == "autoselector") {
@@ -88,7 +80,6 @@ void EditChain::AddProfileToListIfExist(int profileId) {
         auto w = new ProxyItem(this, _ent, wI);
         ui->listWidget->addItem(wI);
         ui->listWidget->setItemWidget(wI, w);
-        // change button
         connect(w->get_change_button(), &QPushButton::clicked, w, [=,this] {
             get_edit_dialog()->hide();
             GetMainWindow()->start_select_mode(w, [=,this](int newId) {

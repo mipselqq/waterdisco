@@ -8,8 +8,6 @@
 #include <cmath>
 
 namespace {
-    // Round a positive value up to a "nice" 1/2/5 * 10^n ceiling, so the scale
-    // label is stable and readable instead of jittering with every sample.
     double niceCeil(double v) {
         if (v <= 0) return 1.0;
         const double mag = std::pow(10.0, std::floor(std::log10(v)));
@@ -25,15 +23,13 @@ namespace {
 
 MiniChartWidget::MiniChartWidget(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(46);
-    // Expand into whatever height the card gives it, so the process card fills
-    // instead of leaving dead space.
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
 void MiniChartWidget::setCapacity(int n) {
     cap_ = n > 1 ? n : 1;
-    while (a_.size() > cap_) a_.removeFirst();
-    while (b_.size() > cap_) b_.removeFirst();
+    while (a_.size() > static_cast<std::size_t>(cap_)) a_.pop_front();
+    while (b_.size() > static_cast<std::size_t>(cap_)) b_.pop_front();
     update();
 }
 
@@ -59,10 +55,10 @@ void MiniChartWidget::setCaption(const QString& caption) {
 }
 
 void MiniChartWidget::push(double primary, double secondary) {
-    a_.append(primary);
-    b_.append(secondary);
-    while (a_.size() > cap_) a_.removeFirst();
-    while (b_.size() > cap_) b_.removeFirst();
+    a_.push_back(primary);
+    b_.push_back(secondary);
+    while (a_.size() > static_cast<std::size_t>(cap_)) a_.pop_front();
+    while (b_.size() > static_cast<std::size_t>(cap_)) b_.pop_front();
     update();
 }
 
@@ -84,7 +80,6 @@ void MiniChartWidget::paintEvent(QPaintEvent*) {
         secondary.setAlpha(120);
     }
 
-    // Vertical scale: fixed if requested, otherwise a nice ceiling above the peak.
     double maxV = fixedMax_;
     if (maxV <= 0) {
         double peak = 0;
@@ -94,9 +89,7 @@ void MiniChartWidget::paintEvent(QPaintEvent*) {
     }
     if (maxV <= 0) maxV = 1.0;
 
-    // The whole widget is the panel. Labels live in top/bottom strips *inside* it,
-    // so the data band keeps a fixed geometry no matter how wide the labels are —
-    // that's what keeps sibling charts aligned to the same length.
+    // Labels live inside the panel, so the data band's geometry stays identical across sibling charts.
     const QRectF panel = QRectF(rect()).adjusted(1.5, 1.5, -1.5, -1.5);
     if (panel.width() <= 2 || panel.height() <= 2) return;
 
@@ -118,8 +111,8 @@ void MiniChartWidget::paintEvent(QPaintEvent*) {
 
     const double stepX = plot.width() / static_cast<double>(cap_ - 1 > 0 ? cap_ - 1 : 1);
 
-    auto drawSeries = [&](const QVector<double>& s, const QColor& color, bool fill) {
-        if (s.isEmpty()) return;
+    auto drawSeries = [&](const std::deque<double>& s, const QColor& color, bool fill) {
+        if (s.empty()) return;
         const int n = s.size();
         // Newest sample hugs the right edge; older samples extend left.
         const auto pointAt = [&](int i) {
@@ -148,7 +141,6 @@ void MiniChartWidget::paintEvent(QPaintEvent*) {
             p.setBrush(Qt::NoBrush);
             p.drawPath(line);
         }
-        // Dot on the latest sample so the current level is easy to spot.
         p.setPen(Qt::NoPen);
         p.setBrush(color);
         p.drawEllipse(pointAt(n - 1), 2.2, 2.2);
@@ -158,8 +150,7 @@ void MiniChartWidget::paintEvent(QPaintEvent*) {
     drawSeries(b_, secondary, false);
     drawSeries(a_, primary, true);
 
-    // Labels last, so they stay legible over the series: scale ceiling top-left,
-    // 0 bottom-left, caption (metric name) bottom-right.
+    // Drawn last so they stay legible over the series.
     p.setFont(labelFont);
     QColor scaleColor = textColor;
     scaleColor.setAlpha(150);

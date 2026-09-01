@@ -5,71 +5,46 @@
 
 namespace Configs
 {
-    // A profile that tracks a whole group instead of one server.
-    //
-    // Membership is resolved at build time from `gid` (plus the filters), so
-    // servers added by a subscription update join the selector with no user
-    // action. Ranking is done client-side by Throne's own URL test — `pool`
-    // holds the result, best first, capped at `poolCap`. Only the first
-    // `buildLimit` of that pool are actually emitted into the running config;
-    // the core's auto-selector then does the fast switching among those.
+    // Membership resolves at build time from gid; ranking is client-side, best first in pool.
     class autoSelector : public outbound
     {
     public:
-        // --- membership -------------------------------------------------
         int gid = -1;
         QString nameFilter;             // regex over the profile name, empty = all
         QString countryFilter;          // comma-separated ISO codes, empty = all
-        bool excludeUnavailable = true; // skip profiles whose last test failed
+        bool excludeUnavailable = true;
 
-        int poolCap = 1000;   // hard cap on how many profiles may be ranked
+        int poolCap = 1000;
         int buildLimit = 300; // how many of the ranked pool enter the config
 
-        // How long an existing URL-test result stays trustworthy, in minutes.
-        // Results inside this window — including ones the user produced by
-        // testing the group by hand — are reused as-is; older ones are
-        // re-measured. 0 disables reuse entirely (always re-test).
+        // Minutes an existing URL-test result stays trustworthy; 0 always re-tests.
         int resultValidityMins = 1440;
 
-        // --- policy -----------------------------------------------------
         QString testURL;         // empty = fall back to the global test URL
         QString connectivityURL; // direct probe used to spot a local outage
         int intervalSec = 300;
         int benchIntervalSec = 600;
-        // How often the profile currently in use is re-checked on its own. Kept
-        // separate from intervalSec because that one is sized for the cost of
-        // sweeping hundreds of members, which is far too slow for the one member
-        // actually carrying traffic — and a server that breaks while still
-        // accepting connections raises no error for anything else to catch.
+        // Re-check interval for the in-use member; a break that still accepts connections raises no error elsewhere.
         int watchIntervalSec = 15;
         int activeSize = 8;
         int sampling = 10;
         int toleranceMs = 300;
         int maxRTTms = 0; // 0 = no ceiling
-        // How many members are kept confirmed working at any time. This is the
-        // instant-failover pool, not a balancing setting: with a set of one, a
-        // single working profile would be enough to stop caring whether any
-        // other still works, and its failure would mean a cold search.
+        // How many members are kept confirmed working: the instant-failover pool, not a balancing setting.
         int expected = 3;
         int dialRetries = 2;
         bool interruptOnSwitch = true;
 
-        // Load balancing across the qualified set. Off by default: a single
-        // sticky pick keeps session affinity and exact traffic accounting.
+        // Off by default: a single sticky pick keeps session affinity and exact traffic accounting.
         bool balance = false;
         QString balanceMode = "rotate"; // "rotate" | "connection"
         int balanceIntervalSec = 30;
 
-        // --- persisted state --------------------------------------------
         // Ranked membership from the last client-side sweep, best first.
         QList<int> pool;
         qint64 poolRankedAt = 0;
-        // A member the user picked by hand in the stats dialog, -1 for fully
-        // automatic. A standing preference rather than run-scoped state, so it
-        // outlives a restart; the core drops it by itself if that profile is not
-        // in the pool it ends up building.
+        // Hand-picked member, -1 = automatic; the core drops it if that profile is not in the built pool.
         int pinnedID = -1;
-        // The subset actually emitted into the last built config.
         QList<int> lastBuilt;
         qint64 lastBuiltAt = 0;
         // Compact usage history, newest first: see HistoryEntry.
@@ -77,9 +52,7 @@ namespace Configs
 
         QString DisplayType() override { return QObject::tr("Auto Selector"); }
 
-        // The tracked group's name — a selector has no server of its own, and
-        // the group it draws from is the one thing that identifies it. Defined
-        // in autoselector.cpp because it has to reach the group repository.
+        // The tracked group's name; defined in the .cpp because it reaches the group repository.
         QString DisplayAddress() override;
 
         // No security of its own; it inherits whatever its members use.
@@ -159,13 +132,11 @@ namespace Configs
 
         BuildResult Build() override
         {
-            // The group outbound is assembled in generate.cpp, where the member
-            // profiles are resolvable; there is nothing to emit from here.
+            // The group outbound is assembled in generate.cpp, where members are resolvable.
             return {{}, "Cannot call Build on an auto selector config"};
         }
 
-        // Clamp everything a hand-edited profile could put out of range. Called
-        // after parsing and before every build.
+        // Clamps what a hand-edited profile could put out of range; runs before every build.
         void Normalize()
         {
             if (poolCap < 1) poolCap = 1;
@@ -177,13 +148,11 @@ namespace Configs
             if (intervalSec < 10) intervalSec = 10;
             if (benchIntervalSec < intervalSec) benchIntervalSec = intervalSec;
             if (watchIntervalSec < 5) watchIntervalSec = 5;
-            // Watching slower than the whole tier is probed would make it dead
-            // weight; the round already covers the selected member by then.
+            // Watching slower than the full round makes it dead weight.
             if (watchIntervalSec > intervalSec) watchIntervalSec = intervalSec;
             if (activeSize < 1) activeSize = 1;
             if (expected < 1) expected = 1;
-            // The ready set has to sit inside the closely-checked set, or some
-            // members would be advertised as ready on stale bench-rate data.
+            // The ready set must sit inside the closely-checked set, or readiness rides on stale bench data.
             if (activeSize < expected) activeSize = expected;
             if (activeSize > buildLimit) activeSize = buildLimit;
             if (sampling < 2) sampling = 2;
@@ -197,13 +166,9 @@ namespace Configs
             if (balanceMode != "connection") balanceMode = "rotate";
         }
 
-        // How many members may be ranked, and how many may go into one config.
-        // The build ceiling is bounded by outbound instantiation cost at box
-        // start, not by the core's probing, which is sampled and stays cheap.
         static constexpr int kMaxPoolCap = 3000;
         static constexpr int kMaxBuildLimit = 500;
 
-        // ---- history ---------------------------------------------------
         struct HistoryEntry {
             int id = -1;
             qint64 firstUsed = 0;
@@ -233,8 +198,7 @@ namespace Configs
             return entries;
         }
 
-        // Records that `ids` entered a build. Entries are kept newest-first so
-        // the LRU trim at the tail drops the least recently used members.
+        // Newest-first, so the LRU trim at the tail drops the least recently used.
         void RecordHistory(const QList<int> &ids, const QHash<int, QString> &names, qint64 now)
         {
             QHash<int, HistoryEntry> byID;

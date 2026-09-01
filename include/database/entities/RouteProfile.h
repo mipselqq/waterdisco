@@ -8,15 +8,6 @@
 namespace Configs {
     const int INVALID_ID = -99999;
 
-    // Address ranges Tun hands straight to the physical NIC instead of routing
-    // them through the core (the "private range bypass"). Loopback and broadcast
-    // are deliberately absent: those are bypassed unconditionally, because routing
-    // them into the tun breaks the internal sing-box <-> Xray bridges and the local
-    // DNS server. A route rule that targets one of these may claim it back.
-    inline QStringList tunBypassablePrivateRanges() {
-        return {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "224.0.0.0/4"};
-    }
-
     enum simpleAction{bypass, block, proxy, warpBypass};
     inline QString simpleActionToString(simpleAction action)
     {
@@ -34,22 +25,19 @@ namespace Configs {
         QList<std::shared_ptr<RouteRule>> Rules;
         int defaultOutboundID = proxyID;
 
-        // Raw profiles carry a full sing-box `route` JSON object (as text) instead of
-        // structured Rules. When preventModifications is set we use it verbatim (after
-        // outbound-id translation); otherwise Throne still injects its internal plumbing.
+        // rawRoute is a whole sing-box `route` JSON object; preventModifications uses it verbatim, otherwise Throne still injects its plumbing.
         bool isRaw = false;
         QString rawRoute = "";
         bool preventModifications = false;
 
-        // Remote profiles fetch their rules from a URL (content may be a throne://route deep
-        // link, its base64, or the JSON share object). The profile is a normal *structured*
-        // profile locally and stays user-editable; a manual/auto update re-fetches from
-        // remoteURL and overwrites the rules (the local name is kept). Raw remote profiles
-        // are intentionally unsupported for now.
+        // Remote profiles stay structured and user-editable; an update re-fetches remoteURL and overwrites Rules, keeping the local name.
         bool isRemote = false;
         QString remoteURL = "";
         bool autoUpdate = false;
-        qint64 remoteLastUpdate = 0; // epoch seconds of the last successful remote fetch
+        qint64 remoteLastUpdate = 0; // epoch seconds
+
+        // Profile ids of openvpn/openconnect profiles run alongside this routing profile.
+        QList<int> endpointProfileIDs;
 
         RouteProfile() = default;
 
@@ -59,31 +47,26 @@ namespace Configs {
 
         QJsonArray get_route_rules(bool forView = false, std::map<int, QString> outboundMap = {});
 
-        // Lossless share schema: a tagged JSON object carrying the profile name, default
-        // outbound and every rule (with its simple/advanced type).
-        QJsonObject ToShareObject();
+        // Endpoints travel as whole configs with credentials cleared; one that cannot is skipped into *warnings.
+        QJsonObject ToShareObject(QString* warnings = nullptr);
         // ToShareObject() compacted, base64url-encoded, wrapped as throne://route/<...>
-        QString ToShareLink();
-        // Parse any shared form: a throne://route link, a base64 blob, a raw share object,
-        // or a legacy bare rule array. Returns nullptr and fills *fatalError on failure;
-        // non-fatal notes (e.g. outbound fallbacks) go to *warnings. *wasOldArray is set
-        // true when the input was a legacy array (no name / default outbound to import).
-        static std::shared_ptr<RouteProfile> FromShareInput(const QString& input, QString* fatalError, QString* warnings, bool* wasOldArray);
+        QString ToShareLink(QString* warnings = nullptr);
+        // *wasOldArray = legacy bare rule array (no name / default outbound); materializeEndpoints=false matches shared endpoints without creating local ones.
+        static std::shared_ptr<RouteProfile> FromShareInput(const QString& input, QString* fatalError, QString* warnings, bool* wasOldArray, bool materializeEndpoints = true);
 
-        // Parse a throne://remoteRoute/<...> deep link into unsaved remote route profiles
-        // (id=-1, isRemote, remoteURL, autoUpdate, name defaulting to the URL host). *wasRemoteRouteLink
-        // is set true when the input is a remoteRoute link at all (even if its payload is invalid);
-        // on a bad payload the list is empty and *error explains why. Returns {} with
-        // *wasRemoteRouteLink=false when the input isn't a remoteRoute link, so callers can fall
-        // through to other formats.
+        // *wasRemoteRouteLink is true even when the payload is invalid; a non-remoteRoute input returns {} with it false so callers can fall through.
         static QList<std::shared_ptr<RouteProfile>> FromRemoteRoutesLink(const QString& input, bool* wasRemoteRouteLink, QString* error);
 
-        // Raw-profile helpers: recursively collect referenced outbound ids (from `outbound`
-        // and top-level `final` fields) and translate those numeric ids to sing-box tags.
         static QList<int> CollectRawOutboundIds(const QJsonObject& route);
         static QJsonObject TranslateRawOutbounds(const QJsonObject& route, const std::map<int, QString>& outboundMap);
 
         static std::shared_ptr<RouteProfile> GetDefaultChain();
+
+        // The positional placeholder paired with an endpoint, correlated by type + outboundID.
+        static std::shared_ptr<RouteRule> MakeEndpointRule(int endpointProfileID);
+
+        // One endpointPreferredBy rule per listed endpoint; prunes orphans, appends missing. Raw: no-op.
+        void SyncEndpointRules();
 
         std::shared_ptr<QList<int>> get_used_outbounds();
 
@@ -95,10 +78,7 @@ namespace Configs {
 
         QStringList get_direct_ips();
 
-        // Raw destination IP CIDRs the profile pulls away from a plain direct exit
-        // (routed to any non-direct outbound, or rejected). Tun needs these to decide
-        // which ranges it must carry itself instead of bypassing them to the physical
-        // NIC. Rule-sets are not resolvable at build time and are left out.
+        // CIDRs pulled away from a direct exit, so Tun knows which ranges it must carry; rule-sets aren't resolvable at build time and are left out.
         QStringList get_hijacked_ips();
 
         bool IsEmpty();

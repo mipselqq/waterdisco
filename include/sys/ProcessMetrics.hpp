@@ -4,28 +4,16 @@
 #include <QtGlobal>
 
 namespace Sys {
-    // Per-process CPU% and resident-memory sampler.
-    //
-    // CPU% is a rate: it is derived from the change in the process's cumulative
-    // CPU time between two successive samples divided by the elapsed wall-clock
-    // time, then normalized by the logical CPU count (so a value of 100 means the
-    // whole machine). Because a rate needs two data points, the first sample for a
-    // given pid reports cpuPercent = 0 and just seeds the baseline. Sample on a
-    // fixed cadence (e.g. from a timer) for a stable reading.
+    // CPU% is a rate normalized by the logical CPU count (100 = the whole machine); the first sample for a pid only seeds the baseline.
     class ProcessMetrics {
     public:
         struct Sample {
             bool ok = false;         // false when the pid could not be queried
-            qint64 rssBytes = 0;     // private memory footprint, bytes, as the OS
-                                     // task manager reports it (Windows: private
-                                     // working set; macOS: phys_footprint; Linux: RSS)
+            qint64 rssBytes = 0;     // bytes: Windows private working set, macOS phys_footprint, Linux RSS
             double cpuPercent = 0.0; // 0..100 of total machine CPU; 0 on first sample
         };
 
-        // Sample the given process id (0/negative -> not ok). Keeps a per-pid
-        // baseline internally so consecutive calls yield the CPU rate. A pid that
-        // is reused by a new process is handled by the non-negative-delta guard
-        // (the fresh process reports less cumulative CPU, so that tick reads 0).
+        // 0/negative pid -> not ok; a reused pid reads 0 for that tick via the non-negative-delta guard.
         Sample sample(qint64 pid);
 
     private:

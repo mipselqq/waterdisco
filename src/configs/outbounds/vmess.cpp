@@ -1,5 +1,6 @@
 #include "include/configs/outbounds/vmess.h"
 
+#include <QJsonDocument>
 #include <QUrlQuery>
 #include <include/global/Utils.hpp>
 
@@ -24,7 +25,8 @@ namespace Configs {
                 if (QString type = objN["type"].toString(); type == "http") net = "http";
                 transport->type = net;
                 transport->host = objN["host"].toString();
-                transport->path = objN["path"].toString();
+                if (net == "grpc") transport->service_name = objN["path"].toString();
+                else transport->path = objN["path"].toString();
                 
                 QString scy = objN["scy"].toString();
                 if (!scy.isEmpty()) security = scy;
@@ -33,8 +35,29 @@ namespace Configs {
                 if (tlsStr == "tls") {
                     tls->enabled = true;
                     tls->server_name = objN["sni"].toString();
+                    tls->alpn = objN["alpn"].toString().split(',', Qt::SkipEmptyParts);
+                    const auto insecure = objN.contains("insecure")
+                                              ? objN["insecure"].toVariant().toString()
+                                              : objN["allowInsecure"].toVariant().toString();
+                    tls->insecure = insecure == "1" || insecure == "true";
+                    if (const auto fingerprint = objN["fp"].toString(); !fingerprint.isEmpty()) {
+                        tls->utls->enabled = true;
+                        tls->utls->fingerPrint = fingerprint;
+                    }
                 }
-                
+
+                // throneExtra holds what the V2RayN schema cannot; the dummy authority only satisfies QUrl.
+                if (const auto extra = objN["throneExtra"].toString(); !extra.isEmpty()) {
+                    const QString extraLink = "vmess://x@127.0.0.1:1?" + extra;
+                    transport->ParseFromLink(extraLink);
+                    multiplex->ParseFromLink(extraLink);
+                    const auto extraQuery = QUrlQuery(extra);
+                    if (extraQuery.hasQueryItem("globalPadding")) global_padding = extraQuery.queryItemValue("globalPadding") == "true";
+                    if (extraQuery.hasQueryItem("authenticatedLength")) authenticated_length = extraQuery.queryItemValue("authenticatedLength") == "true";
+                    if (extraQuery.hasQueryItem("packetEncoding")) packet_encoding = extraQuery.queryItemValue("packetEncoding");
+                    if (!Configs::vPacketEncoding.contains(packet_encoding)) packet_encoding = "";
+                }
+
                 return !(uuid.isEmpty() || server.isEmpty());
             }
         }
@@ -103,27 +126,42 @@ namespace Configs {
 
     QString vmess::ExportToLink()
     {
-        QUrl url;
-        QUrlQuery query;
-        url.setScheme("vmess");
-        url.setUserName(uuid);
-        url.setHost(server);
-        url.setPort(server_port);
-        if (!name.isEmpty()) url.setFragment(name);
+        const auto network = transport->type.isEmpty() || transport->type == "tcp"
+                                 ? QStringLiteral("tcp")
+                                 : transport->type == "http" ? QStringLiteral("h2") : transport->type;
+        const auto path = network == "grpc" ? transport->service_name : transport->path;
 
-        if (security != "auto") query.addQueryItem("encryption", security);
+        // What the V2RayN schema has no room for; other clients ignore the unknown key.
+        QUrlQuery extra;
+        mergeUrlQuery(extra, transport->ExportToLink());
+        mergeUrlQuery(extra, multiplex->ExportToLink());
+        if (global_padding) extra.addQueryItem("globalPadding", "true");
+        if (authenticated_length) extra.addQueryItem("authenticatedLength", "true");
+        if (packet_encoding != "xudp") {
+            extra.addQueryItem("packetEncoding", packet_encoding.isEmpty() ? "none" : packet_encoding);
+        }
 
-        mergeUrlQuery(query, tls->ExportToLink());
-        mergeUrlQuery(query, transport->ExportToLink());
-        mergeUrlQuery(query, multiplex->ExportToLink());
-        
-        if (alter_id > 0) query.addQueryItem("alterId", QString::number(alter_id));
-        if (global_padding) query.addQueryItem("globalPadding", "true");
-        if (authenticated_length) query.addQueryItem("authenticatedLength", "true");
-        query.addQueryItem("packetEncoding", packet_encoding.isEmpty() ? "none" : packet_encoding);
-        
-        if (!query.isEmpty()) url.setQuery(query);
-        return url.toString(QUrl::FullyEncoded);
+        QJsonObject object{
+            {"v", "2"},
+            {"ps", name},
+            {"add", server},
+            {"port", QString::number(server_port)},
+            {"id", uuid},
+            {"aid", QString::number(alter_id)},
+            {"scy", security.isEmpty() ? QStringLiteral("auto") : security},
+            {"net", network},
+            {"type", "none"},
+            {"host", transport->host},
+            {"path", path},
+            {"tls", tls->enabled ? QStringLiteral("tls") : QString()},
+            {"sni", tls->server_name},
+            {"alpn", tls->alpn.join(',')},
+            {"fp", tls->utls->fingerPrint},
+        };
+        if (tls->insecure) object["allowInsecure"] = QStringLiteral("1");
+        if (!extra.isEmpty()) object["throneExtra"] = extra.toString(QUrl::FullyEncoded);
+        const auto payload = QJsonDocument(object).toJson(QJsonDocument::Compact).toBase64();
+        return QStringLiteral("vmess://") + QString::fromLatin1(payload);
     }
 
     QJsonObject vmess::ExportToJson()

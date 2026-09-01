@@ -10,9 +10,7 @@
 #include <QFontMetrics>
 
 namespace {
-    // Stacked-segment colours. Picked to read on both light and dark themes.
-    // Prefixed to stay unique under the project's unity build (anonymous-namespace
-    // symbols from batched translation units share one namespace).
+    // Prefixed: the unity build merges anonymous-namespace symbols from batched translation units.
     const QColor kChartDownColor(0x4F, 0x8A, 0xF7); // blue
     const QColor kChartUpColor(0x34, 0xC9, 0x8A);   // green
     constexpr int kChartMarginLeft = 66;
@@ -36,9 +34,7 @@ void TrafficChartWidget::setData(const QList<Bar>& bars, int labelStride, long l
 }
 
 QString TrafficChartWidget::bucketRangeText(long long bucketStart) const {
-    // A bar is a span, not an instant: a daily bucket reads as its calendar date,
-    // an hourly (or finer) bucket as "start – end" on the local clock. Times come
-    // from fromSecsSinceEpoch, which renders in the system timezone.
+    // fromSecsSinceEpoch renders in the system timezone, matching how the buckets were aligned.
     const QDateTime start = QDateTime::fromSecsSinceEpoch(bucketStart);
     if (bucketSecs_ >= 86400LL) {
         return start.toString("ddd, yyyy-MM-dd");
@@ -71,7 +67,6 @@ void TrafficChartWidget::paintEvent(QPaintEvent*) {
         return;
     }
 
-    // Horizontal gridlines + y-axis labels.
     const QFontMetrics fm(font());
     for (int i = 0; i <= kChartGridLines; ++i) {
         const double frac = static_cast<double>(i) / kChartGridLines;
@@ -83,15 +78,13 @@ void TrafficChartWidget::paintEvent(QPaintEvent*) {
                    Qt::AlignRight | Qt::AlignVCenter, ReadableSize(static_cast<qint64>(maxTotal * frac)));
     }
 
-    // Bars (download stacked under upload).
     const int n = bars_.size();
     const double slotW = plot.width() / n;
     const double barW = qMin(slotW * 0.66, 44.0);
     for (int i = 0; i < n; ++i) {
         const auto& b = bars_[i];
         const double slotLeft = plot.left() + i * slotW;
-        // Full-height slot column for hover hit-testing, so the user can aim
-        // anywhere in the column rather than at a possibly tiny bar.
+        // Hit-test against the full-height slot, not the bar, which can be a few pixels tall.
         barRects_.append(QRectF(slotLeft, plot.top(), slotW, plot.height()));
 
         if (hovered_ == i) {
@@ -108,7 +101,6 @@ void TrafficChartWidget::paintEvent(QPaintEvent*) {
         if (upH > 0) p.fillRect(QRectF(x, plot.bottom() - downH - upH, barW, upH), kChartUpColor);
     }
 
-    // X-axis labels (strided to avoid overlap).
     p.setPen(mutedColor);
     for (int i = 0; i < n; ++i) {
         if (i % labelStride_ != 0) continue;
@@ -117,7 +109,6 @@ void TrafficChartWidget::paintEvent(QPaintEvent*) {
                    Qt::AlignHCenter | Qt::AlignTop, bars_[i].label);
     }
 
-    // Legend (top-right).
     const int sw = fm.height() - 4; // swatch size
     const QString downLbl = tr("Download");
     const QString upLbl = tr("Upload");

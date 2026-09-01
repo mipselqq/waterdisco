@@ -12,7 +12,7 @@ public:
         setFixedSize(24, 24);
         auto pos = parent->rect().topRight();
         pos = parent->mapTo(window, pos);
-        pos.setX(pos.x() - 48); // ?
+        pos.setX(pos.x() - 48);
         move(pos);
         raise();
         setVisible(parent->isVisible());

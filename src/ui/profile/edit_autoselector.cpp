@@ -20,8 +20,6 @@ EditAutoSelector::EditAutoSelector(QWidget *parent) : QWidget(parent), ui(new Ui
     ui->balance_mode->addItem(tr("Rotate on a timer (keeps sessions stable)"), "rotate");
     ui->balance_mode->addItem(tr("Per connection (widest spread)"), "connection");
 
-    // Defaults are meant to work unattended, so everything but the group, the
-    // name filter and the balancing switch starts folded away.
     ui->advanced_area->setVisible(false);
     connect(ui->advanced_toggle, &QPushButton::toggled, this, [this](bool on) {
         ui->advanced_area->setVisible(on);
@@ -29,17 +27,12 @@ EditAutoSelector::EditAutoSelector(QWidget *parent) : QWidget(parent), ui(new Ui
         resizeDialogToContent();
     });
 
-    // Grid columns share the width evenly so the advanced area stays roughly
-    // square instead of growing into one tall column.
     ui->advanced_layout->setColumnStretch(0, 1);
     ui->advanced_layout->setColumnStretch(1, 1);
 
     mirrorTooltipsToLabels();
 
-    // Releasing the pin takes effect on the spot rather than on save: the button
-    // only exists when a pin is set, so there is nothing to weigh up, and a
-    // cancelled dialog silently restoring a preference the user just dropped
-    // would be worse than the small inconsistency of writing outside onEnd.
+    // Unlike the rest of this form, releasing the pin is written immediately, not in onEnd().
     connect(ui->pinned_clear, &QPushButton::clicked, this, [this] {
         m_pinnedID = -1;
         refreshPinnedRow();
@@ -49,8 +42,7 @@ EditAutoSelector::EditAutoSelector(QWidget *parent) : QWidget(parent), ui(new Ui
                 Configs::dataManager->profilesRepo->Save(ent);
             }
         }
-        // The running core holds its own copy, so it has to hear about this too
-        // or nothing visible would happen until the next start.
+        // The running core holds its own copy of the pin.
         if (Stats::autoSelectorMonitor->Active()) {
             (void) Stats::autoSelectorMonitor->RequestSelect({});
         }
@@ -59,8 +51,6 @@ EditAutoSelector::EditAutoSelector(QWidget *parent) : QWidget(parent), ui(new Ui
     connect(ui->balance, &QCheckBox::toggled, this, [this] { updateBalanceEnabled(); });
     connect(ui->balance_mode, &QComboBox::currentIndexChanged, this, [this] { updateBalanceEnabled(); });
 
-    // Anything that changes membership re-runs the plan so the summary below
-    // the caps always describes what would actually be built.
     connect(ui->group, &QComboBox::currentIndexChanged, this, [this] { refreshPlanSummary(); });
     connect(ui->name_filter, &QLineEdit::textChanged, this, [this] { refreshPlanSummary(); });
     connect(ui->country_filter, &QLineEdit::textChanged, this, [this] { refreshPlanSummary(); });
@@ -74,31 +64,21 @@ EditAutoSelector::~EditAutoSelector() {
     delete ui;
 }
 
-// Hiding a child does not shrink a dialog on its own: every layout up the chain
-// caches the size it was last laid out at, and the dialog keeps whatever size it
-// was given. So invalidate the chain, then resize on the next event-loop pass —
-// the new size hint is only correct once the invalidation has propagated.
+// Hiding a child never shrinks the dialog: parent layouts cache their last size, so the resize is only correct one event-loop pass after the invalidation.
 void EditAutoSelector::resizeDialogToContent() {
     auto *dialog = get_edit_dialog ? get_edit_dialog() : nullptr;
     if (dialog == nullptr) return;
-    // updateGeometry() drops this widget's cached hint and propagates the
-    // invalidation up through every parent layout, so the dialog's own hint is
-    // recomputed rather than reused.
     if (layout() != nullptr) layout()->invalidate();
     updateGeometry();
 
     runOnThread([dialog] {
         if (auto *dialogLayout = dialog->layout()) dialogLayout->activate();
-        // resize(sizeHint()) rather than adjustSize(), which clamps to 2/3 of
-        // the screen; bound it ourselves so a tall form still cannot exceed the
-        // available desktop area.
+        // adjustSize() would clamp to 2/3 of the screen, so bound it here instead.
         const auto available = QGuiApplication::primaryScreen()->availableGeometry().size();
         dialog->resize(dialog->sizeHint().boundedTo(available));
     }, dialog);
 }
 
-// Every explanation lives on the field in the .ui; copy it onto the field's
-// label so hovering the words the user is actually reading works too.
 void EditAutoSelector::mirrorTooltipsToLabels() const {
     for (auto *form : findChildren<QFormLayout *>()) {
         for (int row = 0; row < form->rowCount(); row++) {
@@ -118,9 +98,7 @@ void EditAutoSelector::onStart(std::shared_ptr<Configs::Profile> _ent) {
     auto outbound = this->ent->AutoSelector();
     if (outbound == nullptr) return;
 
-    // Every setValue below fires valueChanged. Planning on each of those would
-    // walk the whole group up to a dozen times for nothing, and would do it
-    // against a form that is only half filled in.
+    // Every setValue below fires valueChanged, which would replan against a half-filled form.
     m_loading = true;
 
     for (int gid : Configs::dataManager->groupsRepo->GetGroupsTabOrder()) {
@@ -128,7 +106,6 @@ void EditAutoSelector::onStart(std::shared_ptr<Configs::Profile> _ent) {
         if (group == nullptr || group->archive) continue;
         ui->group->addItem(group->name, group->id);
     }
-    // A brand-new selector defaults to the group it is being created in.
     const int trackedGid = outbound->gid >= 0 ? outbound->gid : this->ent->gid;
     if (const int idx = ui->group->findData(trackedGid); idx >= 0) ui->group->setCurrentIndex(idx);
 
@@ -188,8 +165,8 @@ bool EditAutoSelector::onEnd() {
     }
 
     outbound->gid = gid;
-    outbound->nameFilter = ui->name_filter->text();
-    outbound->countryFilter = ui->country_filter->text();
+    outbound->nameFilter = ui->name_filter->text().trimmed();
+    outbound->countryFilter = ui->country_filter->text().trimmed();
     outbound->excludeUnavailable = ui->exclude_unavailable->isChecked();
     outbound->poolCap = ui->pool_cap->value();
     outbound->buildLimit = ui->build_limit->value();
@@ -214,8 +191,7 @@ bool EditAutoSelector::onEnd() {
     outbound->balanceIntervalSec = ui->balance_interval->value();
     outbound->Normalize();
 
-    // The pool is ranked membership; a filter change can invalidate it, so drop
-    // anything that no longer qualifies rather than carrying a stale ranking.
+    // The pool is a ranking, so a filter change can leave entries that no longer qualify.
     const auto candidates = Configs::AutoSelectorRankingCandidates(this->ent);
     const QSet<int> eligible(candidates.begin(), candidates.end());
     QList<int> pool;
@@ -226,9 +202,6 @@ bool EditAutoSelector::onEnd() {
     return true;
 }
 
-// The whole row disappears when nothing is pinned: an auto selector is
-// automatic by default, and a permanently visible "Preferred profile: none"
-// only invites the question of what it is for.
 void EditAutoSelector::refreshPinnedRow() const
 {
     const bool pinned = m_pinnedID >= 0;
@@ -246,9 +219,6 @@ void EditAutoSelector::refreshPinnedRow() const
 
 void EditAutoSelector::updateBalanceEnabled() const {
     const bool on = ui->balance->isChecked();
-    // "Keep ready" is not a balancing setting: it is how many profiles stay
-    // confirmed working so a failure can be covered instantly. It applies
-    // whether or not traffic is spread over them.
     ui->balance_mode->setEnabled(on);
     ui->balance_mode_l->setEnabled(on);
     const bool rotating = on && ui->balance_mode->currentData().toString() == "rotate";
@@ -274,18 +244,15 @@ void EditAutoSelector::refreshPlanSummary() {
     auto outbound = this->ent == nullptr ? nullptr : this->ent->AutoSelector();
     if (outbound == nullptr) return;
 
-    // Plan against a throwaway copy carrying the form's current values. Doing
-    // this in place would be wrong: PlanAutoSelector normalises the selector,
-    // and normalisation clamps fields the form has not written yet — a
-    // half-populated form would permanently shrink the real settings.
+    // Throwaway copy: PlanAutoSelector normalises, which would clamp fields the form hasn't written yet.
     auto probe = std::make_shared<Configs::Profile>(new Configs::autoSelector(*outbound),
                                                     QStringLiteral("autoselector"));
     probe->id = this->ent->id;
     probe->gid = this->ent->gid;
     auto *preview = probe->AutoSelector();
     preview->gid = ui->group->currentData().toInt();
-    preview->nameFilter = ui->name_filter->text();
-    preview->countryFilter = ui->country_filter->text();
+    preview->nameFilter = ui->name_filter->text().trimmed();
+    preview->countryFilter = ui->country_filter->text().trimmed();
     preview->excludeUnavailable = ui->exclude_unavailable->isChecked();
     preview->poolCap = ui->pool_cap->value();
     preview->buildLimit = ui->build_limit->value();

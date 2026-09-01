@@ -30,12 +30,7 @@ namespace Configs {
         long long traffic_dl = 0;
         long long traffic_up = 0;
     };
-    // Which logical categories a backup contains / a restore should apply.
-    // profiles -> groups, groups_order, profiles tables
-    // routes   -> route_profiles, route_rules tables
-    // settings -> settings table
-    // otp      -> otp_profiles table
-    // icons    -> icons/ folder (handled by the UI layer, not the database)
+    // icons is the icons/ folder, handled by the UI layer rather than the database.
     struct BackupParts {
         bool profiles = false;
         bool routes = false;
@@ -50,17 +45,14 @@ namespace Configs {
     // Max bound parameters per statement (SQLite default SQLITE_MAX_VARIABLE_NUMBER is 999).
     constexpr int BATCH_LIMIT_WRITE = 1500;
     constexpr int BATCH_LIMIT_READ = 4096;
-    // Run WAL checkpoint after this many write operations (exec or batch chunk).
     constexpr int WAL_CHECKPOINT_AFTER_WRITES = 10000;
 
-    // How long a statement waits for a competing writer's lock before SQLITE_BUSY
-    // is raised. SQLiteCpp defaults to 0, i.e. transient contention fails instantly
-    // and surfaces as an exception.
+    // SQLiteCpp defaults this to 0, so transient contention fails instantly as an exception.
     constexpr int BUSY_TIMEOUT_MS = 5000;
 
     // Both thresholds must be met; SQLite never returns freed pages to the OS on its own.
-    constexpr long long VACUUM_MIN_FREE_BYTES = 4LL * 1024 * 1024; // 4 MiB
-    constexpr double VACUUM_MIN_FREE_RATIO = 0.50;                 // 50%
+    constexpr long long VACUUM_MIN_FREE_BYTES = 4LL * 1024 * 1024;
+    constexpr double VACUUM_MIN_FREE_RATIO = 0.50;
 
     constexpr int INCREMENTAL_VACUUM_PAGES = 1024;
     constexpr unsigned long MAINTENANCE_DELAY_MS = 30000;
@@ -106,7 +98,7 @@ namespace Configs {
 
     private:
 
-        // 1. Bind one argument; explicit overloads avoid ambiguity on Linux (int32_t/int64_t/uint32_t)
+        // Explicit overloads avoid ambiguity on Linux (int32_t/int64_t/uint32_t).
         template<typename T>
         std::enable_if_t<std::is_integral_v<std::decay_t<T>>> bindOne(SQLite::Statement& query, int index, T&& value) {
             query.bind(index, static_cast<int64_t>(value));
@@ -129,10 +121,8 @@ namespace Configs {
         }
 
         void bindArgs(SQLite::Statement& query, int index) {
-            // No more args to bind
         }
 
-        // 2. The "PGX Style" Exec (No return value, e.g., UPDATE/INSERT)
         template<typename... Args>
         void exec0(const std::string& sql, Args&&... args) {
             SQLite::Statement query(db, sql);
@@ -141,11 +131,9 @@ namespace Configs {
             maybeCheckpoint(1);
         }
 
-        // Run WAL checkpoint manually (e.g. from a periodic timer). Safe to call from any thread.
+        // Safe to call from any thread.
         void checkpointWal();
 
-        // 3. Helper for fetching a single row
-        // Returns a Statement you can extract data from
         template<typename... Args>
         std::unique_ptr<SQLite::Statement> query0(const std::string& sql, Args&&... args) {
             auto query = std::make_unique<SQLite::Statement>(db, sql);
@@ -153,7 +141,6 @@ namespace Configs {
             return query;
         }
 
-        // 4. Execute DELETE FROM table WHERE idColumn IN (ids), chunked by BATCH_LIMIT
         void execDeleteByIdIn0(const std::string& table, const std::string& idColumn, const std::vector<int>& ids) {
             for (size_t off = 0; off < ids.size(); off += BATCH_LIMIT_WRITE) {
                 size_t end = std::min(off + BATCH_LIMIT_WRITE, ids.size());
@@ -162,7 +149,6 @@ namespace Configs {
             }
         }
 
-        // 5. Execute INSERT OR REPLACE INTO settings (key, value) VALUES ..., chunked (2 params per row -> BATCH_LIMIT/2 rows per chunk)
         void execBatchSettingsReplace0(const std::vector<std::pair<std::string, std::string>>& keyValues) {
             const size_t chunkSize = BATCH_LIMIT_WRITE / 2;
             for (size_t off = 0; off < keyValues.size(); off += chunkSize) {
@@ -173,7 +159,6 @@ namespace Configs {
             }
         }
 
-        // 6. Execute INSERT INTO table (colA, colB) VALUES ..., chunked (2 params per pair -> BATCH_LIMIT/2 pairs per chunk)
         void execBatchInsertIntPairs0(const std::string& table, const std::string& colA, const std::string& colB,
                                      const std::vector<int>& pairs) {
             if (pairs.size() < 2 || pairs.size() % 2 != 0) return;
@@ -202,7 +187,6 @@ namespace Configs {
             }
         }
 
-        // Same chunking as execBatchInsertProfiles; INSERT OR REPLACE for batch save/update
         void execBatchReplaceProfiles0(const std::vector<ProfileInsertRow>& rows) {
             const size_t chunkSize = BATCH_LIMIT_WRITE / 17;
             for (size_t off = 0; off < rows.size(); off += chunkSize) {
@@ -223,9 +207,7 @@ namespace Configs {
             }
         }
 
-        // Throwing variant of exec(): lets callers compose an explicit
-        // transaction (BEGIN/COMMIT/ROLLBACK) in which a failed statement must
-        // abort the whole unit instead of being swallowed per-statement.
+        // Throws instead of swallowing, so a caller's explicit transaction aborts as one unit.
         template<typename... Args>
         void execThrow(const std::string& sql, Args&&... args) {
             exec0(sql, std::forward<Args>(args)...);
@@ -288,14 +270,10 @@ namespace Configs {
         // Throws std::exception on failure.
         void restoreFrom(const std::string& srcPath);
 
-        // Create a snapshot at destPath containing only the selected categories.
-        // entity_ids is always retained so restored IDs stay consistent.
-        // Caller must delete destPath if it already exists. Throws on failure.
+        // entity_ids is always retained so restored IDs stay consistent; caller must delete destPath first. Throws on failure.
         void backupSelective(const std::string& destPath, const BackupParts& parts);
 
-        // Replace the selected categories in the live database with the contents
-        // of the snapshot at srcPath. Only columns present in both schemas are
-        // copied, so backups from other versions still restore. Throws on failure.
+        // Only columns present in both schemas are copied, so cross-version backups still restore. Throws on failure.
         void restoreSelective(const std::string& srcPath, const BackupParts& parts);
     };
 }

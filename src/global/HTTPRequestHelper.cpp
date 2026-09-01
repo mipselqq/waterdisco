@@ -78,12 +78,10 @@ namespace Configs_network {
             }
             MW_show_log(QString("SSL Errors: %1 %2").arg(error_str.join(","), Configs::dataManager->settingsRepo->net_insecure ? "(Ignored)" : ""));
         });
-        // Wait for response
         QEventLoop loop;
         connect(_reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
         loop.exec();
 
-        //
         auto result = HTTPResponse{_reply->error() == QNetworkReply::NetworkError::NoError ? "" : _reply->errorString(),
                                        _reply->readAll(), _reply->rawHeaderPairs()};
         _reply->deleteLater();
@@ -107,13 +105,14 @@ namespace Configs_network {
     }
 
     QString NetworkRequestHelper::GetHeader(const QList<QPair<QByteArray, QByteArray>> &header, const QString &name) {
+        const QByteArray needle = name.toLatin1();
         for (const auto &p: header) {
-            if (QString(p.first).toLower() == name.toLower()) return p.second;
+            if (p.first.compare(needle, Qt::CaseInsensitive) == 0) return p.second;
         }
-        return "";
+        return {};
     }
 
-    QString NetworkRequestHelper::DownloadAsset(const QString &url, const QString &fileName) {
+    QString NetworkRequestHelper::DownloadAsset(const QString &url, const QString &fileName, bool useProxy) {
         QNetworkRequest request;
         QNetworkAccessManager accessManager;
         request.setUrl(url);

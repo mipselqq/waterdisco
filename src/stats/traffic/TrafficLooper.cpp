@@ -36,11 +36,8 @@ namespace Stats {
         proxy->downlink_rate = 0;
         QSet<QString> countedProxyTags;
 
-        // For each chain group, read the matched-outbound's delta-since-last-query
-        // and credit it to every user-visible profile in the chain. Aggregate
-        // rates from all groups into the proxy entry for the status bar.
         for (auto& group : groups) {
-            const auto tagKey = group.watchTag.toStdString();
+            const auto& tagKey = group.watchTagKey;
             if (!resp.ups.contains(tagKey)) continue;
             const auto interval = now - group.last_update;
             group.last_update = now;
@@ -54,7 +51,6 @@ namespace Stats {
                 for (auto& profile : group.profiles) {
                     profile->traffic_uplink += up;
                     profile->traffic_downlink += down;
-                    // Mirror the per-profile crediting into the time-series module.
                     trafficStatsManager->AddConfigDelta(profile->id, up, down);
                 }
                 group.dirty = true;
@@ -73,8 +69,6 @@ namespace Stats {
             }
         }
 
-        // direct: not part of any chain group, tracked on its own for the
-        // status-bar split.
         direct->uplink_rate = 0;
         direct->downlink_rate = 0;
         const std::string directTag = "direct";
@@ -101,11 +95,10 @@ namespace Stats {
         elapsedTimer.start();
         int secs_since_save = 0;
         while (true) {
-            QThread::msleep(1000); // refresh every one second
+            QThread::msleep(1000);
 
             // profile start and stop
             if (!loop_enabled) {
-                // 停止
                 if (looping) {
                     looping = false;
                     runOnUiThread([=] {
@@ -121,13 +114,11 @@ namespace Stats {
                 });
                 continue;
             } else {
-                // 开始
                 if (!looping) {
                     looping = true;
                 }
             }
 
-            // do update
             loop_mutex.lock();
 
             UpdateAll();
@@ -139,7 +130,6 @@ namespace Stats {
                 PersistTraffic();
             }
 
-            // post to UI
             runOnUiThread([=,this] {
                 auto *m = GetMainWindow();
                 if (m == nullptr) return;
@@ -175,8 +165,7 @@ namespace Stats {
         QList<std::shared_ptr<Configs::Profile>> all;
         {
             QMutexLocker lk(&loop_mutex);
-            // A profile can appear in several groups (an auto selector is
-            // credited by every one of its members), so dedup before writing.
+            // A profile can appear in several groups (an auto selector is credited by every member), so dedup first.
             QSet<int> seen;
             for (auto& group : groups) {
                 if (!group.dirty) continue;
@@ -205,9 +194,7 @@ namespace Stats {
         direct = std::make_shared<TrafficLooperEntry>();
         direct->tag = "direct";
 
-        // Seed last_update to "now" so the first delta lands against the next
-        // tick rather than against time zero — otherwise the first rate sample
-        // gets divided by however long the app has been up.
+        // Seed last_update to now, or the first rate sample is divided by however long the app has been up.
         const auto now = elapsedTimer.isValid() ? elapsedTimer.elapsed() : 0;
 
         groups.clear();
@@ -215,14 +202,13 @@ namespace Stats {
             if (configGroup.watchTag.isEmpty() || configGroup.profiles.isEmpty()) continue;
             TrafficLooperGroup g;
             g.watchTag = configGroup.watchTag;
+            g.watchTagKey = configGroup.watchTag.toStdString();
             g.profiles = configGroup.profiles;
             g.last_update = now;
             groups.append(g);
         }
         direct_last_update = now;
 
-        // Snapshot reference metadata for the statistics module so per-config
-        // history stays meaningful even after a profile is renamed or removed.
         trafficStatsManager->EnsureDirectMeta();
         QSet<int> snapshotted;
         for (const auto& g : groups) {

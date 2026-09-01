@@ -14,7 +14,6 @@ namespace Configs
         // Seconds, or an AmneziaWG 3.0 range such as "22-30".
         QString persistent_keepalive;
 
-        // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         QString ExportToLink() override;
@@ -36,10 +35,7 @@ namespace Configs
         int worker_count = 0;
         QString udp_timeout;
 
-        // Amnezia (AmneziaWG) options. Mirrors the amnezia_wg object of the
-        // sing-box wireguard endpoint. jc/jmin/jmax and s1-s4 are integers,
-        // h1-h4 (magic headers) and i1-i5 (signature packets) are passed
-        // through verbatim as strings.
+        // AmneziaWG: jc/jmin/jmax and s1-s4 are integers; h1-h4 (magic headers) and i1-i5 (signature packets) are strings.
         bool enable_amnezia = false;
         int jc = 0;
         int jmin = 0;
@@ -58,8 +54,7 @@ namespace Configs
         QString i4;
         QString i5;
 
-        // AmneziaWG 3.0. header_protection_key is a base64 32-byte key; the
-        // rest are numeric ranges ("30" or "22-30") passed through verbatim.
+        // AmneziaWG 3.0: header_protection_key is a base64 32-byte key; the rest are ranges ("30" or "22-30").
         QString header_protection_key;
         QString content_padding_addition;
         QString rekey_after_time;
@@ -68,7 +63,10 @@ namespace Configs
         QString keepalive_timeout;
         QString max_handshake_attempts;
 
-        // baseConfig overrides
+        // AmneziaWG 3.1
+        bool random_trailers = false;
+        bool disable_cookies = false;
+
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         QString ExportToLink() override;

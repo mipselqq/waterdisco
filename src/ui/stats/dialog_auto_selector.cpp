@@ -51,8 +51,6 @@ namespace
         return member.state;
     }
 
-    // Sorting the status column by its label would be alphabetical noise; order
-    // it best-to-worst instead.
     int stateOrder(const Stats::AutoSelectorMemberView &member)
     {
         if (member.state == "ok") return 0;
@@ -62,9 +60,6 @@ namespace
         return 4; // dead
     }
 
-    // A sort key that may be absent. Missing values are parked at the end in
-    // both directions, so an unmeasured profile never floats to the top of a
-    // "fastest first" sort.
     struct Key {
         bool known = false;
         double value = 0;
@@ -87,13 +82,10 @@ namespace
 
     Key lastOKKey(const Stats::AutoSelectorMemberView &m) { return {m.lastOKms > 0, static_cast<double>(m.lastOKms)}; }
 
-    // Explains the row in plain words, so a demoted server never looks arbitrary.
     QString noteText(const Stats::AutoSelectorMemberView &member)
     {
         if (member.pinned) {
             if (member.selected) return QObject::tr("your choice, carrying traffic now");
-            // The pin is a preference, not an override: the selector had to move
-            // off it, and will come back once it is working again.
             return QObject::tr("your choice, but not usable right now");
         }
         if (member.selected) return QObject::tr("carrying traffic now");
@@ -112,7 +104,7 @@ namespace
         if (member.failures > 0) return QObject::tr("%1 of %2 checks failed").arg(member.failures).arg(member.samples);
         return {};
     }
-} // namespace
+}
 
 DialogAutoSelector::DialogAutoSelector(QWidget *parent) : QDialog(parent)
 {
@@ -175,8 +167,7 @@ DialogAutoSelector::DialogAutoSelector(QWidget *parent) : QDialog(parent)
     header->setSortIndicatorShown(true);
     header->setSortIndicator(m_sortColumn, m_sortOrder);
     connect(header, &QHeaderView::sectionClicked, this, &DialogAutoSelector::onHeaderClicked);
-    // Interactive rather than Stretch: the columns are auto-sized once and are
-    // then the user's to adjust, which Stretch would fight on every poll.
+    // Stretch would fight the user's column widths on every poll.
     header->setSectionResizeMode(QHeaderView::Interactive);
     header->setStretchLastSection(true);
     connect(m_table, &QTableWidget::itemSelectionChanged, this, [this] {
@@ -195,10 +186,7 @@ DialogAutoSelector::DialogAutoSelector(QWidget *parent) : QDialog(parent)
     fitToColumns();
 }
 
-// A QTableWidget's size hint is a fixed default that has nothing to do with how
-// many columns it holds, so sizing to the hint alone leaves all nine clamped to
-// a few characters each. Take what the columns actually need as the floor, then
-// bound the result to the desktop.
+// A QTableWidget's size hint is a fixed default unrelated to its column count.
 void DialogAutoSelector::fitToColumns()
 {
     int needed = 2 * m_table->frameWidth() + m_table->verticalScrollBar()->sizeHint().width() + 24;
@@ -214,8 +202,7 @@ QString DialogAutoSelector::highlightedTag() const
     const auto rows = m_table->selectionModel() != nullptr ? m_table->selectionModel()->selectedRows()
                                                            : QModelIndexList{};
     if (rows.isEmpty()) return {};
-    // The tag rides on the name cell rather than being looked up by row: sorting
-    // and filtering both reorder the table under the selection.
+    // The tag rides on the name cell: sorting and filtering reorder rows under the selection.
     const auto *item = m_table->item(rows.first().row(), ColName);
     return item == nullptr ? QString() : item->data(Qt::UserRole).toString();
 }
@@ -228,8 +215,7 @@ void DialogAutoSelector::applySelection(const QString &tag)
         m_footer->setText(tr("Could not change the profile: %1").arg(error));
         return;
     }
-    // The core applies this immediately; the table only catches up on the next
-    // poll, so say so rather than looking like nothing happened.
+    // The core applies this at once, but the table only catches up on the next poll.
     m_pinnedTag = tag;
     m_footer->setText(tag.isEmpty() ? tr("Back to automatic — the selector will choose again.")
                                     : tr("Now using your chosen profile."));
@@ -332,8 +318,7 @@ void DialogAutoSelector::sortRows(QList<Stats::AutoSelectorMemberView> &rows) co
                 break;
         }
         if (decided) return result;
-        // Rank is the tiebreak everywhere, so equal rows keep the order the core
-        // ranked them in rather than shuffling between polls.
+        // Rank is the tiebreak everywhere, so equal rows don't shuffle between polls.
         return a.rank < b.rank;
     });
 }
@@ -344,8 +329,6 @@ void DialogAutoSelector::onHeaderClicked(int column)
         m_sortOrder = m_sortOrder == Qt::AscendingOrder ? Qt::DescendingOrder : Qt::AscendingOrder;
     } else {
         m_sortColumn = column;
-        // Latency-like columns read best smallest-first; "last OK" and the
-        // success ratios are most useful worst-first.
         m_sortOrder = (column == ColLastOK || column == ColChecks || column == ColDials)
                           ? Qt::DescendingOrder
                           : Qt::AscendingOrder;
@@ -364,8 +347,7 @@ void DialogAutoSelector::buildRows(const Stats::AutoSelectorView &view)
     }
     sortRows(rows);
 
-    // Rebuilding cells on every 2s poll would fight the user's scroll position,
-    // so only the row count changes trigger a full reset.
+    // A full reset on every poll would fight the user's scroll position.
     if (m_table->rowCount() != rows.size()) m_table->setRowCount(static_cast<int>(rows.size()));
 
     const auto setCell = [this](int row, int column, const QString &text, const QString &tip = {}) {
@@ -407,21 +389,15 @@ void DialogAutoSelector::buildRows(const Stats::AutoSelectorView &view)
             nameItem->setFont(font);
         }
     }
-    // Only once: re-fitting on every 2s poll would yank column widths around
-    // under the user's cursor.
     if (!m_columnsSized && !rows.isEmpty()) {
         m_columnsSized = true;
         auto *header = m_table->horizontalHeader();
-        // Measure with the stretch off, or the last column reports the table's
-        // current width instead of what its content needs — and that width is
-        // exactly what is being computed here.
+        // With the stretch on, the last column reports the table's current width, not its content's.
         header->setStretchLastSection(false);
         m_table->resizeColumnsToContents();
-        // Give the two free-text columns room to breathe beyond their content.
         m_table->setColumnWidth(ColName, std::max(m_table->columnWidth(ColName), 220));
         m_table->setColumnWidth(ColNote, std::max(m_table->columnWidth(ColNote), 260));
-        // The first poll can land after the dialog is already up, so re-fit now
-        // that the real column widths are known.
+        // The first poll can land after the dialog is already up, so re-fit here.
         fitToColumns();
         header->setStretchLastSection(true);
     }

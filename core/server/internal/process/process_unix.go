@@ -12,8 +12,6 @@ import (
 	"syscall"
 )
 
-// startChild launches the extra process, dropped to the unprivileged real user
-// when the Core is setuid-root (see applyPrivilegeDrop), else as-is.
 func startChild(path string, args []string, noOut bool) (running, error) {
 	cmd := newCmd(path, args, noOut)
 	if err := applyPrivilegeDrop(cmd); err != nil {
@@ -22,19 +20,10 @@ func startChild(path string, args []string, noOut bool) (running, error) {
 	return startCmd(cmd)
 }
 
-// applyPrivilegeDrop makes the child run as the unprivileged real user.
-//
-// The Core is a setuid-root binary, so when an unprivileged user launches it
-// the effective uid is 0 but the real uid still identifies that user. We hand
-// that real uid/gid to the kernel via SysProcAttr.Credential, which performs
-// the setuid/setgid in the child before exec — race-free.
-//
-// If the Core is genuinely running as root (real uid 0, e.g. a root login or
-// `sudo`), there is no unprivileged user to recover, so we refuse to launch an
-// arbitrary binary with root privileges.
+// Under setuid-root the real uid still identifies the launching user; SysProcAttr.Credential setuids in the child before exec, race-free.
 func applyPrivilegeDrop(cmd *exec.Cmd) error {
 	if os.Geteuid() != 0 {
-		return nil // not elevated, run as-is
+		return nil
 	}
 	ruid := os.Getuid()
 	rgid := os.Getgid()
@@ -53,9 +42,6 @@ func applyPrivilegeDrop(cmd *exec.Cmd) error {
 	return nil
 }
 
-// supplementaryGroups resolves the real user's groups so the child keeps the
-// access the user normally has. If the user database can't be read, fall back
-// to just the primary gid (strictly fewer privileges, never more).
 func supplementaryGroups(ruid, rgid int) []uint32 {
 	fallback := []uint32{uint32(rgid)}
 	u, err := user.LookupId(strconv.Itoa(ruid))
@@ -78,8 +64,6 @@ func supplementaryGroups(ruid, rgid int) []uint32 {
 	return groups
 }
 
-// userEnv replaces HOME/USER/LOGNAME with the dropped user's values so the
-// child doesn't see root's identity.
 func userEnv(env []string, ruid int) []string {
 	u, err := user.LookupId(strconv.Itoa(ruid))
 	if err != nil {
@@ -98,16 +82,10 @@ func userEnv(env []string, ruid int) []string {
 	return append(out, "HOME="+u.HomeDir, "USER="+u.Username, "LOGNAME="+u.Username)
 }
 
-// makeConfigReadable ensures the de-privileged extra process can read the
-// config the (possibly elevated) Core just wrote. Every change is made on the
-// open file descriptor (fchown/fchmod), never by re-resolving the path, so a
-// symlink swapped in at the path after creation cannot redirect a privileged
-// chown/chmod onto an attacker-chosen target. The exact target uid/gid is
-// known, so the mode stays tight (0600) instead of world-exposing a config
-// that may carry secrets.
+// os.File.Chown/Chmod are fchown/fchmod on the fd, never a path re-resolution, so a swapped symlink cannot redirect them.
 func makeConfigReadable(f *os.File) error {
 	if os.Geteuid() != 0 {
-		return f.Chmod(0o600) // fchmod(fd)
+		return f.Chmod(0o600)
 	}
 	ruid := os.Getuid()
 	rgid := os.Getgid()
@@ -115,25 +93,13 @@ func makeConfigReadable(f *os.File) error {
 		// Start() refuses to launch in this case anyway.
 		return nil
 	}
-	if err := f.Chown(ruid, rgid); err != nil { // fchown(fd): symlink-proof
+	if err := f.Chown(ruid, rgid); err != nil {
 		return err
 	}
-	return f.Chmod(0o600) // fchmod(fd)
+	return f.Chmod(0o600)
 }
 
-// createSecureConfigFile creates the extra-process config file with a
-// race-free, symlink-proof scheme and returns the open file plus the path to
-// remove on cleanup.
-//
-// When not elevated there is no privilege boundary, so an ordinary temp file
-// is fine. When elevated (setuid-root) the invoking user controls $TMPDIR, so
-// os.TempDir() is untrusted: we instead create a fresh private directory in
-// the standard, root-owned, sticky /tmp. Its random name can't be predicted
-// and, being a root-owned entry in a sticky directory, it can't be unlinked or
-// swapped by another user. The directory is left root-owned and chmod'd to
-// 0711 (search-only): the child can traverse to the known config path but no
-// unprivileged user can write into it or list it, while the config file itself
-// (fchown'd to the user, 0600) stays secret. cleanup removes the directory.
+// When elevated, $TMPDIR is attacker-controlled: use a root-owned 0711 directory in sticky /tmp, which no unprivileged user can swap or list.
 func createSecureConfigFile() (*os.File, string, error) {
 	if os.Geteuid() != 0 {
 		f, err := os.CreateTemp("", "throne-extra-*.conf")

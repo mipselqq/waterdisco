@@ -4,11 +4,7 @@
 #include <QDir>
 #include <QProcess>
 
-// macOS registration is declarative: CFBundleURLTypes and CFBundleDocumentTypes
-// in Info.plist plus LaunchServices indexing the bundle. Launching from anywhere
-// normally registers it, but a moved bundle leaves a stale path, so on change we
-// force a re-index of the current location with `lsregister -f`. No file is
-// written here.
+// Registration is declarative (Info.plist + LaunchServices), but a moved bundle leaves a stale path, hence the forced `lsregister -f`.
 
 static const QString kLsregister =
     "/System/Library/Frameworks/CoreServices.framework/Frameworks/"
@@ -27,8 +23,17 @@ QString UrlScheme_DesiredState() {
     return bundle.isEmpty() ? QString() : "v2|" + bundle;
 }
 
+// LaunchServices keys handlers by bundle path, not by a shared name, so a second copy cannot take ours over.
+bool UrlScheme_IsCurrent() {
+    return true;
+}
+
 void UrlScheme_Apply() {
     const QString bundle = bundlePath();
     if (bundle.isEmpty()) return;
     QProcess::execute(kLsregister, {"-f", bundle});
+}
+
+// The scheme comes from the bundle's Info.plist, so there is nothing of ours to take back; unregistering only lasts until the next launch.
+void UrlScheme_Remove() {
 }

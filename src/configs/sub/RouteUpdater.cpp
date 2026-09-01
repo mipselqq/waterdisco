@@ -20,18 +20,28 @@ namespace RouteUpdate {
 
         QString fatal, warn;
         bool wasOldArray = false;
-        auto fetched = Configs::RouteProfile::FromShareInput(QString::fromUtf8(resp.data), &fatal, &warn, &wasOldArray);
+        // unmaterialized: a remote URL must never create server profiles here
+        auto fetched = Configs::RouteProfile::FromShareInput(QString::fromUtf8(resp.data), &fatal, &warn, &wasOldArray, false);
         if (!fetched) return fatal.isEmpty() ? QObject::tr("could not parse a routing profile from the response") : fatal;
         if (fetched->isRaw) return QObject::tr("the remote content is a raw routing profile, which is not supported for remote profiles yet");
 
-        // Overwrite the structured rules and default outbound, but keep the local identity
-        // and remote settings so the user's URL / auto-update survive.
+        // endpoint rules belong to the local profile, so they survive the swap by index
+        QList<QPair<int, std::shared_ptr<Configs::RouteRule>>> endpointRules;
+        for (int i = 0; i < profile->Rules.size(); i++) {
+            if (profile->Rules[i]->type == Configs::endpointPreferredBy) endpointRules << qMakePair(i, profile->Rules[i]);
+        }
+
         profile->isRaw = false;
         profile->rawRoute.clear();
-        profile->Rules = fetched->Rules;
+        profile->Rules.clear();
+        for (const auto& rule : fetched->Rules) {
+            if (rule->type != Configs::endpointPreferredBy) profile->Rules << rule;
+        }
+        for (const auto& [index, rule] : endpointRules) {
+            profile->Rules.insert(std::min<qsizetype>(index, profile->Rules.size()), rule);
+        }
+        profile->SyncEndpointRules();
         profile->defaultOutboundID = fetched->defaultOutboundID;
-        // Adopt the remote name when the profile doesn't have one yet (e.g. a freshly created
-        // remote profile). A name the user already chose is kept, so updates don't clobber it.
         if (profile->name.trimmed().isEmpty() && !fetched->name.trimmed().isEmpty()) {
             profile->name = fetched->name;
         }

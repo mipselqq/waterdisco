@@ -11,15 +11,11 @@ namespace Configs
 {
     namespace
     {
-        // ---- sing-box -----------------------------------------------------
-
         bool isSingBoxInfra(const QString& t)
         {
             return t == "direct" || t == "block" || t == "dns";
         }
 
-        // Reuses the real per-protocol parser + GetSecurity() so a custom
-        // outbound reads exactly like the equivalent native one.
         SecurityInfo analyzeSingBoxOutbound(const QJsonObject& o)
         {
             const auto type = o["type"].toString();
@@ -44,8 +40,6 @@ namespace Configs
             return ob->ExportIdentity();
         }
 
-        // Resolves route.final and selector/urltest indirection (depth-guarded)
-        // down to the outbound that actually egresses.
         QJsonObject resolveSingBoxEgress(const QJsonArray& outbounds, const QString& tag, int depth)
         {
             if (depth <= 0 || outbounds.isEmpty()) return {};
@@ -73,14 +67,11 @@ namespace Configs
             return target;
         }
 
-        // ---- Xray ---------------------------------------------------------
-
         bool isXrayInfra(const QString& p)
         {
             return p == "freedom" || p == "blackhole" || p == "dns" || p == "loopback";
         }
 
-        // Xray isn't backed by Throne's parsers, so read the raw fields directly.
         SecurityInfo analyzeXrayOutbound(const QJsonObject& o)
         {
             const auto protocol = o["protocol"].toString();
@@ -102,8 +93,7 @@ namespace Configs
                 info.level = insecure ? SecurityLevel::Weak : SecurityLevel::Secure;
                 return info;
             }
-            // No transport security: shadowsocks still encrypts its payload,
-            // vmess encrypts but is trivially detectable, the rest are plaintext.
+            // No transport security: shadowsocks still encrypts its payload; vmess is trivially detectable.
             if (protocol == "shadowsocks") {
                 info.label = QObject::tr("Encrypted");
                 info.level = SecurityLevel::Secure;

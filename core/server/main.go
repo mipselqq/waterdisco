@@ -21,24 +21,20 @@ import (
 )
 
 const (
-	// Threshold is live heap after a forced GC, kept under memoryLimit:
-	// that much surviving under the soft limit means the GC is thrashing
-	memoryLimit           = 2 * 1024 * 1024 * 1024 // 2GB
-	memoryPanicThreshold  = 1536 * 1024 * 1024     // 1.5GB
+	// memoryPanicThreshold stays under memoryLimit: that much live under the soft limit means the GC is thrashing.
+	memoryLimit           = 2 * 1024 * 1024 * 1024
+	memoryPanicThreshold  = 1536 * 1024 * 1024
 	memoryCheckInterval   = 2 * time.Second
 	memoryForcedGCBackoff = 30 * time.Second
 )
 
-// liveHeap avoids HeapAlloc, which also counts unswept garbage and sawtooths
-// up to the GC target (live set x GOGC, capped by memoryLimit),
-// so a bare threshold on it fires on a perfectly healthy heap
+// Not HeapAlloc: it counts unswept garbage and sawtooths up to the GC target, so a bare threshold on it fires on a healthy heap.
 func liveHeap() uint64 {
 	sample := []metrics.Sample{{Name: "/gc/heap/live:bytes"}}
 	metrics.Read(sample)
 	return sample[0].Value.Uint64()
 }
 
-// watchMemory takes the core down when the live heap runs away
 func watchMemory() {
 	for {
 		time.Sleep(memoryCheckInterval)
@@ -47,13 +43,11 @@ func watchMemory() {
 			continue
 		}
 
-		// The metric is only as fresh as the last cycle, and one that ran
-		// during a burst can mark short-lived objects as live
+		// The metric is only as fresh as the last cycle, which during a burst can mark short-lived objects live.
 		runtimeDebug.FreeOSMemory()
 		live := liveHeap()
 		if live < memoryPanicThreshold {
-			// FreeOSMemory is stop-the-world, do not repeat it every tick
-			// while a busy core legitimately sits near the threshold
+			// FreeOSMemory is stop-the-world; do not repeat it every tick while a busy core sits near the threshold.
 			time.Sleep(memoryForcedGCBackoff)
 			continue
 		}
@@ -70,8 +64,7 @@ func watchMemory() {
 }
 
 func writeHeapProfile() (string, error) {
-	// Core runs privileged: a clock-derived name is guessable, and a symlink
-	// planted at that path turns this into a root-owned write anywhere
+	// Core runs privileged: a guessable clock-derived name lets a planted symlink turn this into a root-owned write anywhere.
 	f, err := os.CreateTemp("", "throne-core-heap-*.pprof")
 	if err != nil {
 		return "", err
@@ -92,7 +85,6 @@ func RunCore() {
 
 	parentcheck.CheckParentProcess()
 
-	// Exit when parent dies
 	go func() {
 		parent, err := os.FindProcess(parentcheck.ParentPID)
 		if err != nil {
@@ -114,7 +106,6 @@ func RunCore() {
 
 	boxmain.DisableColor()
 
-	// Connect to GUI IPC socket, retry up to 10 times
 	var conn net.Conn
 	var err error
 	for i := 0; i < 10; i++ {

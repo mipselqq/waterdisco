@@ -14,7 +14,6 @@ namespace Configs {
         if (!url.isValid() && !url.errorString().startsWith("Invalid port")) return false;
         auto query = QUrlQuery(url.query());
 
-        // handle the common format
         if (query.hasQueryItem("fp")) fingerPrint = query.queryItemValue("fp");
         if (!fingerPrint.isEmpty()) enabled = true;
         return true;
@@ -128,7 +127,6 @@ namespace Configs {
         if (!url.isValid() && !url.errorString().startsWith("Invalid port")) return false;
         auto query = QUrlQuery(url.query());
 
-        // handle the common format
         if (query.hasQueryItem("pbk"))
         {
             enabled = true;
@@ -222,6 +220,10 @@ namespace Configs {
         else fragment_unspecified = true;
         if (query.hasQueryItem("tls_fragment_fallback_delay")) fragment_fallback_delay = query.queryItemValue("tls_fragment_fallback_delay");
         if (query.hasQueryItem("tls_record_fragment")) record_fragment = query.queryItemValue("tls_record_fragment") == "true";
+        if (query.hasQueryItem("tls_spoof")) spoof = query.queryItemValue("tls_spoof");
+        if (query.hasQueryItem("tls_spoof_method")) spoof_method = query.queryItemValue("tls_spoof_method");
+        if (query.hasQueryItem("tls_spoof_enabled")) { spoof_enabled = query.queryItemValue("tls_spoof_enabled") == "true"; spoof_unspecified = false; }
+        else spoof_unspecified = true;
         if (query.hasQueryItem("tls_tricks")) { tls_tricks = query.queryItemValue("tls_tricks") == "true"; tls_tricks_unspecified = false; }
         else tls_tricks_unspecified = true;
         if (!server_name.isEmpty()) enabled = true;
@@ -271,6 +273,10 @@ namespace Configs {
         else fragment_unspecified = true;
         if (object.contains("fragment_fallback_delay")) fragment_fallback_delay = object["fragment_fallback_delay"].toString();
         if (object.contains("record_fragment")) record_fragment = object["record_fragment"].toBool();
+        if (object.contains("spoof")) spoof = object["spoof"].toString();
+        if (object.contains("spoof_method")) spoof_method = object["spoof_method"].toString();
+        if (object.contains("spoof_enabled")) { spoof_enabled = object["spoof_enabled"].toBool(); spoof_unspecified = false; }
+        else spoof_unspecified = true;
         if (object.contains("tls_tricks")) { tls_tricks = object["tls_tricks"].toObject()["mixedcase_sni"].toBool(); tls_tricks_unspecified = false; }
         else tls_tricks_unspecified = true;
         if (object.contains("ech")) ech->ParseFromJson(object["ech"].toObject());
@@ -320,6 +326,11 @@ namespace Configs {
         if (!fragment_unspecified) query.addQueryItem("tls_fragment", fragment ? "true" : "false");
         if (!fragment_fallback_delay.isEmpty()) query.addQueryItem("tls_fragment_fallback_delay", fragment_fallback_delay);
         if (record_fragment) query.addQueryItem("tls_record_fragment", "true");
+        if (!spoof_unspecified) query.addQueryItem("tls_spoof_enabled", spoof_enabled ? "true" : "false");
+        if (!spoof.isEmpty()) {
+            query.addQueryItem("tls_spoof", spoof);
+            if (!spoof_method.isEmpty()) query.addQueryItem("tls_spoof_method", spoof_method);
+        }
         if (!tls_tricks_unspecified) query.addQueryItem("tls_tricks", tls_tricks ? "true" : "false");
         mergeUrlQuery(query, ech->ExportToLink());
         mergeUrlQuery(query, utls->ExportToLink());
@@ -358,11 +369,17 @@ namespace Configs {
             object["client_key"] = QListStr2QJsonArray(client_key);
         }
         if (!client_key_path.isEmpty()) object["client_key_path"] = client_key_path;
-        // persist the tri-state explicitly so an Off choice survives a round-trip:
-        // true = On, false = Off; the key is omitted only for "Keep Default".
+        // Tri-state: true = On, false = Off, key absent = Keep Default.
         if (!fragment_unspecified) object["fragment"] = fragment;
         if (!fragment_fallback_delay.isEmpty()) object["fragment_fallback_delay"] = fragment_fallback_delay;
         if (record_fragment) object["record_fragment"] = record_fragment;
+        // spoof_enabled is ours, not sing-box's: Build() resolves it away, but ExportToJson is the stored form.
+        if (!spoof_unspecified) object["spoof_enabled"] = spoof_enabled;
+        // spoof_method only means anything alongside a spoof SNI.
+        if (!spoof.isEmpty()) {
+            object["spoof"] = spoof;
+            if (!spoof_method.isEmpty()) object["spoof_method"] = spoof_method;
+        }
         if (!tls_tricks_unspecified) object["tls_tricks"] = QJsonObject{{"mixedcase_sni", tls_tricks}};
         if (ech->enabled) object["ech"] = ech->ExportToJson();
         if (utls->enabled) object["utls"] = utls->ExportToJson();
@@ -413,14 +430,19 @@ namespace Configs {
             object["client_key"] = QListStr2QJsonArray(client_key);
         }
         if (!client_key_path.isEmpty()) object["client_key_path"] = client_key_path;
-        // hiddify: the built-in fragment implementation emits sing-box's native
-        // tls.fragment here. The custom implementation is emitted at the dialer level
-        // in outbound::Build(), so skip it here when "custom" is selected.
+        // The "custom" fragment implementation is emitted at the dialer level in outbound::Build() instead.
         if (FragmentEffectivelyOn() && Configs::dataManager->settingsRepo->fragment_implementation != "custom") {
             object["fragment"] = true;
             if (!fragment_fallback_delay.isEmpty()) object["fragment_fallback_delay"] = fragment_fallback_delay;
         }
         if (record_fragment) object["record_fragment"] = record_fragment;
+        if (SpoofEffectivelyOn()) {
+            if (const auto sni = spoof.isEmpty() ? Configs::dataManager->settingsRepo->tls_spoof.trimmed() : spoof; !sni.isEmpty()) {
+                object["spoof"] = sni;
+                const auto method = spoof_method.isEmpty() ? Configs::dataManager->settingsRepo->tls_spoof_method.trimmed() : spoof_method;
+                if (!method.isEmpty()) object["spoof_method"] = method;
+            }
+        }
         if (TlsTricksEffectivelyOn()) object["tls_tricks"] = QJsonObject{{"mixedcase_sni", true}};
         if (auto obj = ech->Build().object;!obj.isEmpty()) object["ech"] = obj;
         if (reality->enabled) {
@@ -446,6 +468,14 @@ namespace Configs {
         if (fragment) return true;
         if (fragment_unspecified) return Configs::dataManager->settingsRepo->fragment_default_on;
         return false;
+    }
+
+    bool TLS::SpoofEffectivelyOn()
+    {
+        if (!spoof_unspecified) return spoof_enabled;
+        // a profile that carries its own SNI predates the tri-state and stays on
+        if (!spoof.isEmpty()) return true;
+        return Configs::dataManager->settingsRepo->tls_spoof_default_on;
     }
 
     bool TLS::TlsTricksEffectivelyOn()

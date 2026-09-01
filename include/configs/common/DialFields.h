@@ -15,7 +15,6 @@ namespace Configs
         QString inet4_bind_address;
         QString inet6_bind_address;
 
-        // baseConfig overrides
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
         QString ExportToLink() override;

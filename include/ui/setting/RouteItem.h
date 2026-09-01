@@ -47,16 +47,31 @@ private:
 
     QListWidget* ruleAttrPlusList = nullptr;
 
-    // The "Remote source" box (URL / auto-update / preview / fetch) lives in RouteItem.ui.
-    // For plain structured profiles it is hidden; for remote profiles this fills its initial
-    // values and wires the Preview/Fetch buttons.
+    QWidget* lastTabPage = nullptr;
+
     void setupRemoteSection();
 
-    // Fetch remote content and either preview it (applyToChain=false) or replace the
-    // editor's current rules with it (applyToChain=true).
     void fetchRemote(bool applyToChain);
 
-    // Re-sync the rule list + simple-rule editors after chain->Rules is replaced wholesale.
+    QList<QPair<QString, int>> endpointCandidates;
+
+    void setupEndpointsSection();
+
+    void refreshEndpointCandidates() const;
+
+    void addEndpointRow(int profileId) const;
+
+    void removeEndpointRow(int profileId);
+
+    [[nodiscard]] QList<int> listedEndpointIDs() const;
+
+    // One endpointPreferredBy rule per listed endpoint, keeping existing rules where they sit.
+    void syncEndpointRules();
+
+    [[nodiscard]] bool currentRuleIsEndpoint() const;
+
+    void applyRuleEditLock();
+
     void reloadRuleViewsFromChain();
 
     void ensurePlusTabBuiltOnce();

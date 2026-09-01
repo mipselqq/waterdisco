@@ -14,51 +14,41 @@ namespace Configs {
     private:
         Database& db;
         mutable std::mutex mutex;
-        // Identity map: id -> weak_ptr<Profile>
         mutable std::map<int, std::weak_ptr<Profile>> identityMap;
 
-        // Helper to deserialize Profile from JSON
         std::shared_ptr<Profile> profileFromJson(const QJsonObject& json) const;
         
-        // Save profile to database (internal helper)
         void saveToDatabase(const Profile* profile, int id) const;
 
-        // Build one row for batch insert (same columns as saveToDatabase)
+        // Must stay column-compatible with saveToDatabase.
         ProfileInsertRow profileToInsertRow(const Profile* profile, int id, int gid) const;
 
-        // Load profile from database
         std::shared_ptr<Profile> loadFromDatabase(int id) const;
         
-        // Build profile from current row of a SELECT (same columns as loadFromDatabase)
+        // Must stay column-compatible with loadFromDatabase.
         std::shared_ptr<Profile> profileFromRow(SQLite::Statement& stmt) const;
 
-        // Load profiles for given ids (one SELECT IN chunk). Does not touch identity map.
+        // Does not touch the identity map.
         std::map<int, std::shared_ptr<Profile>> loadProfilesByIdsChunk(const QList<int>& ids) const;
         
-        // Create tables if they don't exist
         void createTables() const;
 
-        // True if the profiles table already has the given column (for migrations).
         bool profilesColumnExists(const char* columnName) const;
 
-        // Get next available profile ID (single)
         int NewProfileID() const;
-        // Allocate a contiguous block of n IDs; returns first ID (use firstId, firstId+1, ..., firstId+n-1). DB atomic, no lock required.
+        // Contiguous block starting at the returned id; atomic in the DB, so no lock is required.
         int NewProfileIDRange(int n) const;
 
     public:
         explicit ProfilesRepo(Database& database);
         
-        // Create a new profile (doesn't save to DB yet, id will be -1)
+        // Not saved yet: id stays -1 until AddProfile.
         [[nodiscard]] static std::shared_ptr<Profile> NewProfile(const QString &type);
         
-        // Add profile to database (assigns ID and saves)
         bool AddProfile(std::shared_ptr<Profile>& profile, int gid = -1);
         
-        // Add multiple profiles in batch
         bool AddProfileBatch(QList<std::shared_ptr<Profile>>& profiles, int gid = -1);
         
-        // Get profile by ID (uses identity map)
         std::shared_ptr<Profile> GetProfile(int id) const;
 
         QList<std::shared_ptr<Profile>> GetProfileBatch(QList<int> ids);
@@ -71,26 +61,21 @@ namespace Configs {
 
         QStringList GetAllProfileNames();
         
-        // Delete multiple profiles
         bool BatchDeleteProfiles(QList<int>& ids, bool stopRunningProfile = false);
         
-        // Get all profile IDs in order
         QList<int> GetAllProfileIds() const;
 
-        // Ids of every profile of one type. Profiles are loaded lazily, so this
-        // asks the database rather than walking (and materialising) the lot.
         QList<int> GetProfileIdsByType(const QString& type) const;
         
-        // Save profile to database (manual save, like old Save() method)
-        // Only saves if profile has a valid ID (id >= 0)
+        // No-op unless id >= 0.
         bool Save(const std::shared_ptr<Profile>& profile);
 
-        // Update only the traffic field of the profile in the database (no existence check, just UPDATE).
+        // Blind UPDATE of the traffic columns: no existence check.
         bool SaveTraffic(const std::shared_ptr<Profile>& profile);
 
         void SaveTrafficBatch(const QList<std::shared_ptr<Profile>>& profiles);
 
-        // Batch save: runs on a new thread, filters to non-null and id >= 0, then batch replace (same chunking as AddProfileBatch).
+        // Runs on a new thread; skips null profiles and id < 0.
         void SaveBatch(const QList<std::shared_ptr<Profile>>& profiles);
     };
 }

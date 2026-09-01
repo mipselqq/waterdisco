@@ -23,12 +23,10 @@
 #include "include/configs/generate.h"
 
 namespace {
-    // Cap on named rows in each breakdown table; usage past this is collapsed into
-    // a single "Other" row so the table stays a readable top-N.
+    // Named rows per breakdown table; the rest is folded into one "Other" row.
     constexpr int kMaxBreakdownRows = 9;
 
-    // Table cell that sorts on its raw byte value rather than the formatted text,
-    // so "1.00 GiB" ranks above "900 MiB". Right-aligned, like a figure column.
+    // Sorts on the raw byte value; the default compares the formatted text, ranking "900 MiB" above "1.00 GiB".
     class TrafficStatsSizeItem : public QTableWidgetItem {
     public:
         TrafficStatsSizeItem(const QString& text, long long value) : QTableWidgetItem(text) {
@@ -44,14 +42,10 @@ namespace {
 DialogTrafficStats::DialogTrafficStats(QWidget* parent) : QDialog(parent), ui(new Ui::DialogTrafficStats) {
     ui->setupUi(this);
 
-    // The chart and tables take the lion's share of the height; the top controls
-    // stay at their natural size. (Box-layout stretch factors don't round-trip
-    // cleanly through uic, so they're set here rather than in the .ui.)
+    // Box-layout stretch factors don't round-trip through uic, so they live here, not in the .ui.
     ui->verticalLayout->setStretch(1, 2); // chart
     ui->verticalLayout->setStretch(2, 3); // tabs
 
-    // Section resize modes are per-column, so they stay in code rather than the
-    // .ui: the name columns stretch to fill, the figure columns hug their content.
     ui->profileTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     ui->profileTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     for (int c = 2; c <= 4; ++c)
@@ -61,8 +55,6 @@ DialogTrafficStats::DialogTrafficStats(QWidget* parent) : QDialog(parent), ui(ne
     for (int c = 1; c <= 3; ++c)
         ui->appTable->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
 
-    // The chart and summary reflect the active tab's dimension, so refresh when
-    // switching tabs, changing the period, or on explicit request.
     connect(ui->refreshBtn, &QPushButton::clicked, this, [this] { refresh(); });
     connect(ui->periodCombo, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
     connect(ui->tabs, &QTabWidget::currentChanged, this, [this](int) { refresh(); });
@@ -85,7 +77,6 @@ long long DialogTrafficStats::selectedWindowSecs() const {
 }
 
 long long DialogTrafficStats::selectedBucketSecs() const {
-    // Hourly buckets for the 24h view, daily buckets for the longer ranges.
     return ui->periodCombo->currentIndex() == 0 ? 3600LL : 86400LL;
 }
 
@@ -93,16 +84,14 @@ void DialogTrafficStats::refresh() {
     auto* repo = Configs::dataManager ? Configs::dataManager->trafficStatsRepo.get() : nullptr;
     if (!repo) return;
 
-    // Persist the in-progress minute so the dashboard reflects up-to-the-moment
-    // usage rather than only what has already rolled over to disk.
+    // The in-progress minute lives in memory until flushed.
     Stats::trafficStatsManager->Flush();
 
     const long long now = QDateTime::currentSecsSinceEpoch();
     const long long window = selectedWindowSecs();
     const long long bucket = selectedBucketSecs();
     const long long from = now - window;
-    // Buckets are stored on UTC boundaries; align them to the viewer's local
-    // calendar so an "hour"/"day" bar starts on the local clock, not UTC's.
+    // Buckets are stored on UTC boundaries; this shifts them onto the viewer's local calendar.
     const long long tzOffset = QDateTime::currentDateTime().offsetFromUtc();
 
     populateProfileTable(from, now);
@@ -121,9 +110,7 @@ void DialogTrafficStats::refresh() {
         totalDown += pt.down;
     }
 
-    // Build a contiguous bar list (gaps filled with zeros) so the time axis is
-    // continuous even when some buckets saw no traffic. Align to the local boundary
-    // with the same offset the query used, so each bar's key matches a series point.
+    // Must align with the same offset the query used, or a bar's key won't match a series point.
     const long long alignedFrom = ((from + tzOffset) / bucket) * bucket - tzOffset;
     QList<TrafficChartWidget::Bar> bars;
     for (long long b = alignedFrom; b < now; b += bucket) {
@@ -133,7 +120,6 @@ void DialogTrafficStats::refresh() {
             bar.down = it->down;
             bar.up = it->up;
         }
-        // Label marks the bucket's start; the chart's tooltip shows the full range.
         bar.label = bucket >= 86400LL ? QDateTime::fromSecsSinceEpoch(b).toString("MM/dd")
                                       : QDateTime::fromSecsSinceEpoch(b).toString("HH:mm");
         bars.append(bar);
@@ -152,9 +138,7 @@ void DialogTrafficStats::populateProfileTable(long long fromSecs, long long toSe
     QHash<int, Configs::ConfigMetaRow> meta;
     for (const auto& m : repo->GetAllConfigMeta()) meta.insert(m.profile_id, m);
 
-    // Rank by total, show the busiest few, and fold any remainder into one "Other"
-    // row. The data is sorted here (not just left to the table) so the cut is by
-    // total even if the user later re-sorts the visible rows by another column.
+    // Sorted here, not by the table, so the top-N cut is by total even after the user re-sorts.
     std::sort(usage.begin(), usage.end(), [](const Configs::ConfigUsage& a, const Configs::ConfigUsage& b) {
         return (a.down + a.up) > (b.down + b.up);
     });
@@ -208,7 +192,6 @@ void DialogTrafficStats::populateAppTable(long long fromSecs, long long toSecs) 
     auto* repo = Configs::dataManager->trafficStatsRepo.get();
     auto usage = repo->QueryAppUsage(fromSecs, toSecs);
 
-    // Same top-N + "Other" treatment as the profile table.
     std::sort(usage.begin(), usage.end(), [](const Configs::AppUsage& a, const Configs::AppUsage& b) {
         return (a.down + a.up) > (b.down + b.up);
     });

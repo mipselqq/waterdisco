@@ -53,7 +53,6 @@ public:
         setFiltersVisible(false);
     }
 
-    // Which filter field gets focus when the row opens; out of range means Name.
     void setLastFilterColumn(int column) {
         m_lastFilterColumn = editForColumn(column) ? column : ProfilesTableModel::ColName;
     }
@@ -63,8 +62,7 @@ public:
     void focusLastFilterField() {
         if (!m_filtersVisible) return;
         QLineEdit *edit = editForColumn(m_lastFilterColumn);
-        // Tab/Backtab/Shortcut are the reasons QLineEdit selects all on focus-in;
-        // come back as if the caret had never left.
+        // Tab/Backtab/Shortcut focus reasons make QLineEdit select all; OtherFocusReason does not.
         edit->setFocus(Qt::OtherFocusReason);
         edit->end(false);
     }
@@ -86,9 +84,7 @@ protected:
     bool eventFilter(QObject *obj, QEvent *event) override {
         if (!qobject_cast<QLineEdit*>(obj)) return QHeaderView::eventFilter(obj, event);
 
-        // Window shortcuts are resolved before the key reaches the field, so bare
-        // keys like Return (menu_start) and Del (menu_delete) would fire their
-        // actions while the user is only typing. Claim what a text field is owed.
+        // Window shortcuts resolve before the key reaches the field, so bare Return/Del would fire menu actions.
         if (event->type() == QEvent::ShortcutOverride) {
             if (!isTextEditingKey(static_cast<QKeyEvent*>(event))) {
                 return QHeaderView::eventFilter(obj, event);
@@ -161,11 +157,9 @@ signals:
     void addressFilterChanged(const QString &text);
     void nameFilterChanged(const QString &text);
     void testFilterChanged(const QString &text);
-    // selectFirst: navigating into the results (Down) rather than backing out.
     void focusTableRequested(bool selectFirst);
     void lastFilterColumnChanged(int column);
-    // Escape from a filter field. The checkable toolbutton owns the visible state,
-    // so it has to be the one to untoggle us.
+    // The checkable toolbutton owns the visible state, so it has to be the one to untoggle us.
     void closeRequested();
 
 private:
@@ -173,8 +167,6 @@ private:
         return {type_filter, address_filter, name_filter, test_filter};
     }
 
-    // Plain keys (bar the function row) are text input or caret movement; with a
-    // modifier, only the standard editing chords.
     static bool isTextEditingKey(QKeyEvent *key) {
         if (!(key->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
             return key->key() < Qt::Key_F1 || key->key() > Qt::Key_F35;
@@ -184,7 +176,7 @@ private:
                               QKeySequence::MoveToStartOfLine, QKeySequence::MoveToEndOfLine,
                               QKeySequence::SelectStartOfLine, QKeySequence::SelectEndOfLine,
                               QKeySequence::DeleteStartOfWord, QKeySequence::DeleteEndOfWord}) {
-            if (key->matches(standard) == QKeySequence::ExactMatch) return true;
+            if (key->matches(standard)) return true;
         }
         return false;
     }

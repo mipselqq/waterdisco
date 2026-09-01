@@ -13,9 +13,7 @@
 #include <cstdlib>
 #include <exception>
 
-// The handler runs on the faulting thread with a possibly-corrupt heap: Win32
-// calls and stack buffers only, no Qt objects, no allocation. Paths are built
-// ahead of time in Windows_SetCrashDumpPath().
+// The handler runs on the faulting thread with a possibly-corrupt heap: Win32 calls and stack buffers only, no Qt, no allocation.
 
 typedef BOOL(WINAPI *MINIDUMPWRITEDUMP)(
     HANDLE hProcess,
@@ -40,8 +38,7 @@ typedef BOOL(WINAPI *MINIDUMPWRITEDUMP)(
 #define THRONE_ARCH_A "unknown"
 #endif
 
-// IndirectlyReferencedMemory is what makes objects on the stacks readable;
-// ~10-40MB per dump against a few hundred KB for MiniDumpNormal.
+// MiniDumpWithIndirectlyReferencedMemory is what makes objects on the stacks readable.
 static const MINIDUMP_TYPE DUMP_TYPE = static_cast<MINIDUMP_TYPE>(
     MiniDumpWithIndirectlyReferencedMemory |
     MiniDumpWithDataSegs |
@@ -110,8 +107,7 @@ static void AppendA(HANDLE file, const char *text) {
     WriteFile(file, text, static_cast<DWORD>(lstrlenA(text)), &written, nullptr);
 }
 
-// Packs the log ring into a flat buffer so it can ride inside the dump. memcpy
-// only; the ring entries were encoded while the process was still healthy.
+// memcpy only: the ring entries were already encoded while the process was healthy.
 static ULONG32 BuildLogStream() {
     static const QByteArray *lines[Logging::MAX_RECENT_LINES];
     const int count = Logging::RecentLinesRaw(lines, Logging::MAX_RECENT_LINES);
@@ -165,7 +161,6 @@ static void WriteSidecar(const wchar_t *path, EXCEPTION_POINTERS *pException, bo
             AppendA(file, line);
         }
 
-        // Module + offset locates the frame in the published PDBs without a debugger.
         HMODULE mod = nullptr;
         if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                static_cast<LPCWSTR>(record->ExceptionAddress), &mod) && mod != nullptr) {
@@ -252,8 +247,7 @@ static void WriteCrashArtifacts(EXCEPTION_POINTERS *pException) {
 
     WriteSidecar(sidecarPath, pException, dumpWritten);
 
-    // Win32 MessageBox, not QMessageBox: constructing a QWidget off the GUI
-    // thread faults again here and re-enters the filter.
+    // Win32 MessageBox, not QMessageBox: a QWidget built off the GUI thread faults again and re-enters the filter.
     wchar_t msg[MAX_PATH + 512];
     const EXCEPTION_RECORD *record = pException != nullptr ? pException->ExceptionRecord : nullptr;
     wchar_t addrHex[17];
@@ -273,10 +267,7 @@ LONG __stdcall CreateCrashHandler(EXCEPTION_POINTERS *pException) {
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-// The CRT failure paths below terminate the process without ever raising a
-// structured exception, so the unhandled-exception filter never sees them.
-// Synthesizing a record from the current context puts them through the same
-// dump path.
+// The CRT failure paths below terminate the process without raising an SEH exception, so the filter never sees them.
 static void ReportSynthetic(DWORD code) {
     CONTEXT context;
     RtlCaptureContext(&context);
@@ -318,8 +309,7 @@ void Windows_SetCrashHandler() {
     SetErrorMode(SEM_FAILCRITICALERRORS);
     SetUnhandledExceptionFilter(CreateCrashHandler);
 
-    // STATUS_STACK_OVERFLOW reaches the filter with one guard page left, which is
-    // not enough to write a dump. Only affects the calling thread.
+    // STATUS_STACK_OVERFLOW reaches the filter with one guard page left, not enough to write a dump (per-thread setting).
     ULONG stackGuarantee = 64 * 1024;
     SetThreadStackGuarantee(&stackGuarantee);
 
@@ -337,9 +327,7 @@ void Windows_SetCrashDumpPath() {
     g_crashDirReady = true;
 }
 
-// WER reads LocalDumps from HKLM only — a per-user copy under HKCU is silently
-// ignored (verified: a faulting process with an HKCU key still dumped to the
-// HKLM default folder). So this needs admin, and quietly does nothing without it.
+// WER reads LocalDumps from HKLM only; an HKCU copy is silently ignored, so this needs admin.
 static bool RegisterWerApp(const wchar_t *exeName, const wchar_t *folder) {
     wchar_t subKey[512];
     wsprintfW(subKey, L"SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting\\LocalDumps\\%s", exeName);
@@ -355,7 +343,7 @@ static bool RegisterWerApp(const wchar_t *exeName, const wchar_t *folder) {
     const DWORD dumpCount = 5;
     RegSetValueExW(key, L"DumpCount", 0, REG_DWORD,
                    reinterpret_cast<const BYTE *>(&dumpCount), sizeof(dumpCount));
-    // 0 = custom, so CustomDumpFlags decides; keeps WER dumps and ours comparable.
+    // DumpType 0 = custom, so CustomDumpFlags decides.
     const DWORD dumpType = 0;
     RegSetValueExW(key, L"DumpType", 0, REG_DWORD,
                    reinterpret_cast<const BYTE *>(&dumpType), sizeof(dumpType));
@@ -376,15 +364,12 @@ void Windows_ConfigureWER() {
         if (*p == L'\\' || *p == L'/') exeName = p + 1;
     }
 
-    // The core is a separate process; its fatal Go runtime aborts are invisible
-    // to anything installed in this one.
+    // The core is a separate process: its fatal Go runtime aborts are invisible to anything installed in this one.
     const bool ok = RegisterWerApp(exeName, g_dumpPathTemplate) &&
                     RegisterWerApp(L"ThroneCore.exe", g_dumpPathTemplate);
     if (ok) {
         LOG_INFO("WER LocalDumps registered for Throne.exe and ThroneCore.exe");
     } else {
-        // One elevated run is enough to make this stick, and Throne already
-        // elevates for TUN, so this is a notice rather than a problem.
         LOG_INFO("WER LocalDumps not registered (needs admin); crashes that bypass "
                  "the exception filter will go to %LOCALAPPDATA%\\CrashDumps if "
                  "LocalDumps is enabled machine-wide");

@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EditHysteriaRealm</class>
+ <widget class="QDialog" name="EditHysteriaRealm">
+  <property name="windowTitle">
+   <string>Realm (NAT Traversal)</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0" colspan="4">
+    <widget class="QLabel" name="realm_note">
+     <property name="text">
+      <string>The realm is a rendezvous service: it hands out the server's current public addresses so the connection can be hole-punched directly.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="realm_server_url_l">
+     <property name="text">
+      <string>Realm URL</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1" colspan="3">
+    <widget class="QLineEdit" name="realm_server_url">
+     <property name="placeholderText">
+      <string notr="true">https://realm.example.com</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="realm_id_l">
+     <property name="text">
+      <string>Realm ID</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QLineEdit" name="realm_id">
+     <property name="toolTip">
+      <string>The slot the target Hysteria2 server registered on the realm.</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="2">
+    <widget class="QLabel" name="realm_token_l">
+     <property name="text">
+      <string>Realm Token</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="3">
+    <widget class="QLineEdit" name="realm_token"/>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="realm_stun_servers_l">
+     <property name="text">
+      <string>STUN Servers</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1" colspan="3">
+    <widget class="QLineEdit" name="realm_stun_servers">
+     <property name="toolTip">
+      <string>Comma separated host or host:port entries used to discover this client's public addresses.</string>
+     </property>
+     <property name="placeholderText">
+      <string notr="true">stun.example.com:3478,...</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="realm_ip_version_l">
+     <property name="text">
+      <string>IP Version</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QComboBox" name="realm_ip_version">
+     <item>
+      <property name="text">
+       <string notr="true"/>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string notr="true">4</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string notr="true">6</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="4" column="2" colspan="2">
+    <widget class="QCheckBox" name="realm_port_mapping">
+     <property name="toolTip">
+      <string>Maintain a UDP port mapping on the local gateway via UPnP or NAT-PMP.
+Improves hole-punching reliability. Requires IPv4.</string>
+     </property>
+     <property name="text">
+      <string>Port Mapping</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
+    <widget class="QLabel" name="realm_port_mapping_timeout_l">
+     <property name="text">
+      <string>Mapping Timeout</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="1">
+    <widget class="QLineEdit" name="realm_port_mapping_timeout">
+     <property name="placeholderText">
+      <string notr="true">10s</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="2">
+    <widget class="QLabel" name="realm_port_mapping_lifetime_l">
+     <property name="text">
+      <string>Mapping Lifetime</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="3">
+    <widget class="QLineEdit" name="realm_port_mapping_lifetime">
+     <property name="placeholderText">
+      <string notr="true">10m</string>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="0" colspan="4">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>realm_server_url</tabstop>
+  <tabstop>realm_id</tabstop>
+  <tabstop>realm_token</tabstop>
+  <tabstop>realm_stun_servers</tabstop>
+  <tabstop>realm_ip_version</tabstop>
+  <tabstop>realm_port_mapping</tabstop>
+  <tabstop>realm_port_mapping_timeout</tabstop>
+  <tabstop>realm_port_mapping_lifetime</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

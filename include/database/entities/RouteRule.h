@@ -1,6 +1,7 @@
 #pragma once
 #include <QUrl>
 #include <QJsonObject>
+#include <QObject>
 #include <QSet>
 
 namespace Configs {
@@ -26,7 +27,7 @@ namespace Configs {
     }
 
     // New rule types MUST be appended: RouteRule::type is persisted as the raw int.
-    enum ruleType {custom, simpleAddressProxy, simpleAddressBypass, simpleAddressBlock, simpleProcessNameProxy, simpleProcessNameBypass, simpleProcessNameBlock, simpleProcessPathProxy, simpleProcessPathBypass, simpleProcessPathBlock, simpleAddressWarpBypass, simpleProcessNameWarpBypass, simpleProcessPathWarpBypass};
+    enum ruleType {custom, simpleAddressProxy, simpleAddressBypass, simpleAddressBlock, simpleProcessNameProxy, simpleProcessNameBypass, simpleProcessNameBlock, simpleProcessPathProxy, simpleProcessPathBypass, simpleProcessPathBlock, simpleAddressWarpBypass, simpleProcessNameWarpBypass, simpleProcessPathWarpBypass, endpointPreferredBy};
 
     inline QString ruleTypeToString(ruleType type)
     {
@@ -43,11 +44,11 @@ namespace Configs {
         if (type == simpleAddressWarpBypass) return {"Simple Address Warp-bypass"};
         if (type == simpleProcessNameWarpBypass) return {"Simple Process Name Warp-bypass"};
         if (type == simpleProcessPathWarpBypass) return {"Simple Process Path Warp-bypass"};
+        if (type == endpointPreferredBy) return QObject::tr("Endpoint");
         return {"invalid"};
     }
 
-    // Stable, machine-readable token for a rule's type, used in the share schema so
-    // that simple-vs-advanced rules round-trip independently of enum order or UI labels.
+    // Share-schema tokens: must stay stable across enum reordering and UI relabelling.
     inline QString ruleTypeToToken(int type)
     {
         switch (type) {
@@ -63,6 +64,7 @@ namespace Configs {
             case simpleAddressWarpBypass: return {"simple_address_warp_bypass"};
             case simpleProcessNameWarpBypass: return {"simple_process_name_warp_bypass"};
             case simpleProcessPathWarpBypass: return {"simple_process_path_warp_bypass"};
+            case endpointPreferredBy: return {"endpoint_preferred_by"};
             default: return {"custom"};
         }
     }
@@ -81,6 +83,7 @@ namespace Configs {
         if (token == "simple_address_warp_bypass") return simpleAddressWarpBypass;
         if (token == "simple_process_name_warp_bypass") return simpleProcessNameWarpBypass;
         if (token == "simple_process_path_warp_bypass") return simpleProcessPathWarpBypass;
+        if (token == "endpoint_preferred_by") return endpointPreferredBy;
         return custom;
     }
 
@@ -128,20 +131,19 @@ namespace Configs {
         // since sing-box 1.11.0
         QString action = "route";
 
-        // reject options
         QString rejectMethod;
         bool no_drop = false;
 
-        // route options
         QString override_address;
         QString override_port;
+        // since sing-box 1.14.0
+        QString tls_spoof;
+        QString tls_spoof_method;
         // TODO maybe add some of dial fields?
 
-        // sniff options
         QStringList sniffers;
         bool sniffOverrideDest = false;
 
-        // resolve options
         QString strategy;
 
         QSet<QString> uiVisibleAttributes;
@@ -157,7 +159,6 @@ namespace Configs {
         void ensure_ui_visible_attribute_tabs_seeded();
         static inputType get_input_type(const QString& fieldName);
         static QStringList get_values_for_field(const QString& fieldName);
-        static std::shared_ptr<RouteRule> get_processPath_direct_rule(QString processPath);
         QStringList get_current_value_string(const QString& fieldName);
         [[nodiscard]] QString get_current_value_bool(const QString& fieldName) const;
         void set_field_value(const QString& fieldName, const QStringList& value);

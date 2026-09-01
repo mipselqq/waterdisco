@@ -75,8 +75,8 @@
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
-       <property name="styleSheet">
-        <string notr="true">color: rgb(102, 102, 102);</string>
+       <property name="colorRole" stdset="0">
+        <string notr="true">muted</string>
        </property>
        <property name="text">
         <string notr="true">地址</string>
@@ -111,8 +111,8 @@
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
-       <property name="styleSheet">
-        <string notr="true">color: rgb(251, 114, 153);</string>
+       <property name="colorRole" stdset="0">
+        <string notr="true">tag</string>
        </property>
        <property name="text">
         <string notr="true">类型</string>

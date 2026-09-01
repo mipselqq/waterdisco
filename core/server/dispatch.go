@@ -16,9 +16,7 @@ import (
 
 var globalServer = &server{}
 
-// runDispatch reads request frames and dispatches each to its own goroutine.
-// Request:  [uint32 reqId][uint16 methodLen][method][uint32 payloadLen][payload]
-// Response: [uint32 reqId][uint8 status][uint32 dataLen][data]   (little-endian)
+// Little-endian frames: req [uint32 reqId][uint16 methodLen][method][uint32 payloadLen][payload], resp [uint32 reqId][uint8 status][uint32 dataLen][data].
 func runDispatch(conn net.Conn) {
 	defer func() {
 		conn.Close()
@@ -44,40 +42,33 @@ func runDispatch(conn net.Conn) {
 	}
 
 	for {
-		// Read reqId (uint32 LE)
 		var reqId uint32
 		if err := binary.Read(conn, binary.LittleEndian, &reqId); err != nil {
 			return
 		}
 
-		// Read method name length (uint16 LE)
 		var methodLen uint16
 		if err := binary.Read(conn, binary.LittleEndian, &methodLen); err != nil {
 			return
 		}
 
-		// Read method name
 		methodBytes := make([]byte, methodLen)
 		if _, err := io.ReadFull(conn, methodBytes); err != nil {
 			return
 		}
 
-		// Read payload length (uint32 LE)
 		var payloadLen uint32
 		if err := binary.Read(conn, binary.LittleEndian, &payloadLen); err != nil {
 			return
 		}
 
-		// Read payload
 		payload := make([]byte, payloadLen)
 		if _, err := io.ReadFull(conn, payload); err != nil {
 			return
 		}
 
-		// Dispatch concurrently so long-running calls don't block the reader.
 		go func(id uint32, method string, pl []byte) {
-			// main()'s recover only covers the main goroutine, so without this
-			// one bad request takes the whole core down.
+			// main()'s recover covers only the main goroutine, so without this one bad request takes the core down.
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("panic in %s: %v\n%s", method, r, runtimeDebug.Stack())
@@ -96,7 +87,6 @@ func runDispatch(conn net.Conn) {
 
 type handlerFn func(context.Context, []byte) ([]byte, error)
 
-// handle adapts a typed server method to the wire: unmarshal, call, marshal.
 // PReq pins Req to the pointer type the generated code implements proto.Message on.
 func handle[Req any, PReq interface {
 	*Req
@@ -115,7 +105,6 @@ func handle[Req any, PReq interface {
 	}
 }
 
-// The whole RPC surface. Request types are inferred from each method signature.
 var handlers = map[string]handlerFn{
 	"Start":               handle(globalServer.Start),
 	"Stop":                handle(globalServer.Stop),
@@ -127,6 +116,7 @@ var handlers = map[string]handlerFn{
 	"QueryIPTest":         handle(globalServer.QueryIPTest),
 	"QueryStats":          handle(globalServer.QueryStats),
 	"QueryConnections":    handle(globalServer.QueryConnections),
+	"CloseConnections":    handle(globalServer.CloseConnections),
 	"QueryAutoSelectors":  handle(globalServer.QueryAutoSelectors),
 	"AutoSelectorAction":  handle(globalServer.AutoSelectorAction),
 	"IsPrivileged":        handle(globalServer.IsPrivileged),
@@ -136,6 +126,10 @@ var handlers = map[string]handlerFn{
 	"QuerySpeedTest":      handle(globalServer.QuerySpeedTest),
 	"QueryCountryTest":    handle(globalServer.QueryCountryTest),
 	"GenWgKeyPair":        handle(globalServer.GenWgKeyPair),
+	"InstallDashboard":    handle(globalServer.InstallDashboard),
+	"QueryVPNStatus":      handle(globalServer.QueryVPNStatus),
+	"SubmitVPNChallenge":  handle(globalServer.SubmitVPNChallenge),
+	"CancelVPNChallenge":  handle(globalServer.CancelVPNChallenge),
 }
 
 func dispatch(methodName string, payload []byte) ([]byte, error) {

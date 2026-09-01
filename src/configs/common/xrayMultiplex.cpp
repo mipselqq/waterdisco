@@ -44,8 +44,7 @@ namespace Configs {
 
     QJsonObject xrayMultiplex::ExportToJson() {
         QJsonObject object;
-        // tri-state: omit only for "Keep Default" (useDefault); persist On (true) /
-        // Off (false) explicitly so an Off choice survives a round-trip.
+        // Tri-state: omit only for "Keep Default" (useDefault); On/Off are persisted explicitly.
         if (useDefault) return object;
         object["enabled"] = enabled;
         if (!enabled) return object;

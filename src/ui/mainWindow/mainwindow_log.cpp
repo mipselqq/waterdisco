@@ -15,8 +15,6 @@
 namespace {
     constexpr qsizetype MAX_PENDING_LOG_CHARS = 2 * 1024 * 1024;
 
-    // Bypasses QTextEdit::append()'s per-call layout/scroll work, which dominates
-    // when the core spams lines; one edit block per batch instead.
     inline void FastAppendTextDocument(const QString &message, QTextDocument *doc) {
         QTextCursor cursor(doc);
         cursor.movePosition(QTextCursor::End);
@@ -37,8 +35,7 @@ void MainWindow::applyLogBrowserFont() {
 }
 
 void MainWindow::setLogHighlighter(bool darkMode) {
-    // A QSyntaxHighlighter attaches to the document and is never evicted by
-    // constructing another, so the old one must be deleted or they stack up.
+    // A QSyntaxHighlighter is never evicted by constructing another, so the old one must be deleted.
     delete logHighlighter;
     delete coreLogHighlighter;
     logHighlighter = new SyntaxHighlighter(darkMode, qvLogDocument);
@@ -115,8 +112,7 @@ void MainWindow::log_process_loop() {
             needsPost = !logFlushScheduled;
             logFlushScheduled = true;
         }
-        // At most one flush in flight; anything produced meanwhile is picked up by
-        // the flush that is already pending, so the UI event queue cannot grow.
+        // At most one flush in flight; later text rides the pending one, so the event queue cannot grow.
         if (needsPost) runOnUiThread([this] { flush_log_batch(); });
     }
 }

@@ -10,8 +10,6 @@
 
 namespace Stats
 {
-    // One member of a running auto-selector group, as the core last reported it,
-    // with the tag resolved back to the profile it came from.
     struct AutoSelectorMemberView
     {
         QString tag;
@@ -41,9 +39,6 @@ namespace Stats
         [[nodiscard]] bool isDead() const { return state == "dead"; }
         [[nodiscard]] bool isUsable() const { return state == "ok" || state == "degraded"; }
 
-        // Something is actually wrong with this member: it is failing, being
-        // backed off after a failed connection, or losing some of its checks.
-        // "untested" is not a problem — the prober simply has not reached it.
         [[nodiscard]] bool hasProblem() const
         {
             return state == "dead" || state == "cooldown" || state == "degraded";
@@ -59,15 +54,12 @@ namespace Stats
         QString selectedTag;
         QString selectedName;
         int selectedProfileID = -1;
-        // Set when the user pinned a member by hand. Differs from selectedTag
-        // whenever that member is not currently healthy — the pin is a
-        // preference, and the ranking still takes over when it has to.
+        // May differ from selectedTag: the pin is a preference, ranking still overrides an unhealthy member.
         QString pinnedTag;
         QString pinnedName;
         bool balance = false;
         QString balanceMode;
-        // The core believes the LOCAL network is down and has frozen its
-        // ranking. Nothing may be judged broken while this is set.
+        // Core froze its ranking (local network down); nothing may be judged broken while this is set.
         bool suspended = false;
         qint64 suspendedSinceMs = 0;
         int membersTotal = 0;
@@ -82,29 +74,20 @@ namespace Stats
         qint64 lastSwitchMs = 0;
         QString lastSwitchReason;
         qint64 updatedAtMs = 0;
-        // Set while the monitor is counting down to declaring the pool dead.
         qint64 exhaustedSinceMs = 0;
         QList<AutoSelectorMemberView> members;
 
-        // A one-line description of what the selector is doing right now — the
-        // point being that there is never a silent gap where the user cannot
-        // tell what it is up to.
         [[nodiscard]] QString summary() const;
 
-        // Second line: the numbers behind the summary.
         [[nodiscard]] QString detail() const;
     };
 
-    // Polls the core for auto-selector state while a selector profile is
-    // running. Measurement lives in the core (it is the one dialling); the
-    // decision to give up on a pool and rebuild lives here.
     class AutoSelectorMonitor : public QObject
     {
         Q_OBJECT
 
     public:
-        // Called when a profile starts. `infos` is empty for ordinary profiles,
-        // which puts the monitor back to sleep.
+        // An empty `infos` (an ordinary profile) puts the monitor back to sleep.
         void SetBuild(const QList<Configs::AutoSelectorBuildInfo> &infos);
 
         void Clear();
@@ -116,24 +99,16 @@ namespace Stats
 
         [[nodiscard]] bool Active() const;
 
-        // Force a full re-check of every member now.
         void RequestRecheck() const;
 
-        // Pins the group to one member, or hands it back to automatic selection
-        // when `tag` is empty. Returns the core's error, empty on success. The
-        // choice is stored on the profile so it outlives a restart.
+        // An empty `tag` restores automatic selection; returns the core's error, empty on success.
         [[nodiscard]] QString RequestSelect(const QString &tag);
 
-        // Writes what the core has measured back onto the member profiles, so a
-        // restart can hand it straight back instead of re-measuring the pool.
         void PersistHealth();
 
     signals:
-        // Fresh state arrived from the core.
         void updated();
-        // Every built member has been unusable for long enough, and the local
-        // network is demonstrably fine. The pool needs rebuilding from the next
-        // slice of the ranked list.
+        // Emitted only once every member has been unusable for the grace period while the local network is fine.
         void poolExhausted(int profileID);
 
     private:
@@ -155,16 +130,9 @@ namespace Stats
 
     extern AutoSelectorMonitor *autoSelectorMonitor;
 
-    // How long every member must stay unusable before the pool is declared
-    // exhausted. Long enough that a brief upstream hiccup cannot trigger a
-    // reconnect, short enough that a genuinely dead pool is replaced quickly.
     constexpr int kPoolExhaustedGraceSecs = 20;
-    // Floor between two rebuilds, doubled on each consecutive rebuild up to the
-    // ceiling, so a subscription that is entirely dead cannot spin.
+    // Doubled on each consecutive rebuild, up to the max.
     constexpr int kRebuildBackoffMinSecs = 60;
     constexpr int kRebuildBackoffMaxSecs = 600;
-    // How often the core's measurements are written back to the member profiles.
-    // Often enough that a crash loses little, rare enough that a 300-member pool
-    // is not writing rows every couple of seconds.
     constexpr int kHealthPersistSecs = 60;
 } // namespace Stats

@@ -8,6 +8,12 @@
 #include "include/configs/common/utils.h"
 
 namespace Configs {
+    static bool ParseAmneziaBool(const QString& value)
+    {
+        auto trimmed = value.trimmed();
+        return trimmed.compare("true", Qt::CaseInsensitive) == 0 || trimmed == "1";
+    }
+
     bool Peer::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);
@@ -91,10 +97,7 @@ namespace Configs {
         return {object, ""};
     }
 
-    // A plain interval stays a JSON number so configs remain readable by
-    // standard WireGuard clients; only an AmneziaWG range needs a string.
-    // Anything that is neither is dropped rather than passed to the core, which
-    // would refuse to start the endpoint.
+    // A range must be a string and a plain interval a number; anything else makes the core refuse to start.
     void Peer::WriteKeepalive(QJsonObject& object) const
     {
         if (persistent_keepalive.isEmpty()) return;
@@ -112,7 +115,6 @@ namespace Configs {
 
     bool wireguard::ParseFromLink(const QString& link)
     {
-        // Try WireGuard config file format first
         if (link.contains("[Interface]") && link.contains("[Peer]")) {
             auto lines = link.split("\n");
             for (const auto& line : lines) {
@@ -164,11 +166,12 @@ namespace Configs {
                 if (key == "RejectAfterTime") reject_after_time = value, enable_amnezia = true;
                 if (key == "KeepaliveTimeout") keepalive_timeout = value, enable_amnezia = true;
                 if (key == "MaxHandshakeAttempts") max_handshake_attempts = value, enable_amnezia = true;
+                if (key == "RandomTrailers") random_trailers = ParseAmneziaBool(value), enable_amnezia = true;
+                if (key == "DisableCookies") disable_cookies = ParseAmneziaBool(value), enable_amnezia = true;
             }
             return !private_key.isEmpty() && !peer->public_key.isEmpty();
         }
         
-        // Standard wg:// URL format
         auto url = QUrl(link);
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query());
@@ -212,6 +215,8 @@ namespace Configs {
         if (query.hasQueryItem("reject_after_time")) reject_after_time = query.queryItemValue("reject_after_time"), enable_amnezia = true;
         if (query.hasQueryItem("keepalive_timeout")) keepalive_timeout = query.queryItemValue("keepalive_timeout"), enable_amnezia = true;
         if (query.hasQueryItem("max_handshake_attempts")) max_handshake_attempts = query.queryItemValue("max_handshake_attempts"), enable_amnezia = true;
+        if (query.hasQueryItem("random_trailers")) random_trailers = ParseAmneziaBool(query.queryItemValue("random_trailers")), enable_amnezia = true;
+        if (query.hasQueryItem("disable_cookies")) disable_cookies = ParseAmneziaBool(query.queryItemValue("disable_cookies")), enable_amnezia = true;
         FixAddress();
 
         return !(private_key.isEmpty() || peer->public_key.isEmpty() || server.isEmpty());
@@ -275,6 +280,8 @@ namespace Configs {
             if (!reject_after_time.isEmpty()) query.addQueryItem("reject_after_time", reject_after_time);
             if (!keepalive_timeout.isEmpty()) query.addQueryItem("keepalive_timeout", keepalive_timeout);
             if (!max_handshake_attempts.isEmpty()) query.addQueryItem("max_handshake_attempts", max_handshake_attempts);
+            if (random_trailers) query.addQueryItem("random_trailers", "true");
+            if (disable_cookies) query.addQueryItem("disable_cookies", "true");
         }
 
         mergeUrlQuery(query, outbound::ExportToLink());
@@ -394,6 +401,8 @@ namespace Configs {
         if (!reject_after_time.isEmpty()) object["reject_after_time"] = reject_after_time;
         if (!keepalive_timeout.isEmpty()) object["keepalive_timeout"] = keepalive_timeout;
         if (!max_handshake_attempts.isEmpty()) object["max_handshake_attempts"] = max_handshake_attempts;
+        if (random_trailers) object["random_trailers"] = true;
+        if (disable_cookies) object["disable_cookies"] = true;
         return object;
     }
 
@@ -424,6 +433,8 @@ namespace Configs {
         if (object.contains("reject_after_time")) reject_after_time = AmneziaRangeFromJson(object["reject_after_time"]);
         if (object.contains("keepalive_timeout")) keepalive_timeout = AmneziaRangeFromJson(object["keepalive_timeout"]);
         if (object.contains("max_handshake_attempts")) max_handshake_attempts = AmneziaRangeFromJson(object["max_handshake_attempts"]);
+        if (object.contains("random_trailers")) random_trailers = object["random_trailers"].toBool();
+        if (object.contains("disable_cookies")) disable_cookies = object["disable_cookies"].toBool();
     }
 
     // Ranges are written as strings, but sing-box also accepts a bare number.
