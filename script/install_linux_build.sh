@@ -11,7 +11,7 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/Waterdisco}"
 CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 CORE_PATH="${CORE_PATH:-}"
-CORE_GO_TAGS="${CORE_GO_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_purego,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
+CORE_GO_TAGS="${CORE_GO_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_openvpn,with_openconnect,with_purego,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
 
 log() {
   printf '[install] %s\n' "$*"
@@ -103,25 +103,9 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
   if [[ -z "$CORE_PATH" ]]; then
     log "Building ThroneCore from core/server"
     mkdir -p "$BUILD_DIR"
+    "$ROOT_DIR/script/gen_proto.sh"
     (
       cd "$ROOT_DIR/core/server"
-      if [[ ! -f "gen/libcore.pb.go" || ! -f "gen/libcore_grpc.pb.go" ]]; then
-        need_cmd protoc
-        export PATH="$(go env GOPATH)/bin:$PATH"
-        if ! command -v protoc-gen-go >/dev/null 2>&1; then
-          log "Installing protoc-gen-go"
-          GOWORK=off GO111MODULE=on go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-        fi
-        if ! command -v protoc-gen-go-grpc >/dev/null 2>&1; then
-          log "Installing protoc-gen-go-grpc"
-          GOWORK=off GO111MODULE=on go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-        fi
-        log "Generating Go gRPC bindings from gen/libcore.proto"
-        (
-          cd gen
-          protoc -I . --go_out=. --go-grpc_out=. libcore.proto
-        )
-      fi
 
       # Force module mode so local imports like ThroneCore/gen resolve even if user env disables modules.
       # Keep parity with script/build_go.sh tags so Clash API and related features are available.
