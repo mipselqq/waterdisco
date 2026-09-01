@@ -277,7 +277,13 @@ type testEnv struct {
 
 // `current` measures the running instance instead of building one, and owns nothing.
 func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConfigs []string,
-	coreConfig string, tags []string, useDefaultOutbound bool) (*testEnv, error) {
+	coreConfig string, tags []string, useDefaultOutbound bool,
+	xrayDNSStrategy string) (*testEnv, error) {
+
+	// Owned here, not by the caller: this builds the probe box the Xray instances below resolve through.
+	var boxCtx boxContextHolder
+	prepareXray := xrayPreparer(xrayDNSStrategy, boxCtx.get)
+
 	if current {
 		box := currentBox()
 		if box == nil {
@@ -328,7 +334,9 @@ func prepareTestEnv(current bool, needXray bool, xrayConfig string, xrayFullConf
 	}
 	cleanups = append(cleanups, func() { closeXrayInstances(fullXray) })
 
-	box, cancel, err := boxmain.Create([]byte(applyHostEgress(coreConfig)))
+	// applyHostEgress keeps a live VPN's host routes on the test box so ranked
+	// probes do not tear down the running tunnel.
+	box, cancel, err := boxmain.Create([]byte(applyHostEgress(coreConfig)), boxCtx.publish)
 	if err != nil {
 		unwind()
 		return nil, err
@@ -664,7 +672,8 @@ func (s *server) IPTest(ctx context.Context, in *gen.IPTestRequest) (*gen.IPTest
 	// second, isolated Hysteria instance whose lifecycle is unrelated to the
 	// active tunnel and guarantees that split routing cannot leak the host IP.
 	env, err := prepareTestEnv(in.GetTestCurrent(), in.GetNeedXray(), in.GetXrayConfig(),
-		in.XrayFullConfigs, in.GetConfig(), in.OutboundTags, in.GetUseDefaultOutbound())
+		in.XrayFullConfigs, in.GetConfig(), in.OutboundTags, in.GetUseDefaultOutbound(),
+		in.GetXrayOutboundDnsStrategy())
 	if err != nil {
 		return nil, err
 	}

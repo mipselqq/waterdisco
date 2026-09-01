@@ -332,6 +332,8 @@ message IPTestRequest {
   // core. This is required for the live connection indicator: it must observe
   // the exact egress that is currently carrying traffic.
   optional bool test_current = 9 [default = false];
+  // See TestReq.xray_outbound_dns_strategy.
+  optional string xray_outbound_dns_strategy = 10 [default = ""];
 }
 
 message IPTestResp {

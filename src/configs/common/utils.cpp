@@ -5,6 +5,8 @@
 #include "include/global/Configs.hpp"
 #include "include/global/Utils.hpp"
 
+#include <QJsonArray>
+
 namespace Configs
 {
     void mergeUrlQuery(QUrlQuery& baseQuery, const QString& strQuery)

@@ -27,6 +27,7 @@
 #include "include/global/HTTPRequestHelper.hpp"
 #include "include/stats/traffic/TrafficLooper.hpp"
 #include "include/stats/autoselector/AutoSelectorMonitor.hpp"
+#include "include/ui/mainWindow/TestRunner.h"
 #include "include/ui/setting/Icon.hpp"
 #include "include/global/CountryHelper.hpp"
 #include "include/ui/stats/dialog_auto_selector.h"
@@ -237,6 +238,10 @@ void MainWindow::refresh_status(const QString &traffic_update) {
 
     const auto route = Configs::dataManager->routesRepo->GetRouteProfile(settings->current_route_id);
     const QString activeRouteName = (route && route->name != "Default") ? route->name : "";
+    // VPN tunnel state takes this slot when an endpoint is up; otherwise the live country.
+    const QString runningDetail = m_vpnEndpointState.isEmpty()
+                                      ? (running ? running->runningCountryInfo : QString())
+                                      : m_vpnEndpointState;
 
     auto make_title = [=,this](bool isTray) {
         QStringList tt;
@@ -879,7 +884,7 @@ void MainWindow::url_test_current() {
                 MW_show_log(QString("UrlTest error: %1").arg(QString::fromStdString(result.results[0].error.value())));
             }
             if (latency <= 0) {
-                MW_show_log(tr("Test Result") + ": " + tr("Unavailable"));
+                MW_show_log(tr("Test Result") + ": " + (vpnText.isEmpty() ? tr("Unavailable") : vpnText));
             } else if (latency > 0) {
                 MW_show_log(tr("Test Result") + ": " + QString("%1 ms").arg(latency));
             }

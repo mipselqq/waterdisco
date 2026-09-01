@@ -228,28 +228,6 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_STRING(sub_ver_os)
     D_LOAD_INT_ENABLE(sub_auto_update, sub_auto_update_enable)
     D_LOAD_INT_ENABLE(route_auto_update, route_auto_update_enable)
-    // Mux
-    D_LOAD_INT(mux_concurrency)
-    D_LOAD_COMBO_STRING(mux_protocol)
-    D_LOAD_BOOL(mux_padding)
-    D_LOAD_BOOL(mux_default_on)
-    D_LOAD_COMBO_STRING(fragment_implementation)
-    D_LOAD_BOOL(fragment_default_on)
-    D_LOAD_BOOL(tls_tricks_default_on)
-    D_LOAD_STRING(fragment_size)
-    D_LOAD_STRING(fragment_sleep)
-    ui->fragment_size->setValidator(new QRegularExpressionValidator(QRegularExpression("^[0-9]+(-[0-9]+)?$"), this));
-    ui->fragment_sleep->setValidator(new QRegularExpressionValidator(QRegularExpression("^[0-9]+(-[0-9]+)?$"), this));
-    // size/sleep only affect the custom implementation, so enable them only for it
-    auto syncFragParams = [this](const QString &impl) {
-        bool custom = impl == "custom";
-        ui->fragment_size->setEnabled(custom);
-        ui->fragment_sleep->setEnabled(custom);
-        ui->fragment_size_l->setEnabled(custom);
-        ui->fragment_sleep_l->setEnabled(custom);
-    };
-    connect(ui->fragment_implementation, &QComboBox::currentTextChanged, this, syncFragParams);
-    syncFragParams(ui->fragment_implementation->currentText());
     ui->dns_in_port->setValidator(new QIntValidator(1, 65535, ui->dns_in_port));
     ui->dns_in_port->setText(Int2String(Configs::dataManager->settingsRepo->core_dns_in_port));
 
