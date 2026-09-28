@@ -427,7 +427,7 @@ QTabBar::tab:selected {
         <number>0</number>
        </property>
        <property name="documentMode">
-        <bool>true</bool>
+        <bool>false</bool>
        </property>
        <property name="movable">
         <bool>true</bool>
@@ -436,15 +436,15 @@ QTabBar::tab:selected {
         <attribute name="title">
          <string/>
         </attribute>
-        <layout class="QGridLayout" name="gridLayout_2">
+        <layout class="QVBoxLayout" name="verticalLayout_tab1">
          <property name="leftMargin">
-          <number>1</number>
+          <number>0</number>
          </property>
          <property name="topMargin">
           <number>0</number>
          </property>
          <property name="rightMargin">
-          <number>1</number>
+          <number>0</number>
          </property>
          <property name="bottomMargin">
           <number>0</number>
@@ -452,7 +452,7 @@ QTabBar::tab:selected {
          <property name="spacing">
           <number>0</number>
          </property>
-         <item row="0" column="0">
+         <item>
           <widget class="ProfilesTableView" name="profilesTableView">
            <property name="contextMenuPolicy">
             <enum>Qt::ContextMenuPolicy::CustomContextMenu</enum>
@@ -554,7 +554,7 @@ QTabBar::tab:selected {
               <bool>true</bool>
              </property>
              <property name="documentMode">
-              <bool>true</bool>
+              <bool>false</bool>
              </property>
              <property name="tabsClosable">
               <bool>false</bool>
@@ -580,13 +580,13 @@ QTabBar::tab:selected {
                 <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
                </property>
                <property name="leftMargin">
-                <number>1</number>
+                <number>0</number>
                </property>
                <property name="topMargin">
                 <number>0</number>
                </property>
                <property name="rightMargin">
-                <number>1</number>
+                <number>0</number>
                </property>
                <property name="bottomMargin">
                 <number>0</number>
@@ -615,75 +615,22 @@ QTabBar::tab:selected {
                 <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
                </property>
                <property name="leftMargin">
-                <number>1</number>
+                <number>0</number>
                </property>
                <property name="topMargin">
                 <number>0</number>
                </property>
                <property name="rightMargin">
-                <number>1</number>
+                <number>0</number>
                </property>
                <property name="bottomMargin">
                 <number>0</number>
                </property>
                <item>
-                <widget class="QTableWidget" name="connections">
+                <widget class="QTreeView" name="connections">
                  <property name="autoFillBackground">
                   <bool>false</bool>
                  </property>
-                 <column>
-                  <property name="text">
-                   <string>Destination (Domain)</string>
-                  </property>
-                  <property name="toolTip">
-                   <string>Click To Disable Sorting</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string>Process</string>
-                  </property>
-                  <property name="toolTip">
-                   <string>Click To Sort By Process</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string>Protocol</string>
-                  </property>
-                  <property name="toolTip">
-                   <string>Click To Sort By Protocol</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string>Outbound</string>
-                  </property>
-                  <property name="toolTip">
-                   <string>Click To Sort By Outbound</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string>Traffic</string>
-                  </property>
-                  <property name="toolTip">
-                   <string>Click to sort by traffic; right-click to choose total/down/up</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string>Speed</string>
-                  </property>
-                  <property name="toolTip">
-                   <string>Click to sort by speed; right-click to choose total/down/up</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string notr="true"/>
-                  </property>
-                 </column>
                 </widget>
                </item>
               </layout>
@@ -700,13 +647,38 @@ QTabBar::tab:selected {
                 <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
                </property>
                <property name="leftMargin">
-                <number>1</number>
+                <number>0</number>
                </property>
                <property name="topMargin">
                 <number>0</number>
                </property>
                <property name="rightMargin">
-                <number>1</number>
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+              </layout>
+             </widget>
+             <widget class="QWidget" name="runtime_tab">
+              <attribute name="title">
+               <string>Runtime Stats</string>
+              </attribute>
+              <layout class="QHBoxLayout" name="horizontalLayout_7">
+               <property name="spacing">
+                <number>0</number>
+               </property>
+               <property name="sizeConstraint">
+                <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
                </property>
                <property name="bottomMargin">
                 <number>0</number>
@@ -947,7 +919,6 @@ QTabBar::tab:selected {
     <addaction name="separator"/>
     <addaction name="menu_otp_manager"/>
     <addaction name="separator"/>
-    <addaction name="actionRuntime_Stats"/>
     <addaction name="actionTraffic_Stats"/>
     <addaction name="actionCheck_For_Update"/>
    </widget>
@@ -1537,6 +1508,11 @@ QTabBar::tab:selected {
   <action name="actionCheck_For_Update">
    <property name="text">
     <string>Check For Update</string>
+   </property>
+  </action>
+  <action name="actionUpdate_Rule_Sets">
+   <property name="text">
+    <string>Update Rule-Sets</string>
    </property>
   </action>
  </widget>

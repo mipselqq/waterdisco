@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QSsl>
 #include <functional>
 
 class QNetworkAccessManager;
@@ -18,6 +19,17 @@ namespace Configs_network {
         QString fileName;
         qint64 downloadedSize;
         qint64 totalSize;
+    };
+
+    struct HttpGetOptions {
+        bool useProxy = false;
+        // > 0 aborts the transfer once the body exceeds it and reports an error.
+        qint64 maxBytes = 0;
+        // Empty sends the global User-Agent.
+        QString userAgent;
+        QList<QPair<QByteArray, QByteArray>> headers;
+        QSsl::SslProtocol tlsProtocol = QSsl::SecureProtocols;
+        bool http2 = true;
     };
 
     class NetworkRequestHelper : QObject {

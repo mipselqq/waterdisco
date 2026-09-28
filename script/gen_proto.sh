@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-GEN_DIR="$ROOT_DIR/core/server/gen"
+GEN_DIR="$ROOT_DIR/core/gen"
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {

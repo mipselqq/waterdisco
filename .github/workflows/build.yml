@@ -14,43 +14,42 @@ jobs:
       contents: read
     strategy:
       matrix:
-        # windowslegacy runs the darwin host toolchain from go.zip; keep it on macOS.
         include:
           - cross_os: windows
             cross_arch: amd64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: ubuntu-22.04
           - cross_os: windows
             cross_arch: arm64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: ubuntu-22.04
           - cross_os: linux
             cross_arch: amd64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: ubuntu-22.04
           - cross_os: linux
             cross_arch: arm64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: ubuntu-22.04
           - cross_os: darwin
             cross_arch: amd64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: macos-latest
           - cross_os: darwin
             cross_arch: arm64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: macos-latest
           - cross_os: darwinlegacy
             cross_arch: amd64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: macos-latest
           - cross_os: windowslegacy
             cross_arch: amd64
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: macos-latest
           - cross_os: windowslegacy
             cross_arch: 386
-            go_version: "1.26.7"
+            go_version: "1.27.0"
             runner: macos-latest
       fail-fast: false
     runs-on: ${{ matrix.runner }}
@@ -58,7 +57,7 @@ jobs:
       DEST: ${{ github.workspace }}/deployment/${{ matrix.cross_os }}-${{ matrix.cross_arch }}
     steps:
       - name: Checking out sources
-        uses: actions/checkout@v4.3.1
+        uses: actions/checkout@v7.0.1
       - name: Cache Common Download
         id: cache-common
         uses: actions/cache@v6.1.0
@@ -67,11 +66,11 @@ jobs:
           key: CommonCache-${{ matrix.cross_os }}-${{ matrix.cross_arch }}-${{ hashFiles('script/build_go.sh', 'core/**') }}-${{ matrix.go_version }}
       - name: Install Golang
         if: steps.cache-common.outputs.cache-hit != 'true'
-        uses: actions/setup-go@v6.5.0
+        uses: actions/setup-go@v7.0.0
         with:
           go-version: ${{ matrix.go_version }}
           cache-dependency-path: |
-            core/server/go.sum
+            core/go.sum
       - name: Install Golang For Legacy OS
         if: steps.cache-common.outputs.cache-hit != 'true' && contains( matrix.cross_os, 'legacy' )
         run: |
@@ -86,15 +85,15 @@ jobs:
       - name: Installing protoc-gen-go
         if: steps.cache-common.outputs.cache-hit != 'true'
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
       - name: Clone cronet-go
         if: matrix.cross_os == 'linux'
         run: |
           set -xeuo pipefail
           git init ~/cronet-go
-          git -C ~/cronet-go remote add origin https://github.com/parhelia512/cronet-go.git
-          git -C ~/cronet-go fetch --depth=1 origin "9ed95366ae2f9b4b994cf54f8f9de0d8bc350057"
+          git -C ~/cronet-go remote add origin https://github.com/throneproj/cronet-go.git
+          git -C ~/cronet-go fetch --depth=1 origin "2ee86b72426042457b8eb879ab32296f5752bf2f"
           git -C ~/cronet-go checkout FETCH_HEAD
           git -C ~/cronet-go submodule update --init --recursive --depth=1
       - name: Download Chromium toolchain
@@ -122,6 +121,46 @@ jobs:
         with:
           name: Waterdisco-${{ github.sha }}-Common-${{ matrix.cross_os }}-${{ matrix.cross_arch }}
           path: artifacts.tgz
+          compression-level: 0
+  build-android:
+    permissions:
+      contents: read
+    runs-on: ubuntu-22.04
+    env:
+      DEST: ${{ github.workspace }}/deployment/android
+      NDK_VERSION: "28.2.13676358"
+    steps:
+      - name: Checking out sources
+        uses: actions/checkout@v7.0.1
+      - name: Install Golang
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version: "1.27.0"
+          cache-dependency-path: |
+            core/go.sum
+      - name: Install JDK 17
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Android NDK
+        run: |
+          set -xeuo pipefail
+          echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+      - name: Install gomobile
+        run: |
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.13
+      - name: Build Android AAR
+        shell: bash
+        run: ./script/build_android.sh
+      - name: Uploading Artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ThroneCore-android-${{ github.sha }}
+          path: deployment/android/ThroneCore.aar
+          if-no-files-found: error
           compression-level: 0
   build-cpp:
     permissions:
@@ -204,13 +243,12 @@ jobs:
       DEST: ${{ github.workspace }}/deployment/${{ matrix.dest_suffix }}
       DEST_SUFFIX: ${{ matrix.dest_suffix }}
       ARCH: ${{ matrix.target }}
-      # Unquoted at the cmake call sites so it word-splits into two flags.
       LAUNCHER_ARGS: ${{ matrix.launcher != '' && format('-DCMAKE_C_COMPILER_LAUNCHER={0} -DCMAKE_CXX_COMPILER_LAUNCHER={0}', matrix.launcher) || '' }}
     steps:
       - name: Checking out sources
-        uses: actions/checkout@v4.3.1
+        uses: actions/checkout@v7.0.1
       - name: Checking out the web dashboard
-        uses: actions/checkout@v4.3.1
+        uses: actions/checkout@v7.0.1
         with:
           repository: SagerNet/sing-box-dashboard
           ref: gh-pages
@@ -231,7 +269,7 @@ jobs:
           arch: ${{ matrix.target }}
       - name: Setup compiler cache
         if: matrix.launcher != ''
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.24
         with:
           key: ${{ matrix.dest_suffix }}-${{ matrix.qt_version }}
           variant: ${{ matrix.launcher }}
@@ -327,17 +365,78 @@ jobs:
           name: Waterdisco-${{ github.sha }}-${{ matrix.dest_suffix }}
           path: artifacts.tgz
           compression-level: 0
-  publish:
-    name: Pack & Publish Release
-    runs-on: ubuntu-latest
+  pack:
+    name: Pack ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
     needs:
       - build-cpp
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - target: windows
+            runner: windows-latest
+            artifacts: "windows*"
+          - target: linux-amd64
+            runner: ubuntu-latest
+            artifacts: "linux-amd64*"
+            tools: rpm
+          - target: linux-arm64
+            runner: ubuntu-latest
+            artifacts: "linux-arm64*"
+            tools: rpm
+          - target: macos
+            runner: ubuntu-latest
+            artifacts: "darwin*"
+          - target: debug
+            runner: ubuntu-latest
+            artifacts: "*"
+      fail-fast: false
+    steps:
+      - name: Checking out sources
+        uses: actions/checkout@v7.0.1
+      - name: Download Artifacts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: Waterdisco-${{ github.sha }}-${{ matrix.artifacts }}
+          path: download-artifact
+      - name: Install packaging tools
+        if: matrix.tools
+        run: sudo apt install ${{ matrix.tools }}
+      - name: Pack
+        shell: bash
+        run: bash ./script/pack_release.sh ${{ matrix.target }} "${{ github.event.inputs.tag }}"
+      - name: Uploading Artifact
+        if: matrix.target != 'debug'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Pack-${{ github.sha }}-${{ matrix.target }}
+          path: |
+            deployment/Throne-*
+            deployment/Waterdisco-*
+          if-no-files-found: error
+          compression-level: 0
+      - name: Uploading Debug Artifact
+        if: matrix.target == 'debug'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Debug-${{ github.sha }}
+          path: deployment/debug-symbols.zip
+          if-no-files-found: error
+          compression-level: 0
+  publish:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs:
+      - pack
+      - build-android
     permissions:
       contents: write
       actions: read
     steps:
       - name: Checking out sources
-        uses: actions/checkout@v4.3.1
+        uses: actions/checkout@v7.0.1
       - name: Download Artifacts
         uses: actions/download-artifact@v8.0.1
         with:
@@ -348,10 +447,11 @@ jobs:
           mv ghr*linux_amd64/ghr .
           find . -name artifacts.tgz | xargs -n1 tar xzf
           ####
-          sudo apt install nsis rpm
-          cp ./script/windows_installer.nsi .
-          makensis windows_installer.nsi
-          cp ThroneSetup.exe deployment/Waterdisco-${{ github.event.inputs.tag }}-windows-universal-installer.exe
+          sudo apt install rpm
+          # The Windows pack job builds this with Inno Setup. NSIS is gone.
+          installer=$(find download-artifact -name 'Waterdisco-*-windows-universal-installer.exe' -print -quit)
+          test -n "$installer"
+          cp "$installer" "deployment/Waterdisco-${{ github.event.inputs.tag }}-windows-universal-installer.exe"
           ####
           cd deployment
           mkdir debug
@@ -443,31 +543,18 @@ jobs:
       - name: Uploading Debug Artifact
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: Debug-${{ github.sha }}
-          path: deployment/debug-symbols.zip
-          compression-level: 0
-      - name: Clean Up
-        run: |
-          cd deployment
-          rm -rf windows-amd64
-          rm -rf windows-arm64
-          rm -rf linux-amd64
-          rm -rf linux-amd64-system-qt
-          rm -rf linux-arm64
-          rm -rf linux-arm64-system-qt
-          rm -rf darwin-amd64
-          rm -rf darwin-arm64
-          rm -rf darwinlegacy-amd64
-          rm -rf windowslegacy-amd64
-          rm -rf windowslegacy-386
-          rm -rf *.pdb
-          rm -rf debug*
+          name: ThroneCore-android-${{ github.sha }}
+          path: deployment
       - name: Uploading Artifact
         uses: actions/upload-artifact@v7.0.1
         with:
           name: Deployment-${{ github.sha }}
           path: deployment
           compression-level: 0
+      - name: Installing ghr
+        run: |
+          curl -Lo - https://github.com/tcnksm/ghr/releases/download/v0.17.0/ghr_v0.17.0_linux_amd64.tar.gz | tar xzv
+          mv ghr*linux_amd64/ghr .
       - name: PreRelease
         if: github.event.inputs.publish == 'p'
         run: |

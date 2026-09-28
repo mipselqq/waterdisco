@@ -13,7 +13,7 @@
 #include <memory>
 
 #ifndef Q_MOC_RUN
-#include <core/server/gen/libcore.pb.h>
+#include <core/gen/libcore.pb.h>
 #endif
 
 #include "include/database/entities/Profile.h"
@@ -30,8 +30,10 @@ public:
     TestRunner(const TestRunner&) = delete;
     TestRunner& operator=(const TestRunner&) = delete;
 
-    // `onFinished` fires on every exit path, so a caller may block on it.
     void runUrlTests(const QList<int>& profileIDs, const std::function<void()>& onFinished = {});
+
+    // Waits out a running session instead of refusing it; returns at once and is safe from any thread.
+    void queueUrlTests(const QList<int>& profileIDs, const std::function<void()>& onFinished);
 
     void runIpTests(const QList<int>& profileIDs);
 
@@ -75,7 +77,7 @@ private:
     };
 
     void runLatencyGroup(LatencyKind kind, const QList<int>& requestedIDs,
-                         const std::function<void()>& onFinished);
+                         const std::function<void()>& onFinished, bool waitForSession = false);
 
     void runUrlProbe(const Target& target);
 
@@ -116,9 +118,11 @@ private:
 
     QString contextName(int entID) const;
 
-    void pollSpeedTest(const QMap<QString, int>& tag2entID, bool testCurrent);
+    bool staleGen(quint64 gen) const { return sessionGen_.load() != gen; }
 
-    void pollCountryTest(const QMap<QString, int>& tag2entID, bool testCurrent);
+    void pollSpeedTest(const QMap<QString, int>& tag2entID, bool testCurrent, quint64 gen);
+
+    void pollCountryTest(const QMap<QString, int>& tag2entID, bool testCurrent, quint64 gen);
 
     void creditTraffic(const std::shared_ptr<Configs::Profile>& profile, const QString& tag,
                        qint64 curUp, qint64 curDown);
@@ -132,7 +136,7 @@ private:
 
     // Held for a whole sweep, so it must never double as a per-batch latch.
     QMutex session_;
-    // A poll thread is not joined, so a late tick must not drain the next sweep.
+    // A poll thread is not joined, so a late tick must not drain the next batch.
     std::atomic<quint64> sessionGen_ = 0;
     std::atomic<bool> stopRequested_ = false;
     std::atomic<bool> testingCurrent_ = false;

@@ -508,7 +508,6 @@ void ProfilesTableModel::refreshTable(const QList<int> &ids, bool mayNeedReset) 
     if (needFullReset) {
         setProfileIds(ids);
     } else {
-        // A bulk refresh can rewrite filter fields (clearing tests wipes test_country).
         m_filterKeys.clear();
         m_filterIndexBuilt = false;
 

@@ -10,11 +10,7 @@
 struct ThemeTokens {
     QColor surface;
     QColor onSurface;
-    QColor accent;       // never carries text; onAccent exists for callers that must
-    QColor onAccent;
-    QColor selectedFill;
-    QColor hoverFill;
-    QColor borderSubtle;
+    QColor accent;
     QColor muted;
     QColor tag;
     QColor danger;
@@ -35,4 +31,4 @@ signals:
     void themeChanged(QString themeName);
 };
 
-extern ThemeManager *themeManager;
+ThemeManager *themeManager();

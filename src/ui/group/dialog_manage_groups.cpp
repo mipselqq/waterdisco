@@ -9,6 +9,7 @@
 #include <QListWidgetItem>
 #include <QMessageBox>
 
+#include "include/database/DatabaseManager.h"
 #include "include/database/GroupsRepo.h"
 
 

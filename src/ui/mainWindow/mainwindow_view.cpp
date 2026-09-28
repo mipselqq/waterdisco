@@ -46,15 +46,18 @@ void MainWindow::applyTopBarMetrics() {
     // Drop the previous run's floor: a stale minimum gets baked into minimumSizeHint() below.
     for (auto* b : menuButtons) b->setMinimumWidth(0);
 
-    // Content width only: ::menu-indicator already clears the label, so no arrow padding.
     int uniformButtonWidth = 0;
     for (auto* b : menuButtons) {
         b->ensurePolished();
         uniformButtonWidth = qMax(uniformButtonWidth, b->sizeHint().width());
     }
+
+    // CJK glyphs and long RU labels fill QToolButton's one-space slack and run into the chevron (#1665, #1829).
+    if (usesTightLabels()) {
+        uniformButtonWidth += 2 * fontMetrics().horizontalAdvance(' ');
+    }
     for (auto* b : menuButtons) b->setMinimumWidth(uniformButtonWidth);
 
-    // Translated labels outgrow the designed 800x600 floor, so follow what the layout needs (#1665).
     const QSize contentMin = minimumSizeHint();
     setMinimumSize(qMax(designMinimumSize.width(), contentMin.width()),
                    qMax(designMinimumSize.height(), contentMin.height()));
@@ -180,6 +183,20 @@ void MainWindow::UpdateDataView(bool)
     }, Qt::QueuedConnection);
 }
 
+void MainWindow::noteRestartNeeded(const QString& reason)
+{
+    if (Configs::dataManager->settingsRepo->started_id < 0) return;
+    dataViewHtmlGenerator_.addPendingRestartReason(reason);
+    UpdateDataView(true);
+}
+
+void MainWindow::clearRestartNeeded()
+{
+    if (!dataViewHtmlGenerator_.hasPendingRestart()) return;
+    dataViewHtmlGenerator_.clearPendingRestart();
+    UpdateDataView(true);
+}
+
 void MainWindow::setDownloadReport(const DownloadProgressReport& report, bool show)
 {
     dataViewHtmlGenerator_.setDownloadReport(report, show);
@@ -265,19 +282,19 @@ void MainWindow::refresh_status(const QString &traffic_update) {
         return tt.join(isTray ? "\n" : " ");
     };
 
-    auto icon_status_new = Icon::NONE;
+    auto icon_status_new = Icon::TrayIconStatus::None;
 
     if (running != nullptr) {
         if (settings->spmode_vpn) {
-            icon_status_new = Icon::VPN;
+            icon_status_new = Icon::TrayIconStatus::Vpn;
         } else if (settings->system_dns_set && settings->spmode_system_proxy) {
-            icon_status_new = Icon::SYSTEM_PROXY_DNS;
+            icon_status_new = Icon::TrayIconStatus::SystemProxyDns;
         } else if (settings->system_dns_set) {
-            icon_status_new = Icon::DNS;
+            icon_status_new = Icon::TrayIconStatus::Dns;
         } else if (settings->spmode_system_proxy) {
-            icon_status_new = Icon::SYSTEM_PROXY;
+            icon_status_new = Icon::TrayIconStatus::SystemProxy;
         } else {
-            icon_status_new = Icon::RUNNING;
+            icon_status_new = Icon::TrayIconStatus::Running;
         }
     }
 

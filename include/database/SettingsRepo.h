@@ -2,6 +2,7 @@
 
 #include "Database.h"
 #include "include/global/Const.hpp"
+#include "include/sys/UrlScheme.hpp"
 #include <QMutexLocker>
 #include <QJsonObject>
 #include <QMap>
@@ -15,7 +16,8 @@
 namespace Configs {
     // Loopback/broadcast are deliberately absent: routing them into the tun breaks the sing-box <-> Xray bridges and local DNS.
     inline QStringList defaultTunPrivateRanges() {
-        return {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "224.0.0.0/4"};
+        return {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "224.0.0.0/4",
+                "fc00::/7", "fe80::/10", "ff00::/8"};
     }
 
     class SettingsRepo {
@@ -65,6 +67,8 @@ namespace Configs {
         QString mainWindowGeometry;
         QString log_level = "info";
         QString test_latency_url = "http://cp.cloudflare.com/";
+        // Fetched WITHOUT any proxy, so it must be reachable directly; empty falls back to the OS.
+        QString direct_test_url = "";
         int url_test_timeout_ms = 3000;
         bool disable_tray = false;
         int test_concurrent = 100;
@@ -137,9 +141,11 @@ namespace Configs {
         int profiles_sort_column = 9;
         bool profiles_sort_descending = true;
 
-        // Mirror of the throne:// registration we last wrote to the OS; startup re-registers only when it differs.
+        // Mirrors of the registrations we last wrote to the OS; startup re-registers only when they differ.
         QString url_scheme_mirror = "";
-        bool url_scheme_auto_register = true;
+        bool url_scheme_auto_register = UrlScheme_AutoRegisterByDefault();
+        QString file_assoc_mirror = "";
+        bool file_assoc_auto_register = false;
 
         // Network
         bool net_use_proxy = false;
@@ -148,9 +154,13 @@ namespace Configs {
 
         // Subscription
         QString user_agent = ""; // set at main.cpp
-        // Sign encodes enabled (negative = off), magnitude = interval minutes (ignored if < 30); *_last is epoch seconds.
+        // Configs::subTlsVersion / Configs::subHttpVersion values.
+        int sub_tls_version = 0;
+        int sub_http_version = 0;
+        // Sign encodes enabled (negative = off), magnitude = interval minutes (ignored if < 30).
         int sub_auto_update = -30;
-        qint64 sub_auto_update_last = 0;
+        // Follow a server's profile-update-interval instead of sub_auto_update's minutes.
+        bool sub_respect_server_interval = false;
         bool sub_clear = false;
         bool sub_show_change_popup = true;
         bool sub_send_hwid = true;
@@ -198,6 +208,7 @@ namespace Configs {
         int dns_cache_capacity = 65536;
         bool dns_disable_cache = false;
         bool dns_disable_expire = false;
+        bool dns_persist_cache = false;
         bool dns_reverse_mapping = false;
         bool enable_dns_routing = true;
         bool use_dns_object = false;
@@ -269,6 +280,15 @@ namespace Configs {
         QStringList warp_ifc_addrs = {};
         QString warp_ep = "";
         QStringList warp_reserved = {};
+        bool warp_tos_accepted = false;
+        QString warp_mode = "wireguard"; // "wireguard" or "masque"
+        QString warp_masque_private_key = "";
+        QString warp_masque_peer_public_key = "";
+        QString warp_masque_ep = "";
+        QStringList warp_masque_ifc_addrs = {};
+        QString warp_masque_sni = "consumer-masque.cloudflareclient.com";
+        int warp_masque_http_mode = 0; // 0 = HTTP/3 with fallback, 1 = HTTP/3 only, 2 = HTTP/2
+        QStringList warp_api_hosts = {}; // registration API domains, tried in order; empty = api.cloudflareclient.com
 
         // Hijack
         bool enable_dns_server = false;
@@ -309,6 +329,9 @@ namespace Configs {
         // Fetched on demand into GetBasePath(), which the core exposes to Xray via XRAY_LOCATION_ASSET.
         QString xray_geoip_url = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/release/geoip.dat";
         QString xray_geosite_url = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/release/geosite.dat";
+        // Last 5 hand-typed URLs per field, offered alongside the built-in providers.
+        QStringList xray_geoip_url_history = {};
+        QStringList xray_geosite_url_history = {};
 
         // Extra Core Paths
         QStringList extraCorePaths = {};

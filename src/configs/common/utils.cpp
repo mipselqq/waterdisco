@@ -57,9 +57,13 @@ namespace Configs
         if (!url.isValid()) return false;
         auto query = QUrlQuery(url.query());
         const auto transport = query.queryItemValue("type");
-        // sing-box has no equivalent of the raw HTTP header, so these must go to Xray.
-        const bool rawHttp = (transport.isEmpty() || transport == "tcp" || transport == "raw")
-                             && query.queryItemValue("headerType") == "http";
+        const auto security = query.queryItemValue("security");
+        // sing-box's http transport speaks the raw HTTP header only in plaintext; TLS (which a bare sni also enables) turns it into h2
+        const bool rawHttpOverTls = (transport.isEmpty() || transport == "tcp" || transport == "raw")
+                                    && query.queryItemValue("headerType") == "http"
+                                    && ((!security.isEmpty() && security != "none")
+                                        || !query.queryItemValue("sni").isEmpty()
+                                        || !query.queryItemValue("peer").isEmpty());
 
         if (dataManager->settingsRepo->xray_vless_preference == Xray::AllVLESS
             || query.queryItemValue("type") == "xhttp"

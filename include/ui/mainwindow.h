@@ -3,7 +3,7 @@
 #include <QMainWindow>
 #include <include/global/HTTPRequestHelper.hpp>
 #ifndef Q_MOC_RUN
-#include <core/server/gen/libcore.pb.h>
+#include <core/gen/libcore.pb.h>
 #endif
 
 #include "include/global/Configs.hpp"
@@ -16,8 +16,9 @@
 
 #ifndef MW_INTERFACE
 
+#include <optional>
 #include <QKeyEvent>
-#include <QSystemTrayIcon>
+#include "include/ui/widget/TrayIcon.hpp"
 #include <QPointer>
 #include <QTimer>
 #include <QElapsedTimer>
@@ -30,6 +31,7 @@
 #include <QSet>
 #include <QHash>
 #include <QIcon>
+#include <QPixmap>
 #include <QToolButton>
 #include <QCheckBox>
 #include <QSemaphore>
@@ -42,6 +44,7 @@
 #include "group/GroupSort.hpp"
 #include "include/database/entities/Group.h"
 #include "include/global/GuiUtils.hpp"
+#include "include/ui/setting/Icon.hpp"
 #include "include/ui/utils/DataViewHtmlGenerator.h"
 #include "include/ui/utils/ProfilesFilterProxyModel.h"
 #include "include/ui/utils/ProfilesTableModel.h"
@@ -52,6 +55,10 @@
 
 namespace Configs_sys {
     class CoreProcess;
+}
+
+namespace Configs {
+    enum simpleAction : int;
 }
 
 class TrayProfileSelector;
@@ -127,6 +134,8 @@ public:
 
     void refresh_groups();
 
+    void updateTabToolTip(int gid);
+
     void refresh_status(const QString &traffic_update = "");
 
     void update_traffic_graph(int proxyDl, int proxyUp, int directDl, int directUp);
@@ -153,11 +162,14 @@ public:
 
     void RestartCore();
 
-    void UpdateConnectionList(const QMap<QString, Stats::ConnectionMetadata>& toUpdate, const QMap<QString, Stats::ConnectionMetadata>& toAdd);
-
-    void UpdateConnectionListWithRecreate(const QList<Stats::ConnectionMetadata>& connections);
+    // Whole poll snapshot in the lister's order, never a delta. UI thread only.
+    void UpdateConnectionList(const QList<Stats::ConnectionMetadata>& connections);
 
     void UpdateDataView(bool force = false);
+
+    void noteRestartNeeded(const QString& reason);
+
+    void clearRestartNeeded();
 
     void refresh_auto_selector_view();
 
@@ -288,12 +300,13 @@ private:
     QTextBrowser *coreLogBrowser = nullptr;
     //
     QString title_error;
-    int icon_status = -1;
+    std::optional<Icon::TrayIconStatus> icon_status;
     std::shared_ptr<Configs::Profile> running;
     int last_running_profile_id = -1;
     bool m_profileConnecting = false;
     bool m_profileDisconnecting = false;
     bool m_xrayGeoAssetBusy = false;
+    bool m_ruleSetUpdateBusy = false;
     QString traffic_update_cache;
     QString hostInfoIp;
     bool hostInfoProbeInFlight = false;
@@ -313,13 +326,20 @@ private:
     ExitReason exit_reason = ExitReason::None;
     QMutex mu_download_update;
     QMutex mu_download_dashboard;
-    QMutex connectionListMu;
+    class ConnectionsTreeModel *connectionsModel = nullptr;
+    class ConnectionsTreeFilterProxyModel *connectionsFilterModel = nullptr;
     class ConnectionsFilterHeader *connectionFilterHeader = nullptr;
+    QHash<QString, bool> m_processExpanded; // per-process choices; the rest follow m_processesExpandedByDefault
+    bool m_processesExpandedByDefault = false;
     QTimer *connectionFilterDebounce = nullptr;
+    QToolButton *connectionExpandButton = nullptr;
     QToolButton *connectionCloseAllButton = nullptr;
     QIcon connectionCloseIcon;
+    QIcon connectionExpandIcon;
+    QIcon connectionCollapseIcon;
     int toolTipID;
     SpeedWidget *speedChartWidget;
+    class RuntimeStatsWidget *runtimeStatsWidget = nullptr;
     std::atomic<qint64> lastUpdatedMs = QDateTime::currentMSecsSinceEpoch();
     std::atomic<bool> dataViewUpdateScheduled_{false};
     DataViewHtmlGenerator dataViewHtmlGenerator_;
@@ -415,6 +435,8 @@ private:
 
     void import_or_handle_deeplink(const QString &text);
 
+    void import_text(const QString &text);
+
     void refresh_proxy_list_column_size();
 
     void refresh_proxy_list_impl(const QList<int> &ids = {}, bool mayNeedReset = false);
@@ -468,6 +490,7 @@ private:
     void applyLogBrowserFont();
 
     void applyTopBarMetrics();
+    bool usesTightLabels() const;
 
     QSize designMinimumSize;
 
@@ -554,7 +577,6 @@ private:
     QHash<QString, QString> m_vpnOtpLastCode;
     QHash<QString, int> m_vpnOtpRejects;
     QSet<QString> m_vpnChallengeAnswering;
-    // Like m_vpnAuthPrompted, these outlive the restart they count; nothing else would end it.
     QHash<int, int> m_vpnAutoRestarts;
     qint64 m_vpnAutoRestartAt = 0;
     // Survives the restart the recovery itself triggers, so a rejected retry cannot loop.
@@ -562,6 +584,8 @@ private:
     int m_vpnAuthRestartID = -1;
 
     bool set_system_dns(bool set, bool save_set = true);
+
+    void showHijackDeprecationNotice();
 
     void CheckUpdate();
 
@@ -573,6 +597,12 @@ private:
 
     void setupConnectionSortMenu();
 
+    void onConnectionContextMenu(const QPoint &pos);
+
+    QString routeRuleAppendBlocker() const;
+
+    bool addRuleToCurrentRoute(const QString &rawRule, Configs::simpleAction action);
+
     void setupConnectionFilter();
 
     void restoreConnectionSort();
@@ -581,18 +611,21 @@ private:
 
     void applyConnectionFilters();
 
-    void buildConnectionRow(int row);
+    void syncConnectionSourceColumn();
 
-    void fillConnectionRow(int row, const Stats::ConnectionMetadata &conn);
+    void syncConnectionExpansion();
 
-    void resizeConnectionRows(int count);
+    void setConnectionGroupsExpanded(bool expanded);
 
-    // Rows are rewritten on every poll, so ids are read at click time, never captured.
+    bool connectionGroupsExpanded() const;
+
+    void syncConnectionExpandButton();
+
     void closeConnections(const QStringList &ids);
 
     QStringList listedConnectionIds() const;
 
-    void refreshConnectionCloseIcons();
+    void refreshConnectionIcons();
 
     // Called only after the RPC socket is accepted.  Keeping all automatic
     // start decisions here avoids racing core readiness with startup timers.
@@ -607,7 +640,7 @@ protected:
 };
 
 inline MainWindow *GetMainWindow() {
-    return (MainWindow *) mainwindow;
+    return qobject_cast<MainWindow *>(mainwindow);
 }
 
 void UI_InitMainWindow();

@@ -8,40 +8,26 @@
 
 #include "include/database/GroupsRepo.h"
 #include "include/ui/mainwindow.h"
+#include "include/ui/stats/dialog_endpoint_details.h"
+#include "include/ui/widget/SubscriptionInfoCard.hpp"
 
-
-QString ParseSubInfo(const QString &info) {
-    if (info.trimmed().isEmpty()) return "";
-
-    QString result;
-
-    long long used = 0;
-    long long total = 0;
-    long long expire = 0;
-
-    auto re0m = QRegularExpression("total=([0-9]+)").match(info);
-    if (re0m.lastCapturedIndex() >= 1) {
-        total = re0m.captured(1).toLongLong();
-    } else {
-        return "";
+namespace {
+    QString ParseSubInfo(const Configs::Group &group) {
+        const auto &sub = group.sub_info;
+        QStringList parts;
+        if (sub.valid && sub.has_quota) {
+            QString remainStr = (sub.total > 0) ? ReadableSize(sub.remaining()) : QString::fromUtf8("\u221E");
+            QString expireStr = (sub.expire > 0) ? DisplayTime(sub.expire, QLocale::ShortFormat) : QObject::tr("None");
+            parts << QObject::tr("Used: %1 Remain: %2 Expire: %3").arg(ReadableSize(sub.used()), remainStr, expireStr);
+        }
+        if (sub.valid && sub.expire > 0) {
+            parts << SubscriptionInfoCard::expiryText(sub.expire);
+        }
+        if (const auto plan = Subscription::ResolveAutoUpdate(group); plan.interval > 0) {
+            parts << QObject::tr("Auto-update: every %1").arg(Stats::HumanizeDuration(plan.interval));
+        }
+        return parts.join(" | ");
     }
-    auto re1m = QRegularExpression("upload=([0-9]+)").match(info);
-    if (re1m.lastCapturedIndex() >= 1) {
-        used += re1m.captured(1).toLongLong();
-    }
-    auto re2m = QRegularExpression("download=([0-9]+)").match(info);
-    if (re2m.lastCapturedIndex() >= 1) {
-        used += re2m.captured(1).toLongLong();
-    }
-    auto re3m = QRegularExpression("expire=([0-9]+)").match(info);
-    if (re3m.lastCapturedIndex() >= 1) {
-        expire = re3m.captured(1).toLongLong();
-    }
-
-    result = QObject::tr("Used: %1 Remain: %2 Expire: %3")
-                         .arg(ReadableSize(used), (total == 0) ? QString::fromUtf8("\u221E") : ReadableSize(total - used), DisplayTime(expire, QLocale::ShortFormat));
-
-    return result;
 }
 
 GroupItem::GroupItem(QWidget *parent, const std::shared_ptr<Configs::Group> &ent, QListWidgetItem *item) : QWidget(parent), ui(new Ui::GroupItem) {
@@ -53,8 +39,10 @@ GroupItem::GroupItem(QWidget *parent, const std::shared_ptr<Configs::Group> &ent
     this->item = item;
     if (ent == nullptr) return;
 
+    ui->subinfo->setTextFormat(Qt::PlainText);
+
     connect(this, &GroupItem::edit_clicked, this, &GroupItem::on_edit_clicked);
-    connect(Subscription::groupUpdater, &Subscription::GroupUpdater::asyncUpdateCallback, this, [=,this](int gid) { if (gid == this->ent->id) refresh_data(); });
+    connect(Subscription::updater(), &Subscription::GroupUpdater::asyncUpdateCallback, this, [=,this](int gid) { if (gid == this->ent->id) refresh_data(); });
 
     refresh_data();
 }
@@ -81,8 +69,8 @@ void GroupItem::refresh_data() {
         if (ent->sub_last_update != 0) {
             info << tr("Last update: %1").arg(DisplayTime(ent->sub_last_update, QLocale::ShortFormat));
         }
-        auto subinfo = ParseSubInfo(ent->info);
-        if (!ent->info.isEmpty()) {
+        auto subinfo = ParseSubInfo(*ent);
+        if (!subinfo.isEmpty()) {
             info << subinfo;
         }
         if (info.isEmpty()) {
@@ -102,7 +90,7 @@ void GroupItem::refresh_data() {
 }
 
 void GroupItem::on_update_sub_clicked() {
-    Subscription::groupUpdater->AsyncUpdate(ent->url, ent->id, nullptr, true);
+    Subscription::updater()->RefreshGroup(ent->id, nullptr, true);
 }
 
 void GroupItem::on_edit_clicked() {

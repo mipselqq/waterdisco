@@ -101,11 +101,11 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
   cmake --build "$BUILD_DIR" --target Throne --parallel "$BUILD_JOBS" --verbose
 
   if [[ -z "$CORE_PATH" ]]; then
-    log "Building ThroneCore from core/server"
+    log "Building ThroneCore from core"
     mkdir -p "$BUILD_DIR"
     "$ROOT_DIR/script/gen_proto.sh"
     (
-      cd "$ROOT_DIR/core/server"
+      cd "$ROOT_DIR/core"
 
       # Force module mode so local imports like ThroneCore/gen resolve even if user env disables modules.
       # Keep parity with script/build_go.sh tags so Clash API and related features are available.

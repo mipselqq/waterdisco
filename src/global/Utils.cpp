@@ -9,6 +9,7 @@
 #include <QTcpServer>
 #include <QTimer>
 #include <QMessageBox>
+#include <QPointer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonObject>
@@ -262,16 +263,39 @@ QString DisplayTime(long long time, int formatType) {
 }
 
 QWidget *GetMessageBoxParent() {
-    auto activeWindow = QApplication::activeWindow();
-    if (activeWindow == nullptr && mainwindow != nullptr) {
-        if (mainwindow->isVisible()) return mainwindow;
-        return nullptr;
+    auto parent = QApplication::activeWindow();
+    // A child box dies with its parent box, even while it is still running on the caller's stack.
+    while (qobject_cast<QMessageBox *>(parent) != nullptr) {
+        parent = parent->parentWidget() != nullptr ? parent->parentWidget()->window() : nullptr;
     }
-    return activeWindow;
+    if (parent == nullptr && mainwindow != nullptr && mainwindow->isVisible()) return mainwindow;
+    return parent;
 }
 
 int MessageBoxWarning(const QString &title, const QString &text) {
     return QMessageBox::warning(GetMessageBoxParent(), title, text);
+}
+
+void ShowPassiveWarning(const QString &title, const QString &text) {
+    static QPointer<QMessageBox> box;
+    if (box) {
+        box->setWindowTitle(title);
+        box->setText(text);
+        box->raise();
+        return;
+    }
+    box = new QMessageBox(QMessageBox::Warning, title, text, QMessageBox::Ok, GetMessageBoxParent());
+    // Callers embed foreign text (adapter names, SQLite messages); AutoText would render a tag-like one as HTML.
+    box->setTextFormat(Qt::PlainText);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->setWindowModality(Qt::NonModal);
+    box->show();
+}
+
+void PostPassiveWarning(const QString &title, const QString &text) {
+    auto *app = QCoreApplication::instance();
+    if (app == nullptr) return;
+    QMetaObject::invokeMethod(app, [title, text] { ShowPassiveWarning(title, text); }, Qt::QueuedConnection);
 }
 
 int MessageBoxInfo(const QString &title, const QString &text) {

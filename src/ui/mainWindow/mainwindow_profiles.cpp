@@ -93,7 +93,7 @@ void MainWindow::on_menu_clone_triggered() {
         sls << ent->outbound->ExportJsonLink();
     }
 
-    Subscription::groupUpdater->AsyncUpdate(sls.join("\n"));
+    Subscription::updater()->ImportText(sls.join("\n"));
 }
 
 void MainWindow::on_menu_delete_repeat_triggered() {
@@ -124,7 +124,6 @@ void MainWindow::on_menu_delete_repeat_triggered() {
             newOrder += id;
             continue;
         }
-        // A repeated slot loses the row but keeps the profile; only a distinct id is deleted.
         if (!repeatedSlot) del_ids += id;
         if (const auto ent = byId.value(id); ent != nullptr && remove_display_count < removeListPreviewLimit) {
             remove_display += ent->outbound->DisplayTypeAndName() + " \n ";
@@ -232,7 +231,6 @@ void MainWindow::on_menu_export_config_triggered() {
             MessageBoxWarning("Build Test config error", res->error);
             return;
         }
-        // An xray-full config is tested as its own box, so surface that wrapper here.
         if (!res->xrayFullConfigs.isEmpty()) config_core = res->xrayFullConfigs.first();
         else config_core = QJsonObject2QString(res->coreConfig, true);
         QApplication::clipboard()->setText(config_core);
@@ -314,7 +312,6 @@ void MainWindow::display_qr_link(bool nkrFormat) {
     auto ent = Configs::dataManager->profilesRepo->GetProfile(ents.first());
     auto link = ent->outbound->ExportToLink();
     auto link_deep = ent->outbound->ExportJsonLink();
-    // Some protocols have no share-link form; fall back rather than encode "".
     auto w = new W(link, link_deep, nkrFormat || link.isEmpty());
     w->setWindowTitle(ent->outbound->DisplayTypeAndName());
     w->exec();
@@ -329,7 +326,7 @@ void MainWindow::parseQrImage(const QPixmap *image)
     } else {
         for (const QString &text : texts) {
             MW_show_log("QR Code Result:\n" + text);
-            Subscription::groupUpdater->AsyncUpdate(text);
+            import_text(text);
         }
     }
 }
@@ -348,7 +345,7 @@ void MainWindow::on_menu_scan_qr_triggered() {
     }
     for (const QString &text : texts) {
         MW_show_log("QR Code Result:\n" + text);
-        Subscription::groupUpdater->AsyncUpdate(text);
+        import_text(text);
     }
 }
 
@@ -475,7 +472,6 @@ void MainWindow::on_menu_remove_insecure_triggered() {
     int remove_display_count = 0;
     for (const auto& profile : profiles) {
         if (!profile || !profile->outbound) continue;
-        // Configs of unknown security (e.g. unparseable custom ones) are spared.
         if (!profile->outbound->GetSecurity().isDangerous()) continue;
         del_ids += profile->id;
         if (remove_display_count < removeListPreviewLimit) {
@@ -666,8 +662,7 @@ void MainWindow::clearUnavailableProfiles(bool confirm, QList<int> profileIDs) {
 
     auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDs);
     for (const auto &profile: profiles) {
-        // A Connect-OK profile failed only the egress probe; its tunnel is up.
-        if (profile->latency < 0 && profile->latency != Configs::kLatencyConnectOnly) {
+        if (profile->IsUnavailable()) {
             del_ids += profile->id;
             if (++remove_display_count == removeListPreviewLimit) {
                 remove_display += "...";

@@ -45,6 +45,7 @@ namespace Configs {
             {"vpn_auto_redirect",             &vpn_auto_redirect},
             {"vpn_l3_bridge",                 &vpn_l3_bridge},
             {"sub_clear",                     &sub_clear},
+            {"sub_respect_server_interval",   &sub_respect_server_interval},
             {"sub_show_change_popup",         &sub_show_change_popup},
             {"net_insecure",                  &net_insecure},
             {"sub_send_hwid",                 &sub_send_hwid},
@@ -73,16 +74,19 @@ namespace Configs {
             {"log_enable_exclude",            &log_enable_exclude},
             {"log_auto_scroll",               &log_auto_scroll},
             {"enable_warp",                   &enable_warp},
+            {"warp_tos_accepted",             &warp_tos_accepted},
             {"enable_dns_routing",            &enable_dns_routing},
             {"inbound_auth",                  &inbound_auth},
             {"allow_stopping_active_profile", &allow_stopping_active_profile},
             {"disable_mixed_inbound",         &disable_mixed_inbound},
             {"url_scheme_auto_register",      &url_scheme_auto_register},
+            {"file_assoc_auto_register",      &file_assoc_auto_register},
             {"system_proxy_enabled",          &remember_system_proxy},
             {"tun_mode_enabled",              &remember_tun},
             {"reset_proxy_on_disable_sp", &reset_proxy_on_disable_sp},
             {"dns_disable_cache", &dns_disable_cache},
             {"dns_disable_expire", &dns_disable_expire},
+            {"dns_persist_cache", &dns_persist_cache},
             {"dns_reverse_mapping", &dns_reverse_mapping},
             {"disable_private_range_bypass", &disable_private_range_bypass},
             {"dns_optimistic", &dns_optimistic},
@@ -108,6 +112,8 @@ namespace Configs {
             {"connection_sort",        &connection_sort},
             {"traffic_stats_retention_days", &traffic_stats_retention_days},
             {"sub_auto_update",        &sub_auto_update},
+            {"sub_tls_version",        &sub_tls_version},
+            {"sub_http_version",       &sub_http_version},
             {"route_auto_update",      &route_auto_update},
             {"vpn_mtu",                &vpn_mtu},
             {"ntp_server_port",        &ntp_server_port},
@@ -125,11 +131,13 @@ namespace Configs {
             {"dns_cache_capacity", &dns_cache_capacity},
             {"h2_max_concurrent_streams", &h2_max_concurrent_streams},
             {"quic_initial_packet_size", &quic_initial_packet_size},
+            {"warp_masque_http_mode",  &warp_masque_http_mode},
         };
 
         stringMap = {
             {"user_agent2",                &user_agent},
             {"test_url",                   &test_latency_url},
+            {"direct_test_url",            &direct_test_url},
             {"inbound_address",            &inbound_address},
             {"log_level",                  &log_level},
             {"log_file_level",             &log_file_level},
@@ -191,9 +199,15 @@ namespace Configs {
             {"warp_private_key",           &warp_private_key},
             {"warp_public_key",            &warp_public_key},
             {"warp_ep",                    &warp_ep},
+            {"warp_mode",                  &warp_mode},
+            {"warp_masque_private_key",    &warp_masque_private_key},
+            {"warp_masque_peer_public_key", &warp_masque_peer_public_key},
+            {"warp_masque_ep",             &warp_masque_ep},
+            {"warp_masque_sni",            &warp_masque_sni},
             {"inbound_user",               &inbound_user},
             {"inbound_pass",               &inbound_pass},
             {"url_scheme_mirror",          &url_scheme_mirror},
+            {"file_assoc_mirror",          &file_assoc_mirror},
         };
 
         stringListMap = {
@@ -206,6 +220,8 @@ namespace Configs {
             {"log_exclude_regex",        &log_exclude_regex},
             {"warp_ifc_addrs",           &warp_ifc_addrs},
             {"vpn_private_ranges",       &vpn_private_ranges},
+            {"xray_geoip_url_history",   &xray_geoip_url_history},
+            {"xray_geosite_url_history", &xray_geosite_url_history},
             {"dial_bind_ifc_history",    &dial_bind_interface_history},
             {"dial_inet4_bind_history",  &dial_inet4_bind_address_history},
             {"dial_inet6_bind_history",  &dial_inet6_bind_address_history},
@@ -257,10 +273,6 @@ namespace Configs {
                 remote_dns_disable_ipv6 = str == "ipv4_only";
                 continue;
             }
-            if (key == "sub_auto_update_last") {
-                sub_auto_update_last = str.toLongLong();
-                continue;
-            }
             if (key == "route_auto_update_last") {
                 route_auto_update_last = str.toLongLong();
                 continue;
@@ -299,7 +311,7 @@ namespace Configs {
         if (noSave) return;
 
         std::vector<std::pair<std::string, std::string>> keyValues;
-        keyValues.reserve(boolMap.size() + intMap.size() + stringMap.size() + stringListMap.size() + 4);
+        keyValues.reserve(boolMap.size() + intMap.size() + stringMap.size() + stringListMap.size() + 3);
 
         const auto addPair = [&keyValues](const QString& key, const auto& value) {
             keyValues.emplace_back(key.toStdString(), value);
@@ -328,9 +340,7 @@ namespace Configs {
         addPair(QStringLiteral("xray_vless_preference"),
             std::to_string(static_cast<int>(xray_vless_preference)));
 
-        // qint64 timestamps: out of range for the int map, so persisted here.
-        addPair(QStringLiteral("sub_auto_update_last"),
-            std::to_string(sub_auto_update_last));
+        // qint64 timestamp: out of range for the int map, so persisted here.
         addPair(QStringLiteral("route_auto_update_last"),
             std::to_string(route_auto_update_last));
 

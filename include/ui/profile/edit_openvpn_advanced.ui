@@ -53,10 +53,13 @@
                <property name="text">
                 <string>Mode</string>
                </property>
+               <property name="buddy">
+                <cstring>mode</cstring>
+               </property>
               </widget>
              </item>
              <item row="0" column="1">
-              <widget class="QComboBox" name="mode"/>
+              <widget class="NoWheelComboBox" name="mode"/>
              </item>
              <item row="1" column="0">
               <widget class="QLabel" name="topology_l">
@@ -66,10 +69,13 @@
                <property name="text">
                 <string>Topology</string>
                </property>
+               <property name="buddy">
+                <cstring>topology</cstring>
+               </property>
               </widget>
              </item>
              <item row="1" column="1">
-              <widget class="QComboBox" name="topology"/>
+              <widget class="NoWheelComboBox" name="topology"/>
              </item>
              <item row="2" column="0">
               <widget class="QLabel" name="auth_retry_l">
@@ -79,10 +85,13 @@
                <property name="text">
                 <string>Auth Retry</string>
                </property>
+               <property name="buddy">
+                <cstring>auth_retry</cstring>
+               </property>
               </widget>
              </item>
              <item row="2" column="1">
-              <widget class="QComboBox" name="auth_retry"/>
+              <widget class="NoWheelComboBox" name="auth_retry"/>
              </item>
              <item row="3" column="0" colspan="2">
               <widget class="QCheckBox" name="remote_random">
@@ -102,6 +111,9 @@
                <property name="text">
                 <string>Local Address</string>
                </property>
+               <property name="buddy">
+                <cstring>address</cstring>
+               </property>
               </widget>
              </item>
              <item row="4" column="1">
@@ -119,6 +131,9 @@
                <property name="text">
                 <string>Peer Address</string>
                </property>
+               <property name="buddy">
+                <cstring>peer_address</cstring>
+               </property>
               </widget>
              </item>
              <item row="5" column="1">
@@ -131,6 +146,9 @@
                </property>
                <property name="text">
                 <string>Peer Address (IPv6)</string>
+               </property>
+               <property name="buddy">
+                <cstring>peer_address_ipv6</cstring>
                </property>
               </widget>
              </item>
@@ -228,6 +246,9 @@
                <property name="text">
                 <string>Static Key</string>
                </property>
+               <property name="buddy">
+                <cstring>static_key</cstring>
+               </property>
               </widget>
              </item>
              <item row="0" column="1">
@@ -245,6 +266,9 @@
                <property name="text">
                 <string>Static Key Path</string>
                </property>
+               <property name="buddy">
+                <cstring>static_key_path</cstring>
+               </property>
               </widget>
              </item>
              <item row="1" column="1">
@@ -258,10 +282,13 @@
                <property name="text">
                 <string>Key Direction</string>
                </property>
+               <property name="buddy">
+                <cstring>key_direction</cstring>
+               </property>
               </widget>
              </item>
              <item row="2" column="1">
-              <widget class="QComboBox" name="key_direction"/>
+              <widget class="NoWheelComboBox" name="key_direction"/>
              </item>
              <item row="3" column="0">
               <widget class="QLabel" name="cipher_l">
@@ -270,6 +297,9 @@
                </property>
                <property name="text">
                 <string>Data Cipher</string>
+               </property>
+               <property name="buddy">
+                <cstring>cipher</cstring>
                </property>
               </widget>
              </item>
@@ -299,6 +329,9 @@
                <property name="text">
                 <string>Server Name</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_server_name</cstring>
+               </property>
               </widget>
              </item>
              <item row="0" column="1">
@@ -312,10 +345,13 @@
                <property name="text">
                 <string>Server Name Type</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_server_name_type</cstring>
+               </property>
               </widget>
              </item>
              <item row="1" column="1">
-              <widget class="QComboBox" name="tls_server_name_type"/>
+              <widget class="NoWheelComboBox" name="tls_server_name_type"/>
              </item>
              <item row="2" column="0">
               <widget class="QLabel" name="tls_certificate_path_l">
@@ -324,6 +360,9 @@
                </property>
                <property name="text">
                 <string>CA Certificate Path</string>
+               </property>
+               <property name="buddy">
+                <cstring>tls_certificate_path</cstring>
                </property>
               </widget>
              </item>
@@ -338,6 +377,9 @@
                <property name="text">
                 <string>Client Certificate Path</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_client_certificate_path</cstring>
+               </property>
               </widget>
              </item>
              <item row="3" column="1">
@@ -350,6 +392,9 @@
                </property>
                <property name="text">
                 <string>Client Key Path</string>
+               </property>
+               <property name="buddy">
+                <cstring>tls_client_key_path</cstring>
                </property>
               </widget>
              </item>
@@ -364,6 +409,9 @@
                <property name="text">
                 <string>Control Wrap Key Path</string>
                </property>
+               <property name="buddy">
+                <cstring>control_wrap_key_path</cstring>
+               </property>
               </widget>
              </item>
              <item row="5" column="1">
@@ -376,6 +424,9 @@
                </property>
                <property name="text">
                 <string>Peer Fingerprint</string>
+               </property>
+               <property name="buddy">
+                <cstring>tls_peer_fingerprint</cstring>
                </property>
               </widget>
              </item>
@@ -394,6 +445,9 @@
                <property name="text">
                 <string>CRL Path</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_crl_path</cstring>
+               </property>
               </widget>
              </item>
              <item row="7" column="1">
@@ -406,6 +460,9 @@
                </property>
                <property name="text">
                 <string>Remote Certificate KU</string>
+               </property>
+               <property name="buddy">
+                <cstring>tls_remote_certificate_ku</cstring>
                </property>
               </widget>
              </item>
@@ -420,6 +477,9 @@
                <property name="text">
                 <string>Remote Certificate EKU</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_remote_certificate_eku</cstring>
+               </property>
               </widget>
              </item>
              <item row="9" column="1">
@@ -433,10 +493,13 @@
                <property name="text">
                 <string>Remote Certificate TLS</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_remote_certificate_tls</cstring>
+               </property>
               </widget>
              </item>
              <item row="10" column="1">
-              <widget class="QComboBox" name="tls_remote_certificate_tls"/>
+              <widget class="NoWheelComboBox" name="tls_remote_certificate_tls"/>
              </item>
              <item row="11" column="0">
               <widget class="QLabel" name="tls_certificate_profile_l">
@@ -446,10 +509,13 @@
                <property name="text">
                 <string>Certificate Profile</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_certificate_profile</cstring>
+               </property>
               </widget>
              </item>
              <item row="11" column="1">
-              <widget class="QComboBox" name="tls_certificate_profile"/>
+              <widget class="NoWheelComboBox" name="tls_certificate_profile"/>
              </item>
              <item row="12" column="0">
               <widget class="QLabel" name="tls_ns_certificate_type_l">
@@ -459,10 +525,13 @@
                <property name="text">
                 <string>NS Certificate Type</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_ns_certificate_type</cstring>
+               </property>
               </widget>
              </item>
              <item row="12" column="1">
-              <widget class="QComboBox" name="tls_ns_certificate_type"/>
+              <widget class="NoWheelComboBox" name="tls_ns_certificate_type"/>
              </item>
              <item row="13" column="0">
               <widget class="QLabel" name="tls_version_min_l">
@@ -472,10 +541,13 @@
                <property name="text">
                 <string>Min TLS Version</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_version_min</cstring>
+               </property>
               </widget>
              </item>
              <item row="13" column="1">
-              <widget class="QComboBox" name="tls_version_min"/>
+              <widget class="NoWheelComboBox" name="tls_version_min"/>
              </item>
              <item row="14" column="0">
               <widget class="QLabel" name="tls_version_max_l">
@@ -485,10 +557,13 @@
                <property name="text">
                 <string>Max TLS Version</string>
                </property>
+               <property name="buddy">
+                <cstring>tls_version_max</cstring>
+               </property>
               </widget>
              </item>
              <item row="14" column="1">
-              <widget class="QComboBox" name="tls_version_max"/>
+              <widget class="NoWheelComboBox" name="tls_version_max"/>
              </item>
              <item row="15" column="0">
               <widget class="QLabel" name="tls_cipher_l">
@@ -497,6 +572,9 @@
                </property>
                <property name="text">
                 <string>TLS Cipher</string>
+               </property>
+               <property name="buddy">
+                <cstring>tls_cipher</cstring>
                </property>
               </widget>
              </item>
@@ -510,6 +588,9 @@
                </property>
                <property name="text">
                 <string>TLS Groups</string>
+               </property>
+               <property name="buddy">
+                <cstring>tls_groups</cstring>
                </property>
               </widget>
              </item>
@@ -539,6 +620,9 @@
                <property name="text">
                 <string>Data Ciphers</string>
                </property>
+               <property name="buddy">
+                <cstring>data_ciphers</cstring>
+               </property>
               </widget>
              </item>
              <item row="0" column="1">
@@ -556,6 +640,9 @@
                <property name="text">
                 <string>Data Ciphers Fallback</string>
                </property>
+               <property name="buddy">
+                <cstring>data_ciphers_fallback</cstring>
+               </property>
               </widget>
              </item>
              <item row="1" column="1">
@@ -569,6 +656,9 @@
                <property name="text">
                 <string>Auth Digest</string>
                </property>
+               <property name="buddy">
+                <cstring>auth</cstring>
+               </property>
               </widget>
              </item>
              <item row="2" column="1">
@@ -581,6 +671,9 @@
                </property>
                <property name="text">
                 <string>MSS Fix</string>
+               </property>
+               <property name="buddy">
+                <cstring>mss_fix</cstring>
                </property>
               </widget>
              </item>
@@ -605,10 +698,13 @@
                <property name="text">
                 <string>MSS Fix Mode</string>
                </property>
+               <property name="buddy">
+                <cstring>mss_fix_mode</cstring>
+               </property>
               </widget>
              </item>
              <item row="5" column="1">
-              <widget class="QComboBox" name="mss_fix_mode"/>
+              <widget class="NoWheelComboBox" name="mss_fix_mode"/>
              </item>
              <item row="6" column="0">
               <widget class="QLabel" name="fragment_l">
@@ -617,6 +713,9 @@
                </property>
                <property name="text">
                 <string>Fragment</string>
+               </property>
+               <property name="buddy">
+                <cstring>fragment</cstring>
                </property>
               </widget>
              </item>
@@ -631,6 +730,9 @@
                <property name="text">
                 <string>Replay Window</string>
                </property>
+               <property name="buddy">
+                <cstring>replay_window</cstring>
+               </property>
               </widget>
              </item>
              <item row="7" column="1">
@@ -643,6 +745,9 @@
                </property>
                <property name="text">
                 <string>Replay Window Time</string>
+               </property>
+               <property name="buddy">
+                <cstring>replay_window_time</cstring>
                </property>
               </widget>
              </item>
@@ -676,10 +781,13 @@
                <property name="text">
                 <string>Compression</string>
                </property>
+               <property name="buddy">
+                <cstring>compression</cstring>
+               </property>
               </widget>
              </item>
              <item row="0" column="1">
-              <widget class="QComboBox" name="compression"/>
+              <widget class="NoWheelComboBox" name="compression"/>
              </item>
              <item row="1" column="0">
               <widget class="QLabel" name="compression_lzo_l">
@@ -689,10 +797,13 @@
                <property name="text">
                 <string>Compression LZO</string>
                </property>
+               <property name="buddy">
+                <cstring>compression_lzo</cstring>
+               </property>
               </widget>
              </item>
              <item row="1" column="1">
-              <widget class="QComboBox" name="compression_lzo"/>
+              <widget class="NoWheelComboBox" name="compression_lzo"/>
              </item>
              <item row="2" column="0">
               <widget class="QLabel" name="allow_compression_l">
@@ -702,10 +813,13 @@
                <property name="text">
                 <string>Allow Compression</string>
                </property>
+               <property name="buddy">
+                <cstring>allow_compression</cstring>
+               </property>
               </widget>
              </item>
              <item row="2" column="1">
-              <widget class="QComboBox" name="allow_compression"/>
+              <widget class="NoWheelComboBox" name="allow_compression"/>
              </item>
             </layout>
            </widget>
@@ -740,6 +854,9 @@
                <property name="text">
                 <string>Routes</string>
                </property>
+               <property name="buddy">
+                <cstring>routes</cstring>
+               </property>
               </widget>
              </item>
              <item row="1" column="1">
@@ -753,6 +870,9 @@
                <property name="text">
                 <string>Route Gateway</string>
                </property>
+               <property name="buddy">
+                <cstring>route_gateway</cstring>
+               </property>
               </widget>
              </item>
              <item row="2" column="1">
@@ -765,6 +885,9 @@
                </property>
                <property name="text">
                 <string>Route Metric</string>
+               </property>
+               <property name="buddy">
+                <cstring>route_metric</cstring>
                </property>
               </widget>
              </item>
@@ -788,6 +911,9 @@
                </property>
                <property name="text">
                 <string>Redirect Gateway Flags</string>
+               </property>
+               <property name="buddy">
+                <cstring>redirect_gateway_flags</cstring>
                </property>
               </widget>
              </item>
@@ -885,6 +1011,9 @@
                <property name="text">
                 <string>Ping Interval</string>
                </property>
+               <property name="buddy">
+                <cstring>ping_interval</cstring>
+               </property>
               </widget>
              </item>
              <item row="0" column="1">
@@ -897,6 +1026,9 @@
                </property>
                <property name="text">
                 <string>Ping Restart</string>
+               </property>
+               <property name="buddy">
+                <cstring>ping_restart</cstring>
                </property>
               </widget>
              </item>
@@ -920,6 +1052,9 @@
                </property>
                <property name="text">
                 <string>Renegotiate Interval</string>
+               </property>
+               <property name="buddy">
+                <cstring>renegotiate_interval</cstring>
                </property>
               </widget>
              </item>
@@ -948,6 +1083,9 @@
                <property name="text">
                 <string>Renegotiate Bytes</string>
                </property>
+               <property name="buddy">
+                <cstring>renegotiate_bytes</cstring>
+               </property>
               </widget>
              </item>
              <item row="5" column="1">
@@ -961,6 +1099,9 @@
                <property name="text">
                 <string>Renegotiate Packets</string>
                </property>
+               <property name="buddy">
+                <cstring>renegotiate_packets</cstring>
+               </property>
               </widget>
              </item>
              <item row="6" column="1">
@@ -973,6 +1114,9 @@
                </property>
                <property name="text">
                 <string>TLS Timeout</string>
+               </property>
+               <property name="buddy">
+                <cstring>tls_timeout</cstring>
                </property>
               </widget>
              </item>
@@ -991,6 +1135,9 @@
                <property name="text">
                 <string>Handshake Window</string>
                </property>
+               <property name="buddy">
+                <cstring>handshake_window</cstring>
+               </property>
               </widget>
              </item>
              <item row="8" column="1">
@@ -1007,6 +1154,9 @@
                </property>
                <property name="text">
                 <string>Explicit Exit Notify</string>
+               </property>
+               <property name="buddy">
+                <cstring>explicit_exit_notify</cstring>
                </property>
               </widget>
              </item>
@@ -1035,6 +1185,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>NoWheelComboBox</class>
+   <extends>QComboBox</extends>
+   <header>include/ui/utils/NoWheelComboBox.h</header>
+  </customwidget>
+ </customwidgets>
  <tabstops>
   <tabstop>mode</tabstop>
   <tabstop>topology</tabstop>

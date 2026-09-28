@@ -12,6 +12,7 @@
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QTimer>
 #include <QBrush>
 #include <QRegularExpression>
@@ -36,6 +37,7 @@
 
 #include "include/sys/UrlScheme.hpp"
 #include "include/ui/mainwindow.h"
+#include "include/ui/setting/DiagnosticsTab.h"
 
 DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     : QDialog(parent), ui(new Ui::DialogBasicSettings) {
@@ -59,6 +61,7 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     ui->test_concurrent->setValidator(new QIntValidator(0, 10000, ui->test_concurrent));
     ui->label_14->setToolTip(tr("Parallel test probes per batch (0 = default 100, max 10000)."));
     D_LOAD_STRING(test_latency_url)
+    D_LOAD_STRING(direct_test_url)
     D_LOAD_BOOL(disable_tray)
     ui->reset_proxy_on_disable_sp->setChecked(Configs::dataManager->settingsRepo->reset_proxy_on_disable_sp);
     ui->url_timeout->setText(Int2String(Configs::dataManager->settingsRepo->url_test_timeout_ms));
@@ -72,25 +75,35 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_STRING(inbound_pass)
 
     ui->url_scheme_auto_register->setChecked(Configs::dataManager->settingsRepo->url_scheme_auto_register);
-    connect(ui->url_scheme_install, &QPushButton::clicked, this, [=,this] {
-        const bool ok = UrlScheme_Install();
-        refreshUrlSchemeStatus();
-        if (!ok) QMessageBox::warning(this, tr("URL Scheme"), tr("Could not register the handler for throne:// links."));
-    });
-    connect(ui->url_scheme_uninstall, &QPushButton::clicked, this, [=,this] {
-        UrlScheme_Uninstall();
-        // Leaving auto registration on would put everything back on the next start.
-        ui->url_scheme_auto_register->setChecked(false);
-        Configs::dataManager->settingsRepo->url_scheme_auto_register = false;
-        Configs::dataManager->settingsRepo->Save();
-        refreshUrlSchemeStatus();
-    });
+    ui->file_assoc_auto_register->setChecked(Configs::dataManager->settingsRepo->file_assoc_auto_register);
+    const auto connectAssociation = [this](Association a, QCheckBox *autoRegister, QPushButton *install, QPushButton *uninstall, const QString &failure) {
+        connect(install, &QPushButton::clicked, this, [=,this] {
+            const bool ok = UrlScheme_Install(a);
+            refreshUrlSchemeStatus();
+            if (!ok) QMessageBox::warning(this, ui->url_scheme_box->title(), failure);
+        });
+        connect(uninstall, &QPushButton::clicked, this, [=,this] {
+            UrlScheme_Uninstall(a);
+            autoRegister->setChecked(false);
+            refreshUrlSchemeStatus();
+        });
+    };
+    connectAssociation(Association::Links, ui->url_scheme_auto_register, ui->url_scheme_install, ui->url_scheme_uninstall,
+                       tr("Could not register the handler for throne:// links."));
+    connectAssociation(Association::ConfigFiles, ui->file_assoc_auto_register, ui->file_assoc_install, ui->file_assoc_uninstall,
+                       tr("Could not register the config file associations."));
 #ifdef Q_OS_MACOS
     // LaunchServices registers the scheme from the bundle's Info.plist, so there is nothing of ours to add or take back.
     ui->url_scheme_install->hide();
     ui->url_scheme_uninstall->hide();
 #endif
-    ui->url_scheme_box->setEnabled(UrlScheme_IsSupported());
+    if (!UrlScheme_IsSupported(Association::ConfigFiles)) {
+        ui->file_assoc_auto_register->hide();
+        ui->file_assoc_status->hide();
+        ui->file_assoc_install->hide();
+        ui->file_assoc_uninstall->hide();
+    }
+    ui->url_scheme_box->setEnabled(UrlScheme_IsSupported(Association::Links));
     refreshUrlSchemeStatus();
 
     connect(ui->custom_inbound_edit, &QPushButton::clicked, this, [=,this] {
@@ -208,7 +221,7 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
         ui->theme->setCurrentText(Configs::dataManager->settingsRepo->theme);
     }
     connect(ui->theme, &QComboBox::currentIndexChanged, this, [=,this](int index) {
-        themeManager->ApplyTheme(ui->theme->currentText());
+        themeManager()->ApplyTheme(ui->theme->currentText());
         Configs::dataManager->settingsRepo->theme = ui->theme->currentText().trimmed();
         Configs::dataManager->settingsRepo->Save();
         refreshUrlSchemeStatus();
@@ -216,6 +229,11 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
 
     ui->user_agent->setText(Configs::dataManager->settingsRepo->user_agent);
     ui->user_agent->setPlaceholderText(Configs::dataManager->settingsRepo->GetUserAgent(true));
+    ui->sub_tls_version->setCurrentIndex(std::clamp(Configs::dataManager->settingsRepo->sub_tls_version, 0, ui->sub_tls_version->count() - 1));
+    ui->sub_http_version->setCurrentIndex(std::clamp(Configs::dataManager->settingsRepo->sub_http_version, 0, ui->sub_http_version->count() - 1));
+    if (auto *model = qobject_cast<QStandardItemModel *>(ui->sub_tls_version->model()); model && !QSslSocket::isProtocolSupported(QSsl::TlsV1_3)) {
+        model->item(static_cast<int>(Configs::subTlsVersion::tls13))->setEnabled(false);
+    }
     D_LOAD_BOOL(net_use_proxy)
     D_LOAD_BOOL(allow_stopping_active_profile)
     D_LOAD_BOOL(sub_clear)
@@ -227,6 +245,7 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     D_LOAD_STRING(sub_hwid)
     D_LOAD_STRING(sub_ver_os)
     D_LOAD_INT_ENABLE(sub_auto_update, sub_auto_update_enable)
+    D_LOAD_BOOL(sub_respect_server_interval)
     D_LOAD_INT_ENABLE(route_auto_update, route_auto_update_enable)
     ui->dns_in_port->setValidator(new QIntValidator(1, 65535, ui->dns_in_port));
     ui->dns_in_port->setText(Int2String(Configs::dataManager->settingsRepo->core_dns_in_port));
@@ -249,10 +268,24 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
 
     ui->vless_xray_pref->addItems(Configs::Xray::XrayVlessPreferenceString);
     ui->vless_xray_pref->setCurrentIndex(Configs::dataManager->settingsRepo->xray_vless_preference);
-    D_LOAD_STRING(xray_geoip_url)
-    D_LOAD_STRING(xray_geosite_url)
-    ui->xray_geoip_url->setPlaceholderText("https://github.com/Loyalsoldier/v2ray-rules-dat/raw/release/geoip.dat");
-    ui->xray_geosite_url->setPlaceholderText("https://github.com/Loyalsoldier/v2ray-rules-dat/raw/release/geosite.dat");
+    auto populateGeoAssetCombo = [](QComboBox *combo, bool geoip, const QString &current, const QStringList &history) {
+        for (const auto &p: Configs::Xray::XrayGeoAssetProviders) {
+            combo->addItem(geoip ? p.geoip : p.geosite);
+            combo->setItemData(combo->count() - 1, p.name, Qt::ToolTipRole);
+        }
+        for (const auto &h: history) {
+            if (combo->findText(h) < 0) combo->addItem(h);
+        }
+        const auto &fallback = Configs::Xray::XrayGeoAssetProviders.first();
+        combo->lineEdit()->setPlaceholderText(geoip ? fallback.geoip : fallback.geosite);
+        combo->setCurrentText(current);
+    };
+    populateGeoAssetCombo(ui->xray_geoip_url, true,
+                          Configs::dataManager->settingsRepo->xray_geoip_url,
+                          Configs::dataManager->settingsRepo->xray_geoip_url_history);
+    populateGeoAssetCombo(ui->xray_geosite_url, false,
+                          Configs::dataManager->settingsRepo->xray_geosite_url,
+                          Configs::dataManager->settingsRepo->xray_geosite_url_history);
 
     ui->ntp_enable->setChecked(Configs::dataManager->settingsRepo->enable_ntp);
     ui->ntp_server->setEnabled(Configs::dataManager->settingsRepo->enable_ntp);
@@ -275,6 +308,8 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     ui->mozilla_cert->setChecked(Configs::dataManager->settingsRepo->use_mozilla_certs);
 
     D_LOAD_BOOL(skip_cert)
+
+    ui->tabWidget->addTab(new DiagnosticsTab(ui->tabWidget), tr("Diagnostics"));
 
     // The .ui geometry underruns real font metrics/translations and Qt then overlaps the rows (#1671).
     QSize want = sizeHint();
@@ -313,16 +348,19 @@ static void highlightRegexLines(QTextEdit *edit) {
 }
 
 void DialogBasicSettings::refreshUrlSchemeStatus() {
-    const auto &tk = themeManager->tokens;
-    if (!UrlScheme_IsSupported()) {
-        ui->url_scheme_status->setText(tr("Not available for this installation"));
-        ui->url_scheme_status->setStyleSheet(QStringLiteral("color: %1;").arg(tk.muted.name()));
-        return;
-    }
-
-    const bool installed = UrlScheme_IsCurrent();
-    ui->url_scheme_status->setText(installed ? tr("Installed") : tr("Not installed"));
-    ui->url_scheme_status->setStyleSheet(QStringLiteral("color: %1;").arg((installed ? tk.success : tk.muted).name()));
+    const auto &tk = themeManager()->tokens;
+    const auto show = [&](QLabel *status, Association a) {
+        if (!UrlScheme_IsSupported(a)) {
+            status->setText(tr("Not available for this installation"));
+            status->setStyleSheet(QStringLiteral("color: %1;").arg(tk.muted.name()));
+            return;
+        }
+        const bool installed = UrlScheme_IsCurrent(a);
+        status->setText(installed ? tr("Installed") : tr("Not installed"));
+        status->setStyleSheet(QStringLiteral("color: %1;").arg((installed ? tk.success : tk.muted).name()));
+    };
+    show(ui->url_scheme_status, Association::Links);
+    show(ui->file_assoc_status, Association::ConfigFiles);
 }
 
 void DialogBasicSettings::applyRegexHighlighting() {
@@ -352,6 +390,7 @@ void DialogBasicSettings::accept() {
         Configs::dataManager->settingsRepo->test_concurrent = concurrency;
     }
     D_SAVE_STRING(test_latency_url)
+    Configs::dataManager->settingsRepo->direct_test_url = ui->direct_test_url->text().trimmed();
     D_SAVE_BOOL(disable_tray)
     Configs::dataManager->settingsRepo->proxy_scheme = ui->proxy_scheme->currentText().toLower();
     Configs::dataManager->settingsRepo->speed_test_mode = ui->speedtest_mode->currentIndex();
@@ -365,9 +404,12 @@ void DialogBasicSettings::accept() {
     D_SAVE_STRING(inbound_user)
     D_SAVE_STRING(inbound_pass)
 
-    const bool urlSchemeWasAuto = Configs::dataManager->settingsRepo->url_scheme_auto_register;
+    const bool registrationTurnedOn =
+        (!Configs::dataManager->settingsRepo->url_scheme_auto_register && ui->url_scheme_auto_register->isChecked()) ||
+        (!Configs::dataManager->settingsRepo->file_assoc_auto_register && ui->file_assoc_auto_register->isChecked());
     Configs::dataManager->settingsRepo->url_scheme_auto_register = ui->url_scheme_auto_register->isChecked();
-    if (!urlSchemeWasAuto && Configs::dataManager->settingsRepo->url_scheme_auto_register) UrlScheme_RegisterIfNeeded();
+    Configs::dataManager->settingsRepo->file_assoc_auto_register = ui->file_assoc_auto_register->isChecked();
+    if (registrationTurnedOn) UrlScheme_RegisterIfNeeded();
 
     auto oldMaxLogLines = Configs::dataManager->settingsRepo->max_log_line;
     Configs::dataManager->settingsRepo->max_log_line = ui->max_log_line->text().trimmed().toInt();
@@ -413,6 +455,8 @@ void DialogBasicSettings::accept() {
     // The PeriodicRunner reads these intervals live; no timer needs restarting.
 
     Configs::dataManager->settingsRepo->user_agent = ui->user_agent->text().trimmed();
+    Configs::dataManager->settingsRepo->sub_tls_version = ui->sub_tls_version->currentIndex();
+    Configs::dataManager->settingsRepo->sub_http_version = ui->sub_http_version->currentIndex();
     D_SAVE_BOOL(net_use_proxy)
     D_SAVE_BOOL(allow_stopping_active_profile)
     D_SAVE_BOOL(sub_clear)
@@ -424,6 +468,7 @@ void DialogBasicSettings::accept() {
     D_SAVE_STRING(sub_hwid)
     D_SAVE_STRING(sub_ver_os)
     D_SAVE_INT_ENABLE(sub_auto_update, sub_auto_update_enable)
+    D_SAVE_BOOL(sub_respect_server_interval)
     D_SAVE_INT_ENABLE(route_auto_update, route_auto_update_enable)
 
     Configs::dataManager->settingsRepo->disable_traffic_stats = ui->disable_stats->isChecked();
@@ -437,8 +482,8 @@ void DialogBasicSettings::accept() {
         Configs::dataManager->settingsRepo->core_box_api_secret = secret;
 
     Configs::dataManager->settingsRepo->xray_vless_preference = static_cast<Configs::Xray::XrayVlessPreference>(ui->vless_xray_pref->currentIndex());
-    D_SAVE_STRING(xray_geoip_url)
-    D_SAVE_STRING(xray_geosite_url)
+    Configs::dataManager->settingsRepo->xray_geoip_url = ui->xray_geoip_url->currentText().trimmed();
+    Configs::dataManager->settingsRepo->xray_geosite_url = ui->xray_geosite_url->currentText().trimmed();
 
     Configs::dataManager->settingsRepo->enable_ntp = ui->ntp_enable->isChecked();
     Configs::dataManager->settingsRepo->ntp_server_address = ui->ntp_server->text().trimmed();
@@ -514,15 +559,37 @@ void DialogBasicSettings::downloadXrayGeoAsset(const QString &url, const QString
     });
 }
 
+void DialogBasicSettings::rememberGeoAssetUrl(QComboBox *combo, const QString &url, QStringList &history) {
+    if (url.isEmpty()) return;
+    for (const auto &p: Configs::Xray::XrayGeoAssetProviders) {
+        if (url == p.geoip || url == p.geosite) return;
+    }
+
+    history.removeAll(url);
+    history.prepend(url);
+    while (history.size() > 5) history.removeLast();
+
+    // Providers occupy the head of the combo, so everything after them is history that may have aged out.
+    for (int i = combo->count() - 1; i >= static_cast<int>(Configs::Xray::XrayGeoAssetProviders.size()); --i) {
+        if (!history.contains(combo->itemText(i))) combo->removeItem(i);
+    }
+    if (combo->findText(url) < 0) combo->addItem(url);
+    combo->setCurrentText(url);
+
+    Configs::dataManager->settingsRepo->Save();
+}
+
 void DialogBasicSettings::on_xray_geoip_download_clicked() {
-    QString url = ui->xray_geoip_url->text().trimmed();
-    if (url.isEmpty()) url = ui->xray_geoip_url->placeholderText();
+    QString url = ui->xray_geoip_url->currentText().trimmed();
+    if (url.isEmpty()) url = ui->xray_geoip_url->lineEdit()->placeholderText();
+    rememberGeoAssetUrl(ui->xray_geoip_url, url, Configs::dataManager->settingsRepo->xray_geoip_url_history);
     downloadXrayGeoAsset(url, "geoip.dat");
 }
 
 void DialogBasicSettings::on_xray_geosite_download_clicked() {
-    QString url = ui->xray_geosite_url->text().trimmed();
-    if (url.isEmpty()) url = ui->xray_geosite_url->placeholderText();
+    QString url = ui->xray_geosite_url->currentText().trimmed();
+    if (url.isEmpty()) url = ui->xray_geosite_url->lineEdit()->placeholderText();
+    rememberGeoAssetUrl(ui->xray_geosite_url, url, Configs::dataManager->settingsRepo->xray_geosite_url_history);
     downloadXrayGeoAsset(url, "geosite.dat");
 }
 
@@ -741,6 +808,7 @@ void DialogBasicSettings::on_backup_restore_clicked() {
         return;
     }
 
+    int skippedRules = 0;
     if (chosen.anyDb()) {
         QString tempDbPath = QDir::temp().filePath("Thr_restore_tmp.db");
         QFile::remove(tempDbPath);
@@ -754,7 +822,7 @@ void DialogBasicSettings::on_backup_restore_clicked() {
         tempDbFile.close();
 
         try {
-            Configs::dataManager->getDatabase().restoreSelective(tempDbPath.toStdString(), chosen);
+            skippedRules = Configs::dataManager->getDatabase().restoreSelective(tempDbPath.toStdString(), chosen);
         } catch (std::exception& e) {
             QFile::remove(tempDbPath);
             QMessageBox::critical(this, tr("Restore Failed"),
@@ -782,8 +850,10 @@ void DialogBasicSettings::on_backup_restore_clicked() {
     // The exit path's settingsRepo->Save() would write the stale in-memory values back over the restore.
     if (chosen.settings) Configs::dataManager->settingsRepo->noSave = true;
 
-    QMessageBox::information(this, tr("Restore Complete"),
-        tr("Backup restored successfully. Throne will now restart for the changes to take effect."));
+    QString done = tr("Backup restored successfully. Throne will now restart for the changes to take effect.");
+    if (skippedRules > 0)
+        done += "\n\n" + tr("Skipped %n routing rule(s) that use conditions this version of Throne does not support.", nullptr, skippedRules);
+    QMessageBox::information(this, tr("Restore Complete"), done);
     MW_dialog_message(MwMessage::RestartProgram, {});
     QDialog::reject();
 }

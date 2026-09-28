@@ -5,6 +5,7 @@
 #include <QBuffer>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QStringConverter>
 #include <QUrl>
@@ -154,16 +155,15 @@ void MainWindow::importFromFiles(const QStringList &paths)
 
     for (const QString &problem : problems) MW_show_log(problem);
 
-    // A url payload takes the single-item path: only that one offers a subscription group.
     QStringList batch;
     for (const QString &payload : payloads) {
         if (payload.startsWith("http://") || payload.startsWith("https://")) {
-            Subscription::groupUpdater->AsyncUpdate(payload);
+            import_text(payload);
         } else {
             batch << payload;
         }
     }
-    if (!batch.isEmpty()) Subscription::groupUpdater->AsyncImportBatch(batch);
+    if (!batch.isEmpty()) Subscription::updater()->ImportBatch(batch);
 
     if (payloads.isEmpty() && !problems.isEmpty()) {
         MessageBoxWarning(software_name, tr("Nothing could be imported:") + "\n" + problems.join("\n"));
@@ -176,7 +176,7 @@ void MainWindow::handle_deeplink_impl(const QString &url) {
     const QString cmd = u.host();
 
     if (cmd.compare("add", Qt::CaseInsensitive) == 0) {
-        Subscription::groupUpdater->AsyncUpdate(url);
+        import_text(url);
         return;
     }
 
@@ -296,7 +296,7 @@ void MainWindow::handle_addsub(const QString &url, const QString &name) {
     group->skip_auto_update = !autoUpdate;
     Configs::dataManager->groupsRepo->AddGroup(group);
     refresh_groups();
-    Subscription::groupUpdater->AsyncUpdate(url, group->id);
+    Subscription::updater()->RefreshGroup(group->id);
 }
 
 void MainWindow::import_or_handle_deeplink(const QString &text) {
@@ -304,7 +304,33 @@ void MainWindow::import_or_handle_deeplink(const QString &text) {
         handle_deeplink_impl(trimmed);
         return;
     }
-    Subscription::groupUpdater->AsyncUpdate(text);
+    import_text(text);
+}
+
+void MainWindow::import_text(const QString &text) {
+    const auto content = text.trimmed();
+    if (content.startsWith("http://") || content.startsWith("https://")) {
+        const QStringList items{
+            QObject::tr("Add profiles to this group"),
+            QObject::tr("Create new subscription group"),
+            QObject::tr("Import HTTP proxy profile"),
+        };
+        bool ok = false;
+        const auto choice = QInputDialog::getItem(nullptr, QObject::tr("url detected"),
+                                                  QObject::tr("%1\nHow to update?").arg(content), items, 0, false, &ok);
+        if (!ok) return;
+        switch (items.indexOf(choice)) {
+            case 0:
+                Subscription::updater()->ImportUrl(content);
+                return;
+            case 1:
+                Subscription::updater()->SubscribeUrl(content);
+                return;
+            default:
+                break;
+        }
+    }
+    Subscription::updater()->ImportText(content);
 }
 
 void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
@@ -316,7 +342,8 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
         updateLogFilterFields();
         ui->actionTraffic_Stats->setVisible(!settings->disable_traffic_aggregation);
         if (changed(MwArg::TrayIcon)) {
-            icon_status = -1;
+            Icon::InvalidateTrayIconCache();
+            icon_status.reset();
         }
         if (changed(MwArg::MaxLogLines)) {
             const int maxUiLogLines = qMax(1, settings->max_log_line);
@@ -341,7 +368,6 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
             AutoRun_FixTaskIfNeeded();
         }
         if (changed(MwArg::ProfileListDisplay)) {
-            // The security suffix changes the Type column's width, so drop its cached auto-width.
             if (auto group = Configs::dataManager->groupsRepo->CurrentGroup();
                 group && group->calculated_column_width.size() > ProfilesTableModel::ColType)
                 group->calculated_column_width[ProfilesTableModel::ColType] = 0;
@@ -359,9 +385,8 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
         if (changed(MwArg::Vpn) && settings->spmode_vpn) {
             MessageBoxWarning(tr("Tun Settings changed"), tr("Restart Tun to take effect."));
         }
-        if ((changed(MwArg::ChoosePort) || suggestRestartProxy) && settings->started_id >= 0 &&
-            QMessageBox::question(GetMessageBoxParent(), tr("Confirmation"), tr("Settings changed, restart proxy?")) == QMessageBox::StandardButton::Yes) {
-            profile_start(settings->started_id);
+        if (changed(MwArg::ChoosePort) || suggestRestartProxy) {
+            noteRestartNeeded(changed(MwArg::Route) ? tr("Routing") : tr("Settings"));
         }
         refresh_status();
         if (changed(MwArg::NeedRestart) &&
@@ -383,10 +408,7 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
         break;
     case MwMessage::ProfileChanged:
         refresh_proxy_list({}, true);
-        if (changed(MwArg::RestartProxy) &&
-            QMessageBox::question(GetMessageBoxParent(), tr("Confirmation"), tr("Settings changed, restart proxy?")) == QMessageBox::StandardButton::Yes) {
-            profile_start(settings->started_id);
-        }
+        if (changed(MwArg::RestartProxy)) noteRestartNeeded(tr("Profile"));
         break;
     case MwMessage::GroupsChanged:
         refresh_groups();
