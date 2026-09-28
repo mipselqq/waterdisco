@@ -8,6 +8,8 @@ package xraydns
 
 import (
 	"context"
+	"errors"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -22,7 +24,12 @@ import (
 // Matches tags::dnsDirect in the config builder (src/configs/generate.cpp).
 const directTransportTag = "dns-direct"
 
-const lookupTimeout = 5 * time.Second
+// The UDP transport never retransmits inside one exchange, so a single lost reply would hold the dial for
+// the whole budget. Short attempts re-ask instead; the total stays what one long lookup used to allow.
+const (
+	lookupAttemptTimeout = time.Second
+	lookupAttempts       = 5
+)
 
 // Read per lookup, not captured: the box is always built after the Xray instances that resolve through it.
 type BoxProvider func() context.Context
@@ -55,10 +62,14 @@ func (r *resolver) LookupIP(domain string, option dnsfeature.IPOption) ([]net.IP
 	if router == nil {
 		return nil, 0, E.New("throne-dns: sing-box DNS router is not registered")
 	}
-	addresses, err := router.Lookup(ctx, domain, adapter.DNSQueryOptions{
-		Transport: r.directTransport(ctx),
-		Strategy:  strategyFor(option),
-		Timeout:   lookupTimeout,
+	transport := r.directTransport(ctx)
+	strategy := strategyFor(option)
+	addresses, err := lookupWithRetry(ctx, lookupAttempts, func() ([]netip.Addr, error) {
+		return router.Lookup(ctx, domain, adapter.DNSQueryOptions{
+			Transport: transport,
+			Strategy:  strategy,
+			Timeout:   lookupAttemptTimeout,
+		})
 	})
 	if err != nil {
 		return nil, 0, err
@@ -73,6 +84,27 @@ func (r *resolver) LookupIP(domain string, option dnsfeature.IPOption) ([]net.IP
 	}
 	// LookupForIPWithClient discards the TTL and sing-box owns the cache.
 	return ips, 0, nil
+}
+
+// Only a timed-out attempt is repeated: an answer, NXDOMAIN or a closing box is final.
+func lookupWithRetry(ctx context.Context, attempts int, lookup func() ([]netip.Addr, error)) ([]netip.Addr, error) {
+	var err error
+	for attempt := 0; attempt < attempts; attempt++ {
+		var addresses []netip.Addr
+		addresses, err = lookup()
+		if err == nil || !isTimeout(err) || ctx.Err() != nil {
+			return addresses, err
+		}
+	}
+	return nil, err
+}
+
+func isTimeout(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var timeout interface{ Timeout() bool }
+	return errors.As(err, &timeout) && timeout.Timeout()
 }
 
 // nil leaves the query unpinned and on the config's own DNS rules, which is what a raw DNS object asks for.

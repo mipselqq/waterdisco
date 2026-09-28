@@ -3,6 +3,8 @@ package xraydns
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/netip"
 	"testing"
 
 	"ThroneCore/internal/boxbox"
@@ -93,6 +95,57 @@ func TestLookupWithNoFamilyEnabled(t *testing.T) {
 	_, _, err := resolver.LookupIP("pinned.invalid", dnsfeature.IPOption{})
 	if !errors.Is(err, dnsfeature.ErrEmptyResponse) {
 		t.Fatalf("expected ErrEmptyResponse, got %v", err)
+	}
+}
+
+func TestLookupRetriesTimedOutAttempts(t *testing.T) {
+	calls := 0
+	want := netip.MustParseAddr("10.0.0.1")
+	got, err := lookupWithRetry(context.Background(), 5, func() ([]netip.Addr, error) {
+		calls++
+		if calls < 3 {
+			return nil, fmt.Errorf("exchange4: %w", context.DeadlineExceeded)
+		}
+		return []netip.Addr{want}, nil
+	})
+	if err != nil || len(got) != 1 || got[0] != want || calls != 3 {
+		t.Fatalf("got %v, %v after %d calls; want [%v] after 3", got, err, calls, want)
+	}
+}
+
+func TestLookupGivesUpAfterAllAttempts(t *testing.T) {
+	calls := 0
+	_, err := lookupWithRetry(context.Background(), 5, func() ([]netip.Addr, error) {
+		calls++
+		return nil, context.DeadlineExceeded
+	})
+	if !errors.Is(err, context.DeadlineExceeded) || calls != 5 {
+		t.Fatalf("got %v after %d calls; want a timeout after 5", err, calls)
+	}
+}
+
+func TestLookupDoesNotRetryAnswers(t *testing.T) {
+	notFound := errors.New("rcode 3")
+	calls := 0
+	_, err := lookupWithRetry(context.Background(), 5, func() ([]netip.Addr, error) {
+		calls++
+		return nil, notFound
+	})
+	if !errors.Is(err, notFound) || calls != 1 {
+		t.Fatalf("got %v after %d calls; want the first error after 1", err, calls)
+	}
+}
+
+func TestLookupStopsWhenBoxCloses(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	calls := 0
+	_, _ = lookupWithRetry(ctx, 5, func() ([]netip.Addr, error) {
+		calls++
+		return nil, context.DeadlineExceeded
+	})
+	if calls != 1 {
+		t.Fatalf("got %d calls; a closed box must not be re-asked", calls)
 	}
 }
 
