@@ -204,6 +204,9 @@ void MainWindow::prepare_exit()
 }
 
 void MainWindow::on_menu_exit_triggered() {
+    // prepare_exit() waits in nested event loops, so a second Exit/Restart click can re-enter here.
+    if (exit_in_progress) return;
+    exit_in_progress = true;
     prepare_exit();
     if (exit_reason == ExitReason::RunUpdater) {
         QDir::setCurrent(QApplication::applicationDirPath());

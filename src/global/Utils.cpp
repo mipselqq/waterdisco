@@ -1,5 +1,6 @@
 #include "include/global/Utils.hpp"
 
+#include <atomic>
 #include <random>
 #include <thread>
 
@@ -464,7 +465,19 @@ namespace {
 
 void runOnNewThread(const std::function<void()> &callback, bool wait) {
     if (wait) {
-        std::thread([&callback] { runWorkerCallback(callback); }).join();
+        // The caller (often the UI thread) must keep pumping events while it waits:
+        // callbacks such as profile_stop's teardown block on runOnUiThread(..., true).
+        std::atomic_bool done{false};
+        QEventLoop loop;
+        std::thread worker([&callback, &done, &loop] {
+            runWorkerCallback(callback);
+            done.store(true, std::memory_order_release);
+            QMetaObject::invokeMethod(&loop, "quit", Qt::QueuedConnection);
+        });
+        if (QCoreApplication::instance() != nullptr) {
+            while (!done.load(std::memory_order_acquire)) loop.exec();
+        }
+        worker.join();
         return;
     }
     QThreadPool::globalInstance()->start(new FunctorRunnable(callback));

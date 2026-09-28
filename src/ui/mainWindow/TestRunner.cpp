@@ -1213,24 +1213,8 @@ void TestRunner::runCurrentIpTest(int profileID, const std::function<void(bool)>
         target.entID = profileID;
         target.testCurrent = true;
         const bool success = runIpProbe(target);
-        const bool cancelled = stopRequested_.load();
-        if (!cancelled) {
-            if (const auto profile = Configs::dataManager->profilesRepo->GetProfile(profileID)) {
-                if (success) {
-                    mw_->connectionProbeFailStreak.store(0);
-                    profile->connection_test_status = Configs::ConnectionTestStatus::Success;
-                } else if (mw_->connectionProbeFailStreak.fetch_add(1) + 1 >= 2) {
-                    profile->connection_test_status = Configs::ConnectionTestStatus::Error;
-                }
-            }
-        }
         testingCurrent_.store(false);
         session_.unlock();
-        postUi([this, profileID](MainWindow* mw) {
-            if (mw->isVisible() && !mw->isMinimized()) {
-                mw->refresh_proxy_list({profileID});
-            }
-        });
         if (finished) {
             runOnUiThread([finished, success] { finished(success); });
         }

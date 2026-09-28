@@ -309,6 +309,7 @@ private:
     QMutex mu_starting;
     QMutex mu_stopping;
     QMutex mu_exit;
+    bool exit_in_progress = false;
     ExitReason exit_reason = ExitReason::None;
     QMutex mu_download_update;
     QMutex mu_download_dashboard;

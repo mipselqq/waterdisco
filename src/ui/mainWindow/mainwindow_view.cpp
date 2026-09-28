@@ -403,35 +403,42 @@ void MainWindow::runCurrentConnectionProbe() {
 
     const int profileID = running->id;
     const quint64 generation = connectionProbeGeneration;
-    const bool foreground = isVisible() && !isMinimized();
     const bool hasIp = !running->ip_out.trimmed().isEmpty();
     static constexpr int kProbeWithIpMs = 60'000;
     static constexpr int kProbeForegroundMs = 10'000;
 
+    // Until the first success the row is still Pending, so retry quickly even from the tray.
     if (testRunner->isRunning() || testRunner->isTestingCurrent()) {
-        connectionProbeTimer->start(hasIp ? kProbeWithIpMs : (foreground ? 5'000 : 30'000));
+        connectionProbeTimer->start(hasIp ? kProbeWithIpMs : 5'000);
         return;
     }
 
     QPointer<MainWindow> self(this);
-    testRunner->runCurrentIpTest(profileID, [self, profileID, generation, foreground](bool success) {
+    testRunner->runCurrentIpTest(profileID, [self, profileID, generation](bool success) {
+        // Status and streak are decided here, behind the generation check: a probe that
+        // outlived its run (restart, profile switch) must not touch the new run's state.
         if (!self || self->running == nullptr || self->running->id != profileID
             || self->connectionProbeTimer == nullptr
             || self->connectionProbeGeneration != generation) {
             return;
         }
-        self->refresh_status();
+        const bool foreground = self->isVisible() && !self->isMinimized();
         const bool hasIpNow = !self->running->ip_out.trimmed().isEmpty();
+        const auto profile = Configs::dataManager->profilesRepo->GetProfile(profileID);
         int delayMs;
         if (success) {
             self->connectionProbeFailStreak.store(0);
+            if (profile) profile->connection_test_status = Configs::ConnectionTestStatus::Success;
             delayMs = hasIpNow ? kProbeWithIpMs : (foreground ? kProbeForegroundMs : kProbeWithIpMs);
         } else {
             const int streak = self->connectionProbeFailStreak.fetch_add(1) + 1;
+            if (profile && streak >= 2) profile->connection_test_status = Configs::ConnectionTestStatus::Error;
             static constexpr int kBackoffMs[] = {5'000, 15'000, 30'000, 60'000};
             const int idx = qMin(streak - 1, 3);
-            delayMs = hasIpNow ? kProbeWithIpMs : (foreground ? kBackoffMs[idx] : qMax(kBackoffMs[idx], kProbeWithIpMs));
+            delayMs = hasIpNow ? kProbeWithIpMs : kBackoffMs[idx];
         }
+        self->refresh_status();
+        if (foreground) self->refresh_proxy_list({profileID});
         self->connectionProbeTimer->start(delayMs);
     });
 }
