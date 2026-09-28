@@ -33,6 +33,9 @@ namespace Configs
     // Convert a sing-box outbound object to an Xray outbound object.
     QJsonObject singBoxOutboundToXray(const QJsonObject &outbound);
 
+    // Punycode for non-ASCII hosts. A comma-separated list is converted per entry.
+    QString toAceHost(const QString& host);
+
     QString getHeadersString(QStringList headers);
 
     QStringList parseHeaderPairs(const QString& rawHeader);

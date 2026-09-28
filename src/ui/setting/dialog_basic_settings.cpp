@@ -34,6 +34,8 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QIntValidator>
+#include <QSslSocket>
+#include <QStandardItemModel>
 
 #include "include/sys/UrlScheme.hpp"
 #include "include/ui/mainwindow.h"

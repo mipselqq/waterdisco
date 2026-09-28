@@ -5,7 +5,31 @@
 
 #include <QDateTime>
 
+#include <array>
+
 namespace {
+    struct ItemPriority {
+        DataViewItem item;
+        DataViewPriority priority;
+    };
+
+    // Within one level, panels render in this order.
+    constexpr std::array kItemPriorities = {
+        ItemPriority{DataViewItem::SpeedTest, DataViewPriority::Critical},
+        ItemPriority{DataViewItem::LatencyTest, DataViewPriority::Critical},
+        ItemPriority{DataViewItem::PendingRestart, DataViewPriority::Medium},
+        ItemPriority{DataViewItem::VpnEndpoint, DataViewPriority::Medium},
+        ItemPriority{DataViewItem::AutoSelector, DataViewPriority::Medium},
+        ItemPriority{DataViewItem::Download, DataViewPriority::Medium},
+    };
+
+    constexpr std::array kPriorityOrder = {
+        DataViewPriority::Critical,
+        DataViewPriority::High,
+        DataViewPriority::Medium,
+        DataViewPriority::Low,
+    };
+
     constexpr auto kPanelLineStyle = "text-align:left;margin:0;padding-left:12px;";
 
     QString elapsedPanelLine(qint64 startedAtMs) {

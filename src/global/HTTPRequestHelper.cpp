@@ -70,7 +70,49 @@ namespace Configs_network {
         Q_UNUSED(useProxy);
         ConfigureAccessManager(accessManager);
         ConfigureRequest(request, sendHwid);
-        //
+        auto _reply = accessManager.get(request);
+        connect(_reply, &QNetworkReply::sslErrors, _reply, [](const QList<QSslError> &errors) {
+            QStringList error_str;
+            for (const auto &err: errors) {
+                error_str << err.errorString();
+            }
+            MW_show_log(QString("SSL Errors: %1 %2").arg(error_str.join(","), Configs::dataManager->settingsRepo->net_insecure ? "(Ignored)" : ""));
+        });
+        QEventLoop loop;
+        connect(_reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        loop.exec();
+
+        auto result = HTTPResponse{_reply->error() == QNetworkReply::NetworkError::NoError ? "" : _reply->errorString(),
+                                       _reply->readAll(), _reply->rawHeaderPairs()};
+        _reply->deleteLater();
+        return result;
+    }
+
+    HTTPResponse NetworkRequestHelper::HttpGet(const QString &url, const HttpGetOptions &options) {
+        if (!QSslSocket::isProtocolSupported(options.tlsProtocol)) {
+            return HTTPResponse{QObject::tr("The selected TLS version is not supported on this system.")};
+        }
+        const qint64 maxBytes = options.maxBytes;
+        const auto *settings = Configs::dataManager->settingsRepo.get();
+        QNetworkRequest request;
+        QNetworkAccessManager accessManager;
+        accessManager.setTransferTimeout(10000);
+        request.setUrl(url);
+        ConfigureAccessManager(accessManager);
+        request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, options.http2);
+        const QString userAgent = options.userAgent.isEmpty() ? settings->GetUserAgent() : options.userAgent;
+        if (isSafeHeaderValue(userAgent)) {
+            request.setHeader(QNetworkRequest::KnownHeaders::UserAgentHeader, userAgent);
+        }
+        auto ssl = request.sslConfiguration();
+        ssl.setProtocol(options.tlsProtocol);
+        if (settings->net_insecure) ssl.setPeerVerifyMode(QSslSocket::PeerVerifyMode::VerifyNone);
+        request.setSslConfiguration(ssl);
+        for (const auto &[name, value] : options.headers) {
+            if (value.size() > kMaxHeaderValueLength || value.contains('\r') || value.contains('\n')) continue;
+            request.setRawHeader(name, value);
+        }
         auto _reply = accessManager.get(request);
         connect(_reply, &QNetworkReply::sslErrors, _reply, [](const QList<QSslError> &errors) {
             QStringList error_str;

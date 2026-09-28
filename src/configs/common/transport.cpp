@@ -25,6 +25,9 @@ namespace Configs {
         if (query.hasQueryItem("host")) host = query.queryItemValue("host", QUrl::FullyDecoded);
         if (query.hasQueryItem("path")) path = query.queryItemValue("path", QUrl::FullyDecoded);
         // the raw header's server accepts any of its comma-listed paths, while sing-box sends exactly one
+        const auto linkType = query.queryItemValue("type");
+        const bool rawHttp = (linkType.isEmpty() || linkType == "tcp" || linkType == "raw")
+                             && query.queryItemValue("headerType") == "http";
         if (rawHttp) path = path.section(',', 0, 0, QString::SectionSkipEmpty).trimmed();
         if (query.hasQueryItem("method")) method = query.queryItemValue("method");
         if (query.hasQueryItem("headers")) {

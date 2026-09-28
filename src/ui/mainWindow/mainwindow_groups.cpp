@@ -11,9 +11,75 @@
 
 #include "include/configs/sub/GroupUpdater.hpp"
 #include "include/database/GroupsRepo.h"
+#include "include/global/Utils.hpp"
 #include "include/ui/group/dialog_edit_group.h"
 #include "include/ui/mainWindow/MainWindowInternal.h"
 #include "include/ui/mainWindow/TestRunner.h"
+#include "include/ui/stats/dialog_endpoint_details.h"
+
+namespace {
+    QString groupSidebarToolTip(const Configs::Group &group) {
+        if (group.url.isEmpty()) return Qt::convertFromPlainText(group.name);
+
+        const auto &subInfo = group.sub_info;
+        QString html = QStringLiteral("<div style='max-width:320px;line-height:1.3;'>");
+        html += QStringLiteral("<b>%1</b><br>").arg(group.name.toHtmlEscaped());
+        if (!subInfo.title.isEmpty() && subInfo.title != group.name) {
+            html += QObject::tr("Provider: %1").arg(subInfo.title.toHtmlEscaped()) + QStringLiteral("<br>");
+        }
+        html += QStringLiteral("<span style='opacity:0.8;'>%1</span><br>").arg(QObject::tr("Type: Subscription"));
+        if (group.sub_last_update > 0) {
+            html += QStringLiteral("%1: %2<br>").arg(QObject::tr("Last updated"), DisplayTime(group.sub_last_update, QLocale::ShortFormat));
+        }
+        if (const auto plan = Subscription::ResolveAutoUpdate(group); plan.interval > 0) {
+            html += QObject::tr("Auto-update: every %1").arg(Stats::HumanizeDuration(plan.interval)) + QStringLiteral("<br>");
+        }
+        if (subInfo.has_quota) {
+            html += QStringLiteral("%1: %2<br>").arg(QObject::tr("Used"), ReadableSize(subInfo.used()));
+            if (subInfo.total > 0) {
+                html += QStringLiteral("%1: %2 (%3: %4)<br>").arg(
+                    QObject::tr("Total"), ReadableSize(subInfo.total), QObject::tr("Remaining"), ReadableSize(subInfo.remaining()));
+            }
+        }
+        if (subInfo.expire > 0) {
+            html += QStringLiteral("%1: %2<br>").arg(QObject::tr("Expires"), DisplayTime(subInfo.expire, QLocale::ShortFormat));
+        }
+        if (!subInfo.support_url.isEmpty()) {
+            html += QStringLiteral("%1: %2<br>").arg(QObject::tr("Support"), subInfo.support_url.toHtmlEscaped());
+        }
+        if (!subInfo.web_url.isEmpty()) {
+            html += QStringLiteral("%1: %2<br>").arg(QObject::tr("Portal"), subInfo.web_url.toHtmlEscaped());
+        }
+        if (const QString announce = subInfo.announce.trimmed(); !announce.isEmpty()) {
+            html += QStringLiteral("<hr><b>%1:</b>%2").arg(QObject::tr("Announcement"), Qt::convertFromPlainText(announce, Qt::WhiteSpaceNormal));
+        }
+        html += QStringLiteral("</div>");
+        return html;
+    }
+}
+
+void MainWindow::updateTabToolTip(int gid) {
+    if (!groupSidebar) return;
+    const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+    if (!group) return;
+
+    int widest = groupSidebar->minimumSizeHint().width();
+    for (int i = 0; i < groupSidebar->count(); ++i) {
+        auto *item = groupSidebar->item(i);
+        if (item->data(Qt::UserRole).toInt() == gid) {
+            item->setText(tr("%1  (%2)").arg(group->name).arg(group->Profiles().size()));
+            item->setToolTip(groupSidebarToolTip(*group));
+        }
+        widest = qMax(widest, groupSidebar->fontMetrics().horizontalAdvance(item->text()) + 28);
+    }
+    groupSidebar->setFixedWidth(widest);
+    if (mainContentSplitter) {
+        if (QWidget *pane = mainContentSplitter->widget(0)) {
+            const QMargins margins = pane->layout() ? pane->layout()->contentsMargins() : QMargins();
+            pane->setFixedWidth(widest + margins.left() + margins.right());
+        }
+    }
+}
 
 void MainWindow::show_group(int gid) {
     const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
@@ -57,7 +123,7 @@ void MainWindow::update_group_subscription(int gid) {
     if (!group || group->url.isEmpty()) return;
     if (mw_sub_updating) return;
     mw_sub_updating = true;
-    Subscription::groupUpdater->AsyncUpdate(group->url, group->id, [&] { mw_sub_updating = false; }, true);
+    Subscription::updater()->RefreshGroup(group->id, [&] { mw_sub_updating = false; }, true);
 }
 
 void MainWindow::showGroupSidebarMenu(const QPoint &pos) {
@@ -95,7 +161,7 @@ void MainWindow::rebuildGroupSidebar() {
         auto *item = new QListWidgetItem(
             tr("%1  (%2)").arg(group->name).arg(group->Profiles().size()), groupSidebar);
         item->setData(Qt::UserRole, gid);
-        item->setToolTip(group->name);
+        item->setToolTip(groupSidebarToolTip(*group));
         widest = qMax(widest, groupSidebar->fontMetrics().horizontalAdvance(item->text()) + 28);
         if (gid == Configs::dataManager->settingsRepo->current_group) {
             groupSidebar->setCurrentItem(item);

@@ -1550,8 +1550,8 @@ void TestRunner::runSpeedProbe(const Target& target)
     {
         ResultPoller poller([this, gen = sessionGen_.load(), tag2entID = target.tag2entID, testCurrent = target.testCurrent, speedtestConf] {
             if (sessionGen_.load() != gen || stopRequested_.load()) return;
-            if (speedtestConf == Configs::TestConfig::COUNTRY) pollCountryTest(tag2entID, testCurrent);
-            else pollSpeedTest(tag2entID, testCurrent);
+            if (speedtestConf == Configs::TestConfig::COUNTRY) pollCountryTest(tag2entID, testCurrent, gen);
+            else pollSpeedTest(tag2entID, testCurrent, gen);
         }, kSpeedPollIntervalMs, &stopRequested_);
 
         result = defaultClient->SpeedTest(&rpcOK, req, &coreError);

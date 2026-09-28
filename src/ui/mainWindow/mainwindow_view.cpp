@@ -38,6 +38,14 @@
 #include <QHash>
 #include <QMutexLocker>
 
+// Mirrors the language switch in main.cpp; QLocale() alone follows the system, not an explicit setting.
+bool MainWindow::usesTightLabels() const {
+    static const QStringList byLanguageSetting = {"", "en", "zh_CN", "fa_IR", "ru_RU"};
+    const int language = Configs::dataManager->settingsRepo->language;
+    const QString locale = language == 0 ? QLocale().name() : byLanguageSetting.value(language);
+    return locale.startsWith("zh") || locale.startsWith("ru");
+}
+
 void MainWindow::applyTopBarMetrics() {
     const QList<QToolButton*> menuButtons = {
         ui->toolButton_program, ui->toolButton_preferences, ui->toolButton_testing,

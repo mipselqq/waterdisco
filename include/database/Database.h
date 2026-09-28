@@ -105,6 +105,8 @@ namespace Configs {
         // Not safe from the constructor: a VACUUM there stalls startup.
         void RunMaintenance();
 
+        [[nodiscard]] const std::string& Path() const { return path_; }
+
         // Creates a consistent SQLite copy even while this connection is in WAL mode.
         // A plain file copy would miss committed pages that have not been checkpointed.
         bool SnapshotTo(const std::string& path, std::string* error = nullptr);

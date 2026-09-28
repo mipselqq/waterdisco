@@ -239,92 +239,40 @@ namespace Stats
 
         switch (sort)
         {
-            runOnUiThread([=,this] {
-                auto *m = GetMainWindow();
-                if (m == nullptr || !m->isVisible() || m->isMinimized()) return;
-                m->UpdateConnectionList(toUpdate, toAdd);
-            });
-        } else
-        {
-            if (sort == ByDownload)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                {
-                    if (a.download == b.download) return asc ? a.id > b.id : a.id < b.id;
-                    return asc ? a.download < b.download : a.download > b.download;
-                });
-            }
-            if (sort == ByUpload)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                {
-                   if (a.upload == b.upload) return asc ? a.id > b.id : a.id < b.id;
-                   return asc ? a.upload < b.upload : a.upload > b.upload;
-                });
-            }
-            if (sort == ByProcess)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                {
-                    if (a.process == b.process) return asc ? a.id > b.id : a.id < b.id;
-                    return asc ? a.process > b.process : a.process < b.process;
-                });
-            }
-            if (sort == ByOutbound)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                    {
-                        if (a.outbound == b.outbound) return asc ? a.id > b.id : a.id < b.id;
-                        return asc ? a.outbound > b.outbound : a.outbound < b.outbound;
-                    });
-            }
-            if (sort == ByProtocol)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                    {
-                        if (a.protocol == b.protocol) return asc ? a.id > b.id : a.id < b.id;
-                        return asc ? a.protocol > b.protocol : a.protocol < b.protocol;
-                    });
-            }
-            if (sort == ByTraffic)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                    {
-                        const long long ta = a.upload + a.download, tb = b.upload + b.download;
-                        if (ta == tb) return asc ? a.id > b.id : a.id < b.id;
-                        return asc ? ta < tb : ta > tb;
-                    });
-            }
-            if (sort == ByDownloadSpeed)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                    {
-                        if (a.downloadSpeed == b.downloadSpeed) return asc ? a.id > b.id : a.id < b.id;
-                        return asc ? a.downloadSpeed < b.downloadSpeed : a.downloadSpeed > b.downloadSpeed;
-                    });
-            }
-            if (sort == ByUploadSpeed)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                    {
-                        if (a.uploadSpeed == b.uploadSpeed) return asc ? a.id > b.id : a.id < b.id;
-                        return asc ? a.uploadSpeed < b.uploadSpeed : a.uploadSpeed > b.uploadSpeed;
-                    });
-            }
-            if (sort == BySpeed)
-            {
-                std::sort(sorted.begin(), sorted.end(), [=,this](const ConnectionMetadata& a, const ConnectionMetadata& b)
-                    {
-                        const long long sa = a.uploadSpeed + a.downloadSpeed, sb = b.uploadSpeed + b.downloadSpeed;
-                        if (sa == sb) return asc ? a.id > b.id : a.id < b.id;
-                        return asc ? sa < sb : sa > sb;
-                    });
-            }
-            runOnUiThread([=,this] {
-                auto *m = GetMainWindow();
-                if (m == nullptr || !m->isVisible() || m->isMinimized()) return;
-                m->UpdateConnectionListWithRecreate(sorted);
-            });
+        // Oldest first, matching how rows used to accumulate. `asc` is ignored: this means "unsorted".
+        case Default:
+            sortSmallestFirst(rows, false, [](const ConnectionMetadata& c) { return c.createdAtMs; });
+            break;
+        case ByDownload:
+            sortLargestFirst(rows, asc, [](const ConnectionMetadata& c) { return c.download; });
+            break;
+        case ByUpload:
+            sortLargestFirst(rows, asc, [](const ConnectionMetadata& c) { return c.upload; });
+            break;
+        case ByTraffic:
+            sortLargestFirst(rows, asc, [](const ConnectionMetadata& c) { return c.upload + c.download; });
+            break;
+        case ByDownloadSpeed:
+            sortLargestFirst(rows, asc, [](const ConnectionMetadata& c) { return c.downloadSpeed; });
+            break;
+        case ByUploadSpeed:
+            sortLargestFirst(rows, asc, [](const ConnectionMetadata& c) { return c.uploadSpeed; });
+            break;
+        case BySpeed:
+            sortLargestFirst(rows, asc, [](const ConnectionMetadata& c) { return c.uploadSpeed + c.downloadSpeed; });
+            break;
+        case ByProcess:
+            sortSmallestFirst(rows, asc, [](const ConnectionMetadata& c) -> const QString& { return c.process; });
+            break;
+        case ByOutbound:
+            sortSmallestFirst(rows, asc, [](const ConnectionMetadata& c) -> const QString& { return c.outbound; });
+            break;
+        case ByProtocol:
+            sortSmallestFirst(rows, asc, [](const ConnectionMetadata& c) -> const QString& { return c.protocol; });
+            break;
+        case BySource:
+            sortSmallestFirst(rows, asc, [](const ConnectionMetadata& c) -> const QString& { return c.sourceDisplay; });
+            break;
         }
 
         runOnUiThread([rows = std::move(rows)] {

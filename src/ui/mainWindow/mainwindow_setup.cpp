@@ -1043,8 +1043,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     this->refresh_groups();
 
     tray = new QSystemTrayIcon(nullptr);
-    tray->setIcon(Icon::GetTrayIcon(Icon::NONE));
-    QApplication::setWindowIcon(Icon::GetTaskbarIcon(Icon::NONE));
+    tray->setIcon(Icon::GetTrayIcon(Icon::TrayIconStatus::None));
+    QApplication::setWindowIcon(Icon::GetTaskbarIcon(Icon::TrayIconStatus::None));
     trayMenu = new QMenu();
     auto *routeSeparator = trayMenu->addSeparator();
     trayMenu->addAction(ui->actionRestart_Program);
@@ -1271,7 +1271,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     });
 
     connect(ui->actionUpdate_All_Subscriptions, &QAction::triggered, this, [=,this]{
-        UI_update_all_groups();
+        Subscription::updater()->RefreshAll();
     });
 
     connect(ui->actionRefresh_Column_Widths, &QAction::triggered, this, [=, this] {

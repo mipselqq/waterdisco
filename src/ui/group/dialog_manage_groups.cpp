@@ -54,5 +54,5 @@ void DialogManageGroups::on_add_clicked() {
 }
 
 void DialogManageGroups::on_update_all_clicked() {
-    UI_update_all_groups();
+    Subscription::updater()->RefreshAll();
 }
