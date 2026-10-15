@@ -11,10 +11,26 @@
 
 #include "include/database/GroupsRepo.h"
 #include "include/database/ProfilesRepo.h"
+#include "include/global/RunningProfiles.hpp"
 #include "include/ui/group/dialog_edit_group_advanced.h"
 
 
 #define ADJUST_SIZE runOnThread([=,this] { adjustSize(); adjustPosition(mainwindow); }, this);
+
+namespace {
+    bool editGroupRunningProfileInherits(const QList<int> &profileIds) {
+        const int startedId = Configs::dataManager->settingsRepo->started_id;
+        if (startedId < 0) return false;
+        QList<int> running;
+        for (const int id : profileIds) {
+            if (id == startedId || Configs::RunningUsesProfile(id)) running << id;
+        }
+        for (const auto &profile : Configs::dataManager->profilesRepo->GetProfileBatch(running)) {
+            if (profile != nullptr && profile->endpoint.mode == Configs::EndpointSource::Mode::Inherit) return true;
+        }
+        return false;
+    }
+}
 
 DialogEditGroup::DialogEditGroup(const std::shared_ptr<Configs::Group> &ent, QWidget *parent) : QDialog(parent), ui(new Ui::DialogEditGroup) {
     ui->setupUi(this);
@@ -29,9 +45,13 @@ DialogEditGroup::DialogEditGroup(const std::shared_ptr<Configs::Group> &ent, QWi
     ui->auto_clear_unavailable->setChecked(ent->auto_clear_unavailable);
     ui->skip_auto_update->setChecked(ent->skip_auto_update);
     subOptions = ent->sub_options;
+    endpoint = ent->endpoint;
     connect(ui->advanced, &QPushButton::clicked, this, [this] {
-        auto dialog = new DialogEditGroupAdvanced(subOptions, this->ent->sub_info.server_interval, this);
-        connect(dialog, &QDialog::accepted, this, [this, dialog] { subOptions = dialog->Options(); });
+        auto dialog = new DialogEditGroupAdvanced(subOptions, this->ent->sub_info.server_interval, endpoint, ui->type->currentIndex() == 1, this);
+        connect(dialog, &QDialog::accepted, this, [this, dialog] {
+            subOptions = dialog->Options();
+            endpoint = dialog->Endpoint();
+        });
         connect(dialog, &QDialog::finished, dialog, &QDialog::deleteLater);
         dialog->open();
     });
@@ -231,6 +251,8 @@ void DialogEditGroup::accept() {
     ent->url = newUrl;
     ent->skip_auto_update = ui->skip_auto_update->isChecked();
     ent->sub_options = subOptions;
+    restartNeeded = endpoint != ent->endpoint && editGroupRunningProfileInherits(ent->Profiles());
+    ent->endpoint = endpoint;
     ent->front_proxy_id = resolve_proxy_selection(ui->front_proxy, CACHE.front_proxy);
     ent->landing_proxy_id = resolve_proxy_selection(ui->landing_proxy, LANDING.landing_proxy);
     QDialog::accept();

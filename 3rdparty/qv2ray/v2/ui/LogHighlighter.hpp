@@ -63,6 +63,9 @@ namespace Qv2ray {
         public:
             explicit SyntaxHighlighter(bool darkMode, QTextDocument *parent = nullptr);
 
+            // Does not rehighlight; the caller re-renders the document after changing it.
+            void setSearchPattern(const QRegularExpression &pattern);
+
         protected:
             void highlightBlock(const QString &text) override;
 
@@ -84,6 +87,8 @@ namespace Qv2ray {
             QTextCharFormat timeFormat;
             QTextCharFormat ipHostFormat;
             QTextCharFormat v2rayComponentFormat;
+            QTextCharFormat searchFormat;
+            QRegularExpression searchPattern;
         };
     } // namespace ui
 } // namespace Qv2ray

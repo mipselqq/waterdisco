@@ -99,7 +99,7 @@ void GroupItem::on_edit_clicked() {
         if (dialog->result() == QDialog::Accepted) {
             Configs::dataManager->groupsRepo->Save(ent);
             refresh_data();
-            MW_dialog_message(MwMessage::GroupsChanged, {});
+            MW_dialog_message(MwMessage::GroupsChanged, dialog->RestartNeeded() ? QStringList{MwArg::RestartProxy} : QStringList{});
         }
         dialog->deleteLater();
     });

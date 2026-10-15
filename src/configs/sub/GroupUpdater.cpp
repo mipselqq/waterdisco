@@ -152,16 +152,29 @@ namespace Subscription {
             void flush() {
                 if (chunk.isEmpty()) return;
                 if (Configs::dataManager->profilesRepo->AddProfileBatch(chunk, gid)) {
-                    for (qsizetype i = 0; i < chunk.size(); ++i) entries[entryIndex[i]].id = chunk[i]->id;
+                    for (qsizetype i = 0; i < chunk.size(); ++i) {
+                        entries[entryIndex[i]].id = chunk[i]->id;
+                        added << chunk[i]->id;
+                    }
+                    destination = chunk.first()->gid;
                 }
                 chunk.clear();
                 entryIndex.clear();
+            }
+
+            // Sorted here rather than queued, so the SubscriptionFinished redraw already shows the order.
+            void finish() {
+                flush();
+                const auto group = Configs::dataManager->groupsRepo->GetGroup(destination);
+                if (group != nullptr && group->Reposition(added)) Configs::dataManager->groupsRepo->Save(group);
             }
 
             QList<NewEntry> entries;
 
         private:
             int gid;
+            int destination = -1;
+            QList<int> added;
             ContentIndex *index;
             QList<std::shared_ptr<Configs::Profile>> chunk;
             QList<qsizetype> entryIndex;
@@ -312,7 +325,7 @@ namespace Subscription {
             }
             if (options.remove_insecure) {
                 collect(QObject::tr("Removed %1 insecure profiles:"),
-                        [](const std::shared_ptr<Configs::Profile> &ent) { return ent->outbound->GetSecurity().isDangerous(); });
+                        [](const std::shared_ptr<Configs::Profile> &ent) { return ent->outbound->EffectiveSecurity().isInsecure(); });
             }
             if (options.remove_invalid) {
                 QList<std::shared_ptr<Configs::Profile>> unchecked;
@@ -361,13 +374,8 @@ namespace Subscription {
                 }
             }
             if (options.sort_by_latency) {
-                GroupSortAction sort;
-                sort.method = GroupSortMethod::ByLatency;
-                if (group->SortProfiles(sort)) {
-                    Configs::dataManager->groupsRepo->Save(group);
-                } else {
-                    MW_show_log(QObject::tr("Skipped sorting %1: another sort is in progress.").arg(group->name));
-                }
+                group->SortProfiles({GroupSortMethod::ByLatency, false});
+                Configs::dataManager->groupsRepo->Save(group);
             }
             return deleted;
         }
@@ -536,6 +544,31 @@ namespace Subscription {
         }});
     }
 
+    void GroupUpdater::CloneProfiles(const QList<int> &ids, const Finish &finish) {
+        QList<QPair<QByteArray, Configs::EndpointSource>> copies;
+        for (const auto &ent : Configs::dataManager->profilesRepo->GetProfileBatch(ids)) {
+            copies.append({ent->outbound->ExportJsonLink().toUtf8(), ent->endpoint});
+        }
+        enqueue({-1, false, [=, this] {
+            auto &settings = Configs::dataManager->settingsRepo;
+            settings->imported_count = 0;
+            ImportSink sink(-1, nullptr);
+            auto parseSink = sinkFor(sink);
+            for (const auto &copy : copies) {
+                parseSink.profile = [&sink, endpoint = copy.second](std::shared_ptr<Configs::Profile> ent) {
+                    ent->endpoint = endpoint;
+                    sink.add(std::move(ent));
+                };
+                ParseDocument(copy.first, parseSink);
+            }
+            sink.finish();
+            settings->imported_count = sink.entries.size();
+            MW_dialog_message(MwMessage::SubscriptionFinished, {});
+            emit asyncUpdateCallback(-1);
+            if (finish != nullptr) finish();
+        }});
+    }
+
     void GroupUpdater::enqueue(Job job) {
         QMutexLocker locker(&mutex);
         enqueueLocked(std::move(job));
@@ -685,7 +718,7 @@ namespace Subscription {
 
         MW_show_log(">>>>>>>> " + QObject::tr("Processing subscription data..."));
         for (auto &document : documents) ParseDocument(std::move(document), sinkFor(sink));
-        sink.flush();
+        sink.finish();
         MW_show_log(">>>>>>>> " + QObject::tr("Process complete, applying..."));
 
         settings->imported_count = sink.entries.size();
@@ -878,6 +911,8 @@ namespace Subscription {
 
         disturbed << removeFlagged(members(), options, change_text);
 
+        // The subscription's own order replaced the group's above.
+        group->Resort();
         // Stamped only once the update went through, so an interrupted one is retried instead of counting as fresh.
         group->sub_last_update = QDateTime::currentSecsSinceEpoch();
         groupsRepo->Save(group);

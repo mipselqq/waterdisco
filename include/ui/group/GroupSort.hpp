@@ -1,6 +1,7 @@
 #pragma once
 
 namespace GroupSortMethod {
+    // Persisted as ints: append only.
     enum GroupSortMethod {
         Raw,
         ByType,
@@ -18,4 +19,6 @@ namespace GroupSortMethod {
 struct GroupSortAction {
     GroupSortMethod::GroupSortMethod method = GroupSortMethod::Raw;
     bool descending = false;
+
+    bool operator==(const GroupSortAction &) const = default;
 };

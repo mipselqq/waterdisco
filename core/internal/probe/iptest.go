@@ -61,7 +61,7 @@ func BatchIPTest(ctx context.Context, i Box, outboundTags []string, maxConcurren
 			if !live {
 				limit = firstRequestTimeout(i, tag, cold, timeout)
 			}
-			client, closeClient := outboundHTTPClient(ctx, outbound)
+			client, closeClient := outboundHTTPClient(ctx, i, tag, outbound)
 			if live {
 				closeClient()
 				client, closeClient = liveOutboundHTTPClient(outbound, limit)

@@ -2,6 +2,8 @@
 
 #include "include/ui/mainWindow/MainWindowInternal.h"
 #include "include/api/RPC.h"
+#include "include/api/remote/Router.hpp"
+#include "include/api/remote/Server.hpp"
 // Full definition: MainWindow's destructor lives here and destroys the unique_ptr.
 #include "include/ui/mainWindow/TestRunner.h"
 
@@ -12,8 +14,11 @@
 #include "include/configs/sub/RouteUpdater.hpp"
 #include "include/global/PeriodicRunner.hpp"
 #include "include/global/Logger.hpp"
+#include "include/scanner/IpListUpdater.h"
+#include "include/scanner/ScanManager.h"
 #include "include/stats/autoselector/AutoSelectorMonitor.hpp"
 #include "include/ui/stats/dialog_auto_selector.h"
+#include "include/sys/KillSwitch.hpp"
 #include "include/sys/Process.hpp"
 #include "include/sys/AutoRun.hpp"
 #include "include/sys/UrlScheme.hpp"
@@ -397,6 +402,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         LOG_INFO(QString("elevated: %1").arg(Configs::IsAdmin() ? "yes" : "no"));
         MW_dialog_message(MwMessage::CoreStarted, {Int2String(profileId)});
     });
+
+    // Must precede the first CoreStarted, or a remembered profile would start before the guard is even arming.
+    Sys::KillSwitch::instance()->apply();
 
     auto socketFullName = core_server->fullServerName();
     runOnThread(
@@ -881,8 +889,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         int columnIndex = header->logicalIndexAt(pos);
         auto group = Configs::dataManager->groupsRepo->CurrentGroup();
         if (group == nullptr) return;
-        if (columnIndex == ProfilesTableModel::ColType) {
-            if (!Configs::dataManager->settingsRepo->show_config_security) return;
+        // The column-widths action carries its shortcut id as data, so it must never be read as a sort key.
+        auto execHeaderMenu = [&](QMenu& menu) -> QAction* {
+            if (!menu.isEmpty()) menu.addSeparator();
+            QAction* stopSorting = group->KeepsSorted() ? menu.addAction(tr("Stop Sorting")) : nullptr;
+            menu.addAction(ui->actionRefresh_Column_Widths);
+            auto* chosen = menu.exec(header->mapToGlobal(pos));
+            if (chosen != nullptr && chosen == stopSorting) {
+                stopSortingCurrentGroup();
+                return nullptr;
+            }
+            return chosen == ui->actionRefresh_Column_Widths ? nullptr : chosen;
+        };
+        // Picking a key keeps the direction of a sort already on this column.
+        const auto sortColumn = [this, group](int column, bool descendingByDefault) {
+            GroupSortAction action{ProfilesTableModel::sortOfColumn(column), descendingByDefault};
+            if (ProfilesTableModel::columnOfSort(group->sort.method) == column) action.descending = group->sort.descending;
+            sortCurrentGroup(action);
+        };
+        if (columnIndex == ProfilesTableModel::ColType && Configs::dataManager->settingsRepo->show_config_security) {
             QMenu menu(this);
             auto* sortByLabel = menu.addAction(tr("Sort By:"));
             sortByLabel->setEnabled(false);
@@ -899,7 +924,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 act->setChecked(group->type_sort_by == opt.value);
             }
 
-            auto* chosen = menu.exec(header->mapToGlobal(pos));
+            auto* chosen = execHeaderMenu(menu);
             if (chosen == nullptr || !chosen->data().isValid()) return;
 
             const auto typeSortBy = static_cast<Configs::typeBy>(chosen->data().toInt());
@@ -935,7 +960,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 act->setChecked(static_cast<int>(group->test_sort_by) == opt.value);
             }
 
-            auto* chosen = menu.exec(header->mapToGlobal(pos));
+            auto* chosen = execHeaderMenu(menu);
             if (chosen == nullptr || !chosen->data().isValid()) return;
 
             const auto testSortBy = static_cast<Configs::testBy>(chosen->data().toInt());
@@ -976,7 +1001,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
                 act->setChecked(static_cast<int>(group->traffic_sort_by) == opt.value);
             }
 
-            auto* chosen = menu.exec(header->mapToGlobal(pos));
+            auto* chosen = execHeaderMenu(menu);
             if (chosen == nullptr || !chosen->data().isValid()) return;
 
             const auto trafficSortBy = static_cast<Configs::trafficBy>(chosen->data().toInt());
@@ -992,6 +1017,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             runProfilesSort(action, group->test_sort_by, trafficSortBy);
             return;
         }
+        QMenu menu(this);
+        execHeaderMenu(menu);
     });
     ui->profilesTableView->verticalHeader()->setStretchLastSection(false);
     ui->profilesTableView->verticalHeader()->setDefaultSectionSize(24);
@@ -1174,15 +1201,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         set_spmode_vpn(false);
     });
     connect(ui->menu_qr, &QAction::triggered, this, [=,this]() { display_qr_link(false); });
-    connect(ui->system_dns, &QCheckBox::clicked, this, [=,this](bool checked) {
-        if (const auto ok = set_system_dns(checked); !ok) {
-            ui->system_dns->setChecked(!checked);
-        } else {
-            refresh_status();
-        }
-    });
-    if (Configs::dataManager->settingsRepo->show_system_dns) ui->system_dns->show();
-    else ui->system_dns->hide();
 
     auto startSelectedRankedSpeedtest = [=, this](TestRunner::RankedStartMode mode, bool connectBest = false) {
         const auto selected = get_now_selected_list();
@@ -1258,7 +1276,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         connect(dialog, &QDialog::finished, this, [=,this] {
             if (dialog->result() == QDialog::Accepted) {
                 Configs::dataManager->groupsRepo->Save(ent);
-                MW_dialog_message(MwMessage::GroupsChanged, {});
+                MW_dialog_message(MwMessage::GroupsChanged, dialog->RestartNeeded() ? QStringList{MwArg::RestartProxy} : QStringList{});
             }
             dialog->deleteLater();
         });
@@ -1345,14 +1363,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             action->setData(route->id);
             action->setCheckable(true);
             action->setChecked(Configs::dataManager->settingsRepo->current_route_id == route->id);
-            connect(action, &QAction::triggered, this, [=,this]()
-            {
-                auto routeID = action->data().toInt();
-                if (Configs::dataManager->settingsRepo->current_route_id == routeID) return;
-                Configs::dataManager->settingsRepo->current_route_id = routeID;
-                Configs::dataManager->settingsRepo->Save();
-                if (Configs::dataManager->settingsRepo->started_id >= 0) profile_start(Configs::dataManager->settingsRepo->started_id);
-            });
+            connect(action, &QAction::triggered, this, [=,this]() { choose_route(action->data().toInt()); });
             ui->menuRouting_Menu->addAction(action);
         }
     });
@@ -1517,6 +1528,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(Stats::autoSelectorMonitor, &Stats::AutoSelectorMonitor::updated, this,
             [this] { refresh_auto_selector_view(); }, Qt::QueuedConnection);
 
+    auto* scanManager = Scanner::ScanManager::instance();
+    connect(scanManager, &Scanner::ScanManager::progressChanged, this,
+            [this](int) { refreshScannerDataView(); }, Qt::QueuedConnection);
+    connect(scanManager, &Scanner::ScanManager::statusChanged, this,
+            [this](int) { refreshScannerDataView(true); }, Qt::QueuedConnection);
+    connect(scanManager, &Scanner::ScanManager::scansChanged, this, [this] {
+        m_scannerNames.clear();
+        refreshScannerDataView(true);
+    }, Qt::QueuedConnection);
+
     {
         auto* runner = Throne::PeriodicRunner::instance();
         // Interval is sign-encoded in settings (negative = disabled); < 30 min counts as off.
@@ -1539,12 +1560,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             },
             [] { UI_update_all_remote_routes(true); },
         });
+        runner->Add({
+            {},
+            [] { return 1; },
+            nullptr,
+            nullptr,
+            [] { Scanner::IpListUpdater::instance()->CheckAutoUpdate(); },
+        });
     }
 
     if (!Configs::dataManager->settingsRepo->flag_tray) show();
     else if (tray->isVisible()) HideWindow(this);
-    // Deferred: GetMessageBoxParent() falls back to the mainwindow global, which is only set once this constructor returns.
-    QTimer::singleShot(0, this, &MainWindow::showHijackDeprecationNotice);
+
+    // Connected only now: the handler refreshes the tray and views, which do not exist when apply() first runs above.
+    connect(Sys::KillSwitch::instance(), &Sys::KillSwitch::stateChanged, this, [this] { kill_switch_state_changed(); });
+    QTimer::singleShot(0, this, [this] { kill_switch_state_changed(); });
 
     ui->data_view->setStyleSheet("background: transparent; border: none;");
 
@@ -1560,9 +1590,32 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             clearRestartNeeded();
         }
     });
+
+    const QPointer<RemoteApi::Router> apiRouter = new RemoteApi::Router(this);
+    RemoteApi::Server::instance()->setDispatcher([apiRouter](const RemoteApi::Request &request, const RemoteApi::Responder &respond) {
+        if (apiRouter) apiRouter->dispatch(request, respond);
+        else respond(RemoteApi::Response::Error(503, "exiting", "Throne is shutting down"));
+    });
+    RemoteApi::Server::instance()->apply(RemoteApi::ConfigFromSettings());
 }
 
 MainWindow::~MainWindow() {
     stopImproveMood();
     delete ui;
+}
+void MainWindow::sortCurrentGroup(GroupSortAction action) {
+    const auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+    if (!group) return;
+    group->SetSort(action);
+    Configs::dataManager->groupsRepo->Save(group);
+    Configs::ResortLater(group->id);
+    applyLiveSortIndicator();
+}
+
+void MainWindow::stopSortingCurrentGroup() {
+    const auto group = Configs::dataManager->groupsRepo->CurrentGroup();
+    if (!group) return;
+    group->SetSort({});
+    Configs::dataManager->groupsRepo->Save(group);
+    applyLiveSortIndicator();
 }

@@ -7,6 +7,8 @@
 #include <QColor>
 #include <memory>
 
+#include "include/ui/group/GroupSort.hpp"
+
 namespace Configs {
     class Profile;
 }
@@ -46,6 +48,8 @@ public:
     struct FilterKey {
         QString type;
         QString address;
+        // The host an endpoint source makes the profile dial; empty when it keeps its own.
+        QString effectiveAddress;
         QString name;
         QString country;
         int port = 0;
@@ -87,6 +91,9 @@ public:
 
     void refreshProfileId(int profileId);
 
+    // Re-resolves the Address column after IP lists or group endpoints change.
+    void invalidateAddresses();
+
     void emplaceProfiles(int row1, int row2);
 
     // Match a newly sorted group without resetting the model or discarding the
@@ -109,6 +116,8 @@ public:
     // Legacy vertical-header label. The main table now renders a dedicated
     // number column, but this remains for compatibility with old callers.
     QString rowLabel(int sourceRow, int displayRow) const;
+    static int columnOfSort(GroupSortMethod::GroupSortMethod method);
+    static GroupSortMethod::GroupSortMethod sortOfColumn(int column);
 
     // Null if the profile could not be loaded; valid until the next model change.
     const FilterKey *filterKeyAt(int row) const;
@@ -145,6 +154,7 @@ private:
     // Enough for several screens while keeping thousands of subscriptions
     // virtual: rapid scrolling does not immediately evict rows just painted.
     int m_cacheSize = 512;
+    mutable QHash<int, QString> m_addressCache;
 
     mutable QHash<int, FilterKey> m_filterKeys;
     mutable bool m_filterIndexBuilt = false;

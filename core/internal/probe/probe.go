@@ -247,16 +247,32 @@ func dialerHTTPClient(dial func(ctx context.Context, network, address string) (n
 	}
 }
 
-// Dial follows the HTTP request context, so Client.Timeout and fall-short cancel the
-// proxy dial. The closer still tears down whatever the request context did not.
-func outboundHTTPClient(ctx context.Context, outbound adapter.Outbound) (*http.Client, func()) {
-	client, closeClient := dialerHTTPClient(func(reqCtx context.Context, network, addr string) (net.Conn, error) {
-		if reqCtx == nil {
-			reqCtx = ctx
-		}
+type liveInstanceKey struct{}
+
+// Marks a batch run on the live instance, whose own DNS already reaches names through its tunnel, cached.
+func LiveInstance(ctx context.Context) context.Context {
+	return context.WithValue(ctx, liveInstanceKey{}, true)
+}
+
+// A request's context bounds its dial, while the batch context can also cancel it.
+func outboundHTTPClient(ctx context.Context, i Box, tag string, outbound adapter.Outbound) (*http.Client, func()) {
+	dialCtx, cancelDials := context.WithCancel(ctx)
+	dial := func(reqCtx context.Context, network, addr string) (net.Conn, error) {
 		return outbound.DialContext(reqCtx, "tcp", metadata.ParseSocksaddr(addr))
-	}, 0)
-	return client, closeClient
+	}
+	if endpoints := service.FromContext[adapter.EndpointManager](i.Context()); endpoints != nil && ctx.Value(liveInstanceKey{}) == nil {
+		if _, isEndpoint := endpoints.Get(tag); isEndpoint {
+			resolve := tunnelResolvingDial(dialCtx, outbound)
+			dial = func(reqCtx context.Context, network, addr string) (net.Conn, error) {
+				return resolve(reqCtx, network, addr)
+			}
+		}
+	}
+	client, closeClient := dialerHTTPClient(dial, 0)
+	return client, func() {
+		cancelDials()
+		closeClient()
+	}
 }
 
 // Endpoint membership, not a type assertion: plain outbounds such as direct also satisfy adapter.Endpoint.

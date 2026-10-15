@@ -87,13 +87,7 @@ void MainWindow::on_menu_clone_triggered() {
     auto btn = QMessageBox::question(this, tr("Clone"), tr("Clone %1 item(s)").arg(entIDs.count()));
     if (btn != QMessageBox::Yes) return;
 
-    QStringList sls;
-    auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
-    for (const auto &ent: ents) {
-        sls << ent->outbound->ExportJsonLink();
-    }
-
-    Subscription::updater()->ImportText(sls.join("\n"));
+    Subscription::updater()->CloneProfiles(entIDs);
 }
 
 void MainWindow::on_menu_delete_repeat_triggered() {
@@ -169,6 +163,7 @@ void MainWindow::on_menu_reset_traffic_triggered() {
             group->calculated_column_width[ProfilesTableModel::ColTxTraffic] = 0;
     }
     refresh_proxy_list(entIDs);
+    Configs::RepositionLater(ents, Configs::SortInput::Traffic);
 }
 
 void MainWindow::on_menu_copy_links_triggered() {
@@ -350,16 +345,22 @@ void MainWindow::on_menu_scan_qr_triggered() {
 }
 
 void MainWindow::on_menu_clear_test_result_triggered() {
-    auto entIDs = Configs::dataManager->groupsRepo->CurrentGroup()->Profiles();
-    auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(entIDs);
-    if (ents.empty()) return;
+    clear_test_results(Configs::dataManager->groupsRepo->CurrentGroup()->Profiles());
+}
+
+int MainWindow::clear_test_results(const QList<int> &profileIds) {
+    const auto ents = Configs::dataManager->profilesRepo->GetProfileBatch(profileIds);
+    if (ents.empty()) return 0;
+    QSet<int> gids;
     for (const auto &ent: ents) {
         ent->ClearTestResults();
+        gids.insert(ent->gid);
     }
     Configs::dataManager->profilesRepo->SaveBatch(ents);
     if (auto group = Configs::dataManager->groupsRepo->GetGroup(ents.first()->gid))
         group->clearCalculatedColumnWidth();
     refresh_proxy_list();
+    return static_cast<int>(ents.size());
 }
 
 void MainWindow::on_menu_select_all_triggered() {
@@ -472,7 +473,7 @@ void MainWindow::on_menu_remove_insecure_triggered() {
     int remove_display_count = 0;
     for (const auto& profile : profiles) {
         if (!profile || !profile->outbound) continue;
-        if (!profile->outbound->GetSecurity().isDangerous()) continue;
+        if (!profile->outbound->EffectiveSecurity().isInsecure()) continue;
         del_ids += profile->id;
         if (remove_display_count < removeListPreviewLimit) {
             remove_display += profile->outbound->DisplayTypeAndName() + "\n";
@@ -507,6 +508,7 @@ void MainWindow::on_menu_resolve_selected_triggered() {
             refresh_proxy_list({profile->id});
             if (--Configs::dataManager->settingsRepo->resolve_count != 0) return;
             mw_sub_updating = false;
+            Configs::RepositionLater(ents, Configs::SortInput::Config);
         });
     }
 }
@@ -534,6 +536,7 @@ void MainWindow::on_menu_resolve_domain_triggered() {
             refresh_proxy_list({profile->id});
             if (--Configs::dataManager->settingsRepo->resolve_count != 0) return;
             mw_sub_updating = false;
+            Configs::RepositionLater(QHash<int, QList<int>>{{currGroup->id, profiles}}, Configs::SortInput::Config);
         });
     }
 }

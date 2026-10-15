@@ -134,6 +134,8 @@ namespace Configs_sys {
         if (m_debugMode) env.insert("THRONE_CORE_DEBUG", "1");
         // Points Xray's asset loader at our writable config dir, so a geoip.dat/geosite.dat downloaded later is found with no core restart.
         env.insert("XRAY_LOCATION_ASSET", Configs::GetBasePath());
+        guard_identity = Configs::dataManager->settingsRepo->kill_switch;
+        if (guard_identity) env.insert("THRONE_GUARD", "1");
         setProcessEnvironment(env);
         start(program, {});
     }

@@ -18,7 +18,14 @@ SUFFIX=""
 SRC_DIR="$PWD/linux-$ARCH$SUFFIX"
 
 DEPENDS=""
-[[ "$VARIANT" == "systemqt" ]] && DEPENDS="Requires: qt6-qtbase qt6-qtbase-gui qt6-qtwayland xcb-util-cursor google-noto-emoji-color-fonts"
+if [[ "$VARIANT" == "systemqt" ]]; then
+    DEPENDS=$(cat <<'EOF'
+Requires: (qt6-qtbase-gui >= 6.5 or libQt6Gui6 >= 6.5)
+Requires: (qt6-qtwayland >= 6.5 or libQt6WaylandClient6 >= 6.5)
+Requires: (google-noto-emoji-color-fonts or google-noto-coloremoji-fonts or noto-coloremoji-fonts)
+EOF
+)
+fi
 
 # Private work dir so pack_release.sh can build every package concurrently.
 WORK=$(mktemp -d)
@@ -37,7 +44,7 @@ Categories=Network;Application;
 EOF
 
 cat >"$WORK/Throne.spec" <<-EOF
-Name: Throne
+Name: throne
 Version: ${RPM_VERSION}
 Release: 1
 Summary: Qt based cross-platform GUI proxy configuration manager (backend: sing-box)
@@ -79,4 +86,4 @@ rpmbuild -bb \
   --target "$RPM_ARCH" \
   "$WORK/Throne.spec"
 
-mv "$WORK/RPMS/$RPM_ARCH/Throne-${RPM_VERSION}-1.${RPM_ARCH}.rpm" "Throne-$TAG-fedora-$ARCH$SUFFIX.rpm"
+mv "$WORK/RPMS/$RPM_ARCH/throne-${RPM_VERSION}-1.${RPM_ARCH}.rpm" "Throne-$TAG-fedora-$ARCH$SUFFIX.rpm"

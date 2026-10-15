@@ -1206,16 +1206,16 @@ void TestRunner::runConnectionTimeTests(const QList<int>& requestedIDs) {
     });
 }
 
-void TestRunner::runUrlTests(const QList<int>& profileIDs, const std::function<void()>& onFinished) {
-    runLatencyGroup(LatencyKind::Url, profileIDs, onFinished);
+bool TestRunner::runUrlTests(const QList<int>& profileIDs, const std::function<void()>& onFinished, bool interactive) {
+    return runLatencyGroup(LatencyKind::Url, profileIDs, onFinished, false, interactive);
 }
 
 void TestRunner::queueUrlTests(const QList<int>& profileIDs, const std::function<void()>& onFinished) {
     runOnNewThread([=, this] { runLatencyGroup(LatencyKind::Url, profileIDs, onFinished, true); });
 }
 
-void TestRunner::runIpTests(const QList<int>& profileIDs) {
-    runLatencyGroup(LatencyKind::Ip, profileIDs, {});
+bool TestRunner::runIpTests(const QList<int>& profileIDs, const std::function<void()>& onFinished, bool interactive) {
+    return runLatencyGroup(LatencyKind::Ip, profileIDs, onFinished, false, interactive);
 }
 
 void TestRunner::runCurrentIpTest(int profileID, const std::function<void(bool)>& finished) {
@@ -1244,8 +1244,10 @@ void TestRunner::runCurrentIpTest(int profileID, const std::function<void(bool)>
     });
 }
 
-void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedIDs,
-                                 const std::function<void()>& onFinished, bool waitForSession) {
+bool TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedIDs,
+                                 const std::function<void()>& onFinished, bool waitForSession, bool interactive) {
+    Q_UNUSED(waitForSession)
+    Q_UNUSED(interactive)
     const bool isUrl = kind == LatencyKind::Url;
     const auto panelKind = isUrl ? DataViewHtmlGenerator::LatencyTestPanelState::Kind::Url
                                  : DataViewHtmlGenerator::LatencyTestPanelState::Kind::Ip;
@@ -1255,7 +1257,7 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
     const auto profileIDs = withoutAutoSelectors(withoutDisabled(requestedIDs));
     if (profileIDs.isEmpty()) {
         finish();
-        return;
+        return false;
     }
 
     runOnNewThread([this, profileIDs, panelKind, isUrl, finish]() {
@@ -1314,6 +1316,7 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
         };
 
         std::shared_ptr<Configs::Group> currentGroup;
+        QHash<int, QList<int>> tested;
         for (int i = 0; i < profileIDs.length(); i += configuredTestBatchSize()) {
             if (stopRequested_.load()) break;
             const auto profileIDsSlice = profileIDs.mid(i, configuredTestBatchSize());
@@ -1321,8 +1324,11 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
             if (isUrl && !currentGroup && !profiles.isEmpty()) {
                 currentGroup = Configs::dataManager->groupsRepo->GetGroup(profiles[0]->gid);
             }
+            for (const auto& profile : profiles) tested[profile->gid] << profile->id;
             runBatch(profiles, profileIDsSlice);
         }
+        // Once the run is over, so rows do not jump while results stream in.
+        Configs::RepositionLater(tested, Configs::SortInput::TestResult);
 
         postUi([](MainWindow* mw) {
             mw->dataViewHtmlGenerator_.clearTestSections();
@@ -1339,20 +1345,25 @@ void TestRunner::runLatencyGroup(LatencyKind kind, const QList<int>& requestedID
         }
         MW_show_log(isUrl ? MainWindow::tr("URL test finished!") : MainWindow::tr("IP test finished!"));
     });
+    return true;
 }
 
-void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
+bool TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent,
+                               const std::function<void()>& onFinished, bool interactive)
 {
+    Q_UNUSED(interactive)
+    const auto finish = [onFinished] { if (onFinished) onFinished(); };
     // A live-connection test stays valid for a running selector: it measures
     // whichever member actually carries traffic.
     const auto profileIDs = testCurrent
         ? withoutDisabled(requestedIDs)
         : withoutAutoSelectors(withoutDisabled(requestedIDs));
     if (profileIDs.isEmpty() && !testCurrent) {
-        return;
+        finish();
+        return false;
     }
 
-    runOnNewThread([this, profileIDs, testCurrent]() {
+    runOnNewThread([this, profileIDs, testCurrent, finish]() {
         takeSession();
         sessionGen_.fetch_add(1);
         testingCurrent_.store(testCurrent);
@@ -1361,6 +1372,7 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
         elapsed.start();
         // Fresh per-tag byte baselines for this speed-test session.
         { QMutexLocker lk(&creditMu_); credited_.clear(); }
+        QHash<int, QList<int>> tested;
         if (!testCurrent)
         {
             postUi([count = profileIDs.size()](MainWindow* mw) {
@@ -1399,6 +1411,7 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
                 if (stopRequested_.load()) break;
                 const auto profileIDsSlice = profileIDs.mid(i, stepSize);
                 auto profiles = Configs::dataManager->profilesRepo->GetProfileBatch(profileIDsSlice);
+                for (const auto& profile : profiles) tested[profile->gid] << profile->id;
                 runBatch(profiles);
             }
         } else
@@ -1408,6 +1421,7 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
             target.testCurrent = true;
             runSpeedProbe(target);
             testingCurrent_.store(false);
+            if (const auto running = mw_->running) tested[running->gid] << running->id;
         }
         const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
@@ -1419,7 +1433,9 @@ void TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent)
                 cancelled ? MainWindow::tr("Speedtest interrupted.") : MainWindow::tr("Speedtest finished!"),
                 elapsedMs));
         });
+        finish();
     });
+    return true;
 }
 
 void TestRunner::creditTraffic(const std::shared_ptr<Configs::Profile>& profile, const QString& tag, qint64 curUp, qint64 curDown)

@@ -18,10 +18,13 @@ namespace {
         ItemPriority{DataViewItem::SpeedTest, DataViewPriority::Critical},
         ItemPriority{DataViewItem::LatencyTest, DataViewPriority::Critical},
         ItemPriority{DataViewItem::PendingRestart, DataViewPriority::Medium},
+        ItemPriority{DataViewItem::Scanner, DataViewPriority::Medium},
         ItemPriority{DataViewItem::VpnEndpoint, DataViewPriority::Medium},
         ItemPriority{DataViewItem::AutoSelector, DataViewPriority::Medium},
         ItemPriority{DataViewItem::Download, DataViewPriority::Medium},
     };
+
+    constexpr int kScannerPanelLines = 3;
 
     constexpr std::array kPriorityOrder = {
         DataViewPriority::Critical,
@@ -37,6 +40,12 @@ namespace {
         const qint64 elapsedMs = QDateTime::currentMSecsSinceEpoch() - startedAtMs;
         return QStringLiteral("<p style='%1opacity:0.75;'>%2</p>")
             .arg(QLatin1String(kPanelLineStyle), FormatElapsedHms(elapsedMs));
+    }
+
+    QString dataViewScannerProgressLine(const DataViewHtmlGenerator::ScannerPanelItem &item) {
+        const quint64 percent = item.total > 0 ? qMin<quint64>(100, item.tested * 100 / item.total) : 0;
+        return QObject::tr("%1 scan in progress %2/%3 (%4%)")
+            .arg(item.name, QString::number(item.tested), QString::number(item.total), QString::number(percent));
     }
 }
 
@@ -116,6 +125,11 @@ bool DataViewHtmlGenerator::hasPendingRestart() const {
     return pendingRestart_.visible;
 }
 
+void DataViewHtmlGenerator::setScannerPanel(const QList<ScannerPanelItem> &items) {
+    QMutexLocker lk(&mu_);
+    scanner_ = items;
+}
+
 void DataViewHtmlGenerator::clearTestSections() {
     QMutexLocker lk(&mu_);
     latencyTest_ = {};
@@ -130,32 +144,77 @@ void DataViewHtmlGenerator::addTestProgress(int count) {
 QString DataViewHtmlGenerator::buildHtml() {
     QMutexLocker lk(&mu_);
     for (const auto priority : kPriorityOrder) {
+        int occupied = 0;
+        for (const auto &entry : kItemPriorities) {
+            if (entry.priority == priority && itemVisible(entry.item)) ++occupied;
+        }
+        if (occupied == 0) continue;
         QString html;
         for (const auto &entry : kItemPriorities) {
-            if (entry.priority == priority) html += itemHtml(entry.item);
+            if (entry.priority == priority) html += itemHtml(entry.item, occupied > 1);
         }
-        if (!html.isEmpty()) return html;
+        return html;
     }
     return {};
 }
 
-QString DataViewHtmlGenerator::itemHtml(DataViewItem item) {
+bool DataViewHtmlGenerator::itemVisible(DataViewItem item) const {
     switch (item) {
-        case DataViewItem::Download:       return download_.visible ? downloadSectionHtml() : QString();
-        case DataViewItem::SpeedTest:      return speedtest_.visible ? speedtestSectionHtml() : QString();
-        case DataViewItem::LatencyTest:    return latencyTest_.visible ? latencyTestSectionHtml() : QString();
-        case DataViewItem::AutoSelector:   return autoSelector_.visible ? autoSelectorSectionHtml() : QString();
-        case DataViewItem::VpnEndpoint:    return vpnEndpoint_.visible ? vpnEndpointSectionHtml() : QString();
-        case DataViewItem::PendingRestart: return pendingRestart_.visible ? pendingRestartSectionHtml() : QString();
+        case DataViewItem::Download:       return download_.visible;
+        case DataViewItem::SpeedTest:      return speedtest_.visible;
+        case DataViewItem::LatencyTest:    return latencyTest_.visible;
+        case DataViewItem::AutoSelector:   return autoSelector_.visible;
+        case DataViewItem::VpnEndpoint:    return vpnEndpoint_.visible;
+        case DataViewItem::PendingRestart: return pendingRestart_.visible;
+        case DataViewItem::Scanner:        return !scanner_.isEmpty();
+    }
+    return false;
+}
+
+QString DataViewHtmlGenerator::itemHtml(DataViewItem item, bool shared) {
+    if (!itemVisible(item)) return {};
+    switch (item) {
+        case DataViewItem::Download:       return downloadSectionHtml();
+        case DataViewItem::SpeedTest:      return speedtestSectionHtml();
+        case DataViewItem::LatencyTest:    return latencyTestSectionHtml();
+        case DataViewItem::AutoSelector:   return autoSelectorSectionHtml();
+        case DataViewItem::VpnEndpoint:    return vpnEndpointSectionHtml();
+        case DataViewItem::PendingRestart: return pendingRestartSectionHtml(shared && !scanner_.isEmpty());
+        case DataViewItem::Scanner:        return scannerSectionHtml(shared);
     }
     return {};
 }
 
-QString DataViewHtmlGenerator::pendingRestartSectionHtml() {
+QString DataViewHtmlGenerator::scannerSectionHtml(bool compact) {
+    const auto &tokens = themeManager()->tokens;
+    // The view fits about three lines; when shared, the scanner takes one.
+    if (compact) {
+        QString line = dataViewScannerProgressLine(scanner_.first());
+        if (scanner_.size() > 1) line += QObject::tr(" · +%n more", nullptr, static_cast<int>(scanner_.size() - 1));
+        return QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>").arg(tokens.info.name(), line.toHtmlEscaped());
+    }
+    const qsizetype shown = scanner_.size() > kScannerPanelLines ? kScannerPanelLines - 1 : scanner_.size();
+    QString res;
+    for (qsizetype i = 0; i < shown; ++i) {
+        const auto &item = scanner_.at(i);
+        QString line = dataViewScannerProgressLine(item);
+        if (item.found > 0) line += QObject::tr(" · %1 found").arg(item.found);
+        res += QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
+                   .arg(tokens.info.name(), line.toHtmlEscaped());
+    }
+    if (shown < scanner_.size()) {
+        res += QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
+                   .arg(tokens.muted.name(), QObject::tr("+%1 more").arg(scanner_.size() - shown).toHtmlEscaped());
+    }
+    return res;
+}
+
+QString DataViewHtmlGenerator::pendingRestartSectionHtml(bool compact) {
     const auto &tokens = themeManager()->tokens;
     QString res = QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
                       .arg(tokens.info.name(), QObject::tr("Settings changed, restart to apply").toHtmlEscaped());
-    if (!pendingRestart_.reasons.isEmpty()) {
+    // Without the reasons line, the Restart/Ignore links stay visible above the scan line.
+    if (!compact && !pendingRestart_.reasons.isEmpty()) {
         res += QString("<p style='text-align:center;margin:0;opacity:0.75;'>%1</p>")
                    .arg(pendingRestart_.reasons.join(QStringLiteral(", ")).toHtmlEscaped());
     }

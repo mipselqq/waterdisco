@@ -1,34 +1,62 @@
 #include "include/ui/mainwindow.h"
 
-#include <QAbstractTextDocumentLayout>
 #include <QAction>
+#include <QAbstractTextDocumentLayout>
 #include <QApplication>
-#include <QFontDatabase>
 #include <QMenu>
 #include <QMutexLocker>
 #include <QScrollBar>
-#include <QTextBlock>
 #include <QTextCursor>
+
+#include <algorithm>
 
 #include "3rdparty/qv2ray/v2/ui/LogHighlighter.hpp"
 
 namespace {
     constexpr qsizetype MAX_PENDING_LOG_CHARS = 2 * 1024 * 1024;
+    // Slack so a fractional layout height still counts as scrolled to the bottom.
+    constexpr int LOG_BOTTOM_SLACK = 4;
+    constexpr int LOG_SEARCH_DEBOUNCE_MS = 150;
 
-    inline void FastAppendTextDocument(const QString &message, QTextDocument *doc) {
+    int logLineLimit() {
+        const int limit = Configs::dataManager->settingsRepo->max_log_line;
+        return limit > 0 ? limit : 500;
+    }
+
+    // Every log line must stay exactly one block: the view maps visible m_logLines to blocks by count.
+    void appendDocumentLines(QTextDocument *doc, const QString &lines) {
+        if (lines.isEmpty()) return;
         QTextCursor cursor(doc);
         cursor.movePosition(QTextCursor::End);
         cursor.beginEditBlock();
-        cursor.insertBlock();
-        cursor.insertText(message);
+        if (!doc->isEmpty()) cursor.insertBlock();
+        cursor.insertText(lines);
         cursor.endEditBlock();
+    }
+
+    void removeLeadingBlocks(QTextDocument *doc, int count) {
+        if (count <= 0) return;
+        if (count >= doc->blockCount()) {
+            doc->clear();
+            return;
+        }
+        QTextCursor cursor(doc);
+        cursor.movePosition(QTextCursor::Start);
+        cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor, count);
+        cursor.removeSelectedText();
     }
 }
 
 void MainWindow::applyLogBrowserFont() {
-    QFont logFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    int pt = qApp->font().pointSize();
-    if (pt <= 0) pt = Configs::dataManager->settingsRepo->font_size;
+    const auto &settings = Configs::dataManager->settingsRepo;
+    // The whole list, not just the resolved family, so glyphs missing from the first font still fall back in order.
+    QFont logFont;
+    logFont.setFamilies(LogFontFamilies(settings->log_font_family));
+    logFont.setStyleHint(QFont::Monospace);
+    logFont.setFixedPitch(true);
+    int pt = settings->log_font_size;
+    if (pt <= 0) pt = qApp->font().pointSize();
+    if (pt <= 0) pt = settings->font_size;
     if (pt > 0) logFont.setPointSize(pt);
     ui->masterLogBrowser->setFont(logFont);
     if (coreLogBrowser != nullptr) coreLogBrowser->setFont(logFont);
@@ -129,14 +157,13 @@ void MainWindow::flush_log_batch() {
                                                   const QString &batch) {
         if (batch.isEmpty() || browser == nullptr) return;
         auto *bar = browser->verticalScrollBar();
-        const bool followTail = Configs::dataManager->settingsRepo->log_auto_scroll
-            && bar->value() >= bar->maximum() - 1;
+        const bool followTail = bar->value() >= bar->maximum() - 1;
         auto *layout = document->documentLayout();
         QTextBlock anchorBlock = browser->cursorForPosition(QPoint(0, 0)).block();
         const int viewportOffset = anchorBlock.isValid()
             ? bar->value() - static_cast<int>(layout->blockBoundingRect(anchorBlock).y())
             : 0;
-        FastAppendTextDocument(batch, document);
+        appendDocumentLines(document, batch);
         if (followTail) {
             bar->setValue(bar->maximum());
         } else if (anchorBlock.isValid()) {
@@ -192,10 +219,27 @@ void MainWindow::on_masterLogBrowser_customContextMenuRequested(const QPoint &po
             QMutexLocker pendingLocker(&logPendingMutex);
             logPendingText.clear();
         }
+        m_logLines.clear();
+        m_logHeld.clear();
         qvLogDocument->clear();
-        ui->masterLogBrowser->clear();
+        m_logFollow = true;
+        updateLogStatus();
     });
     menu->addAction(action_clear);
 
     menu->exec(ui->masterLogBrowser->viewport()->mapToGlobal(pos));
+}
+
+void MainWindow::updateLogStatus() {
+    if (ui->logMatchCount != nullptr) {
+        if (m_logSearch.pattern().isEmpty()) ui->logMatchCount->clear();
+        else {
+            const auto matched = std::count_if(m_logLines.begin(), m_logLines.end(), [](const LogLine &line) { return line.visible; });
+            ui->logMatchCount->setText(QStringLiteral("%1 / %2").arg(matched).arg(m_logLines.size()));
+        }
+    }
+    if (logJumpLatestButton != nullptr) {
+        logJumpLatestButton->setVisible(!m_logFollow);
+        logJumpLatestButton->setText(m_logHeld.empty() ? tr("Jump to latest") : tr("Jump to latest (%1 new").arg(m_logHeld.size()));
+    }
 }

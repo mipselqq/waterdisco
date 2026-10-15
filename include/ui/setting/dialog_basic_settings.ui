@@ -468,13 +468,6 @@
                </property>
               </widget>
              </item>
-             <item>
-              <widget class="QCheckBox" name="log_auto_scroll">
-               <property name="text">
-                <string>Auto-scroll log</string>
-               </property>
-              </widget>
-             </item>
             </layout>
            </widget>
           </item>
@@ -640,6 +633,33 @@
             <item row="1" column="1">
              <widget class="QComboBox" name="font_size"/>
             </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_log_font">
+              <property name="text">
+               <string>Log Browser Font</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QFontComboBox" name="log_font_family">
+              <property name="fontFilters">
+               <set>QFontComboBox::FontFilter::MonospacedFonts</set>
+              </property>
+              <property name="toolTip">
+               <string>Only monospaced fonts are listed. An unavailable family falls back to a built-in monospace list.</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="label_log_font_size">
+              <property name="text">
+               <string>Log Browser Font Size</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QComboBox" name="log_font_size"/>
+            </item>
            </layout>
           </widget>
          </item>
@@ -700,13 +720,6 @@
               </property>
               <property name="text">
                <string>Hide dashboard at startup</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="show_sys_dns">
-              <property name="text">
-               <string>Show System DNS option</string>
               </property>
              </widget>
             </item>
@@ -1620,6 +1633,16 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="backup_inc_ip_lists">
+            <property name="text">
+             <string>IP lists and scans</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QCheckBox" name="backup_inc_icons">
             <property name="text">
              <string>Custom icons</string>
@@ -1725,6 +1748,17 @@
        <string>Security</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_4">
+       <item>
+        <widget class="QCheckBox" name="kill_switch">
+         <property name="toolTip">
+          <string>While Throne is running, block all traffic that does not go through Throne, including when no profile is running.
+The local network stays reachable unless Private Range Bypass is turned off in Tun Settings.</string>
+         </property>
+         <property name="text">
+          <string>Kill Switch</string>
+         </property>
+        </widget>
+       </item>
        <item>
         <widget class="QCheckBox" name="disable_priv_req">
          <property name="text">

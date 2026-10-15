@@ -67,7 +67,6 @@ message("[CMAKE_FIND_ROOT_PATH] ${CMAKE_FIND_ROOT_PATH}")
 set(BUILD_SHARED_LIBS OFF)
 
 include("cmake/print.cmake")
-include("cmake/QHotkey.cmake")
 
 find_package(Threads)
 
@@ -88,8 +87,6 @@ endif ()
 
 include("cmake/myproto.cmake")
 list(APPEND NKR_EXTERNAL_TARGETS myproto)
-
-list(APPEND NKR_EXTERNAL_TARGETS qhotkey)
 
 # Sources
 set(PROJECT_SOURCES
@@ -126,12 +123,14 @@ set(PROJECT_SOURCES
         3rdparty/qv2ray/v2/ui/QvAutoCompleteTextEdit.cpp
         3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.cpp
         3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.hpp
-        3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.cpp
 
         3rdparty/quirc/decode.c
         3rdparty/quirc/identify.c
         3rdparty/quirc/quirc.c
         3rdparty/quirc/version_db.c
+
+        3rdparty/monocypher/monocypher.c
+        3rdparty/monocypher/monocypher.h
 
         3rdparty/SQLiteCpp/src/Backup.cpp
         3rdparty/SQLiteCpp/src/Column.cpp
@@ -143,6 +142,13 @@ set(PROJECT_SOURCES
         3rdparty/SQLiteCpp/src/Transaction.cpp
 
         src/api/RPC.cpp
+        include/api/remote/Protocol.hpp
+        src/api/remote/Protocol.cpp
+        include/api/remote/Message.hpp
+        src/api/remote/Message.cpp
+        include/api/remote/Server.hpp
+        src/api/remote/Server.cpp
+        src/api/remote/Config.cpp
 
         src/stats/traffic/TrafficLooper.cpp
         include/stats/traffic/TrafficStatsManager.hpp
@@ -164,6 +170,9 @@ set(PROJECT_SOURCES
         include/sys/Process.hpp
         src/sys/Process.cpp
 
+        include/sys/KillSwitch.hpp
+        src/sys/KillSwitch.cpp
+
         include/sys/ProcessMetrics.hpp
         src/sys/ProcessMetrics.cpp
 
@@ -172,6 +181,12 @@ set(PROJECT_SOURCES
 
         include/sys/UrlScheme.hpp
         src/sys/UrlScheme.cpp
+
+        include/sys/SystemProxy.hpp
+
+        include/sys/GlobalHotkeys.hpp
+        include/sys/GlobalHotkeyBackend.hpp
+        src/sys/GlobalHotkeys.cpp
 
         include/ui/setting/ThemeManager.hpp
         src/ui/setting/ThemeManager.cpp
@@ -189,7 +204,11 @@ set(PROJECT_SOURCES
         src/ui/mainWindow/mainwindow_hotkeys.cpp
         src/ui/mainWindow/mainwindow_profile_lifecycle.cpp
         src/ui/mainWindow/mainwindow_autoselector.cpp
+        src/ui/mainWindow/mainwindow_scanner.cpp
         src/ui/mainWindow/TestRunner.cpp
+        include/api/remote/Router.hpp
+        src/api/remote/Router.cpp
+        src/api/remote/RouterTests.cpp
         include/ui/mainWindow/MainWindowInternal.h
         include/ui/mainWindow/TestRunner.h
         include/ui/mainwindow.h
@@ -392,6 +411,44 @@ set(PROJECT_SOURCES
         src/ui/setting/OtpListWidget.cpp
         include/ui/setting/OtpListWidget.h
 
+        include/ui/utils/ReorderListWidget.h
+        src/ui/utils/ReorderListWidget.cpp
+
+        src/ui/scanner/dialog_scanner.cpp
+        include/ui/scanner/dialog_scanner.h
+        include/ui/scanner/dialog_scanner.ui
+        src/ui/scanner/ScanItem.cpp
+        include/ui/scanner/ScanItem.h
+        src/ui/scanner/dialog_new_scan.cpp
+        include/ui/scanner/dialog_new_scan.h
+        src/ui/scanner/dialog_scan_instance.cpp
+        include/ui/scanner/dialog_scan_instance.h
+        include/ui/scanner/dialog_scan_instance.ui
+        src/ui/scanner/IpEntriesModel.cpp
+        include/ui/scanner/IpEntriesModel.h
+        src/ui/scanner/dialog_ip_lists.cpp
+        include/ui/scanner/dialog_ip_lists.h
+        include/ui/scanner/dialog_ip_lists.ui
+        src/ui/scanner/IpListItem.cpp
+        include/ui/scanner/IpListItem.h
+        src/ui/scanner/dialog_edit_ip_list.cpp
+        include/ui/scanner/dialog_edit_ip_list.h
+        include/ui/scanner/dialog_edit_ip_list.ui
+
+        include/scanner/IpListParse.h
+        src/scanner/IpListParse.cpp
+        include/scanner/WarpPresets.h
+        include/scanner/DefaultIpLists.h
+        src/scanner/DefaultIpLists.cpp
+        include/scanner/ScanProfiles.h
+        src/scanner/ScanProfiles.cpp
+        include/scanner/IpListUpdater.h
+        src/scanner/IpListUpdater.cpp
+        include/scanner/ScanManager.h
+        src/scanner/ScanManager.cpp
+        include/scanner/ScanWorker.h
+        src/scanner/ScanWorker.cpp
+
         src/ui/stats/dialog_traffic_stats.cpp
         include/ui/stats/dialog_traffic_stats.h
         include/ui/stats/dialog_traffic_stats.ui
@@ -407,9 +464,9 @@ set(PROJECT_SOURCES
         src/ui/stats/MiniChartWidget.cpp
         include/ui/stats/MiniChartWidget.h
 
-        src/ui/setting/dialog_hotkey.cpp
-        include/ui/setting/dialog_hotkey.h
-        include/ui/setting/dialog_hotkey.ui
+        src/ui/setting/dialog_integration.cpp
+        include/ui/setting/dialog_integration.h
+        include/ui/setting/dialog_integration.ui
 
         src/ui/profile/ProxyItem.cpp
         include/ui/profile/ProxyItem.h
@@ -532,6 +589,8 @@ set(PROJECT_SOURCES
         include/database/GroupsRepo.h
         include/database/RoutesRepo.h
         include/database/OtpProfilesRepo.h
+        include/database/IpListsRepo.h
+        include/database/IpScansRepo.h
         include/database/SettingsRepo.h
         include/database/TrafficStatsRepo.h
         include/database/MarkersRepo.h
@@ -542,6 +601,9 @@ set(PROJECT_SOURCES
         include/database/entities/RouteProfile.h
         include/database/entities/RouteRule.h
         include/database/entities/OtpProfile.h
+        include/database/entities/IpList.h
+        include/database/entities/IpScan.h
+        include/database/entities/EndpointSource.h
 
         src/database/entities/Profile.cpp
         src/database/entities/ProfileMetrics.cpp
@@ -549,11 +611,15 @@ set(PROJECT_SOURCES
         src/database/entities/RouteProfile.cpp
         src/database/entities/RouteRule.cpp
         src/database/entities/OtpProfile.cpp
+        src/database/entities/IpScan.cpp
+        src/database/entities/EndpointSource.cpp
 
         src/database/ProfilesRepo.cpp
         src/database/GroupsRepo.cpp
         src/database/RoutesRepo.cpp
         src/database/OtpProfilesRepo.cpp
+        src/database/IpListsRepo.cpp
+        src/database/IpScansRepo.cpp
         src/database/TrafficStatsRepo.cpp
         src/database/MarkersRepo.cpp
 
@@ -653,6 +719,7 @@ if (WIN32 AND MSVC)
     set_target_properties(Throne PROPERTIES UNITY_BUILD ON)
 endif ()
 set_property(SOURCE "3rdparty/SQLiteCpp/src/sqlite3.c" PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
+set_property(SOURCE "3rdparty/monocypher/monocypher.c" PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
 
 include(CTest)
 if (BUILD_TESTING)

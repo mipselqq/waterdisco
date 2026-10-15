@@ -31,6 +31,12 @@ namespace Configs
         QStringList config;
         QString config_path;
         QString serverName;
+        QString resolver;
+
+        static QStringList NormalizeConfig(const QStringList& items);
+        void SetQueryTarget(const QString& target);
+        QString QueryTarget() const;
+        QString ConfigBase64() const;
 
         bool ParseFromLink(const QString& link) override;
         bool ParseFromJson(const QJsonObject& object) override;
@@ -70,6 +76,7 @@ namespace Configs
         QStringList curve_preferences;
         QStringList certificate;
         QString certificate_path;
+        QStringList certificate_sha256;
         QStringList certificate_public_key_sha256;
         QStringList client_certificate;
         QString client_certificate_path;

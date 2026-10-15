@@ -7,6 +7,7 @@
 #include "include/global/GuiUtils.hpp"
 #include "include/global/Configs.hpp"
 #include "include/global/HTTPRequestHelper.hpp"
+#include "include/scanner/ScanManager.h"
 
 #include <QStyleFactory>
 #include <QFileDialog>
@@ -132,7 +133,6 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
 #endif
 
     ui->max_log_line->setText(QString::number(Configs::dataManager->settingsRepo->max_log_line));
-    D_LOAD_BOOL(log_auto_scroll)
     ui->log_level->setCurrentText(Configs::dataManager->settingsRepo->log_level);
     ui->xray_loglevel->setCurrentText(Configs::dataManager->settingsRepo->xray_log_level);
     ui->enable_log_include->setChecked(Configs::dataManager->settingsRepo->log_enable_include);
@@ -148,14 +148,6 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
 
     ui->connection_statistics->setChecked(Configs::dataManager->settingsRepo->enable_stats);
     ui->disable_traffic_aggregation->setChecked(Configs::dataManager->settingsRepo->disable_traffic_aggregation);
-    ui->show_sys_dns->setChecked(Configs::dataManager->settingsRepo->show_system_dns);
-    connect(ui->show_sys_dns, &QCheckBox::stateChanged, this, [=]
-    {
-        CACHE.updateSystemDns = true;
-    });
-#ifndef Q_OS_WIN
-    ui->show_sys_dns->hide();
-#endif
     D_LOAD_BOOL(start_minimal)
     ui->skip_delete_confirm->setChecked(Configs::dataManager->settingsRepo->skip_delete_confirmation);
     D_LOAD_BOOL(show_config_security)
@@ -183,6 +175,14 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
         Configs::dataManager->settingsRepo->Save();
         adjustSize();
     });
+    ui->log_font_family->setCurrentFont(QFont(ResolveLogFontFamily(Configs::dataManager->settingsRepo->log_font_family)));
+    CACHE.shownLogFontFamily = ui->log_font_family->currentFont().family();
+    for (int i=7;i<=26;i++) {
+        ui->log_font_size->addItem(Int2String(i));
+    }
+    const int logFontSize = Configs::dataManager->settingsRepo->log_font_size;
+    ui->log_font_size->setCurrentText(Int2String(logFontSize > 0 ? logFontSize : qApp->font().pointSize()));
+    CACHE.shownLogFontSize = ui->log_font_size->currentText().toInt();
     ui->theme->addItems(QStyleFactory::keys());
     ui->theme->addItem("QDarkStyle");
     // Custom stylesheet themes, not QStyleFactory keys.
@@ -308,6 +308,7 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
     ui->disable_priv_req->setChecked(Configs::dataManager->settingsRepo->disable_privilege_req);
     ui->windows_no_admin->setChecked(Configs::dataManager->settingsRepo->disable_run_admin);
     ui->mozilla_cert->setChecked(Configs::dataManager->settingsRepo->use_mozilla_certs);
+    D_LOAD_BOOL(kill_switch)
 
     D_LOAD_BOOL(skip_cert)
 
@@ -420,7 +421,6 @@ void DialogBasicSettings::accept() {
     Configs::dataManager->settingsRepo->xray_log_level = ui->xray_loglevel->currentText().trimmed();
     Configs::dataManager->settingsRepo->log_enable_include = ui->enable_log_include->isChecked();
     Configs::dataManager->settingsRepo->log_enable_exclude = ui->enable_log_exclude->isChecked();
-    D_SAVE_BOOL(log_auto_scroll)
     Configs::dataManager->settingsRepo->log_include_keyword = SplitAndTrim(ui->log_include_keyword->toPlainText(), "\n", false);
     Configs::dataManager->settingsRepo->log_exclude_keyword = SplitAndTrim(ui->log_exclude_keyword->toPlainText(), "\n", false);
 
@@ -448,7 +448,15 @@ void DialogBasicSettings::accept() {
     bool profileListDisplayChanged =
         Configs::dataManager->settingsRepo->show_config_security != ui->show_config_security->isChecked();
     D_SAVE_BOOL(show_config_security)
-    Configs::dataManager->settingsRepo->show_system_dns = ui->show_sys_dns->isChecked();
+
+    QString logFontFamily = ui->log_font_family->currentFont().family();
+    if (Configs::dataManager->settingsRepo->log_font_family.isEmpty() && logFontFamily == CACHE.shownLogFontFamily) logFontFamily.clear();
+    int logFontSize = ui->log_font_size->currentText().toInt();
+    if (Configs::dataManager->settingsRepo->log_font_size <= 0 && logFontSize == CACHE.shownLogFontSize) logFontSize = 0;
+    const bool logFontChanged = logFontFamily != Configs::dataManager->settingsRepo->log_font_family ||
+                                logFontSize != Configs::dataManager->settingsRepo->log_font_size;
+    Configs::dataManager->settingsRepo->log_font_family = logFontFamily;
+    Configs::dataManager->settingsRepo->log_font_size = logFontSize;
 
     if (Configs::dataManager->settingsRepo->max_log_line <= 0) {
         Configs::dataManager->settingsRepo->max_log_line = 800;
@@ -493,21 +501,26 @@ void DialogBasicSettings::accept() {
     Configs::dataManager->settingsRepo->ntp_interval = ui->ntp_interval->currentText().trimmed();
     Configs::dataManager->settingsRepo->ntp_outbound = ui->ntp_outbound->currentText().trimmed();
 
+    // The Type column marks TLS profiles compromised while this is on.
+    profileListDisplayChanged |= Configs::dataManager->settingsRepo->skip_cert != ui->skip_cert->isChecked();
     D_SAVE_BOOL(skip_cert)
     Configs::dataManager->settingsRepo->disable_privilege_req = ui->disable_priv_req->isChecked();
     if (Configs::dataManager->settingsRepo->disable_run_admin != ui->windows_no_admin->isChecked()) CACHE.updateDisableAdmin = true;
     Configs::dataManager->settingsRepo->disable_run_admin = ui->windows_no_admin->isChecked();
     Configs::dataManager->settingsRepo->use_mozilla_certs = ui->mozilla_cert->isChecked();
+    const bool killSwitchChanged = Configs::dataManager->settingsRepo->kill_switch != ui->kill_switch->isChecked();
+    D_SAVE_BOOL(kill_switch)
 
     QStringList changes;
     if (CACHE.needRestart) changes << MwArg::NeedRestart;
     if (CACHE.updateDisableTray) changes << MwArg::DisableTray;
-    if (CACHE.updateSystemDns) changes << MwArg::SystemDns;
     if (CACHE.updateTrayIcon) changes << MwArg::TrayIcon;
     if (CACHE.updateMaxLogLines) changes << MwArg::MaxLogLines;
     if (CACHE.updateDisableAdmin) changes << MwArg::DisableAdmin;
     if (needChoosePort) changes << MwArg::ChoosePort;
     if (profileListDisplayChanged) changes << MwArg::ProfileListDisplay;
+    if (killSwitchChanged) changes << MwArg::KillSwitch;
+    if (logFontChanged) changes << MwArg::LogFont;
     MW_dialog_message(MwMessage::UpdateSettings, changes);
     QDialog::accept();
 }
@@ -529,6 +542,7 @@ static Configs::BackupParts BackupPartsFromMeta(quint32 formatVersion, const QJs
         p.routes = po["routes"].toBool() && files.contains("database");
         p.settings = po["settings"].toBool() && files.contains("database");
         p.otp = po["otp"].toBool() && files.contains("database");
+        p.ipLists = po["ipLists"].toBool() && files.contains("database");
         p.icons = po["icons"].toBool() && hasIcons;
     } else {
         p.profiles = p.routes = p.settings = files.contains("database");
@@ -601,6 +615,7 @@ void DialogBasicSettings::on_backup_create_clicked() {
     parts.routes = ui->backup_inc_routes->isChecked();
     parts.settings = ui->backup_inc_settings->isChecked();
     parts.otp = ui->backup_inc_otp->isChecked();
+    parts.ipLists = ui->backup_inc_ip_lists->isChecked();
     parts.icons = ui->backup_inc_icons->isChecked();
 
     if (!parts.any()) {
@@ -676,6 +691,7 @@ void DialogBasicSettings::on_backup_create_clicked() {
     partsObj["routes"] = parts.routes;
     partsObj["settings"] = parts.settings;
     partsObj["otp"] = parts.otp;
+    partsObj["ipLists"] = parts.ipLists;
     partsObj["icons"] = parts.icons;
 
     QJsonObject meta;
@@ -693,6 +709,7 @@ void DialogBasicSettings::on_backup_create_clicked() {
     if (parts.routes) included << tr("Routing profiles");
     if (parts.settings) included << tr("Settings");
     if (parts.otp) included << tr("OTP profiles");
+    if (parts.ipLists) included << tr("IP lists and scans");
     if (parts.icons) included << tr("Custom icons");
 
     QMessageBox::information(this, tr("Backup Created"),
@@ -765,8 +782,9 @@ void DialogBasicSettings::on_backup_restore_clicked() {
     auto* cbRoutes = new QCheckBox(tr("Routing profiles"), &dlg);
     auto* cbSettings = new QCheckBox(tr("Settings"), &dlg);
     auto* cbOtp = new QCheckBox(tr("OTP profiles"), &dlg);
+    auto* cbIpLists = new QCheckBox(tr("IP lists and scans"), &dlg);
     auto* cbIcons = new QCheckBox(tr("Custom icons"), &dlg);
-    for (auto* cb : {cbProfiles, cbRoutes, cbSettings, cbOtp, cbIcons}) cb->setChecked(true);
+    for (auto* cb : {cbProfiles, cbRoutes, cbSettings, cbOtp, cbIpLists, cbIcons}) cb->setChecked(true);
     cbProfiles->setEnabled(avail.profiles);
     cbProfiles->setChecked(avail.profiles);
     cbRoutes->setEnabled(avail.routes);
@@ -775,12 +793,15 @@ void DialogBasicSettings::on_backup_restore_clicked() {
     cbSettings->setChecked(avail.settings);
     cbOtp->setEnabled(avail.otp);
     cbOtp->setChecked(avail.otp);
+    cbIpLists->setEnabled(avail.ipLists);
+    cbIpLists->setChecked(avail.ipLists);
     cbIcons->setEnabled(avail.icons);
     cbIcons->setChecked(avail.icons);
     layout->addWidget(cbProfiles);
     layout->addWidget(cbRoutes);
     layout->addWidget(cbSettings);
     layout->addWidget(cbOtp);
+    layout->addWidget(cbIpLists);
     layout->addWidget(cbIcons);
 
     auto* warn = new QLabel(
@@ -802,6 +823,7 @@ void DialogBasicSettings::on_backup_restore_clicked() {
     chosen.routes = avail.routes && cbRoutes->isChecked();
     chosen.settings = avail.settings && cbSettings->isChecked();
     chosen.otp = avail.otp && cbOtp->isChecked();
+    chosen.ipLists = avail.ipLists && cbIpLists->isChecked();
     chosen.icons = avail.icons && cbIcons->isChecked();
 
     if (!chosen.any()) {
@@ -823,6 +845,8 @@ void DialogBasicSettings::on_backup_restore_clicked() {
         tempDbFile.write(files["database"]);
         tempDbFile.close();
 
+        // A running scan would otherwise keep writing its progress and results over the restored rows.
+        Scanner::ScanManager::instance()->StopAll(false);
         try {
             skippedRules = Configs::dataManager->getDatabase().restoreSelective(tempDbPath.toStdString(), chosen);
         } catch (std::exception& e) {

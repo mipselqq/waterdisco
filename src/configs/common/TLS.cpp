@@ -1,6 +1,7 @@
 #include "include/configs/common/TLS.h"
 
 #include <QJsonArray>
+#include <QRegularExpression>
 #include <include/global/Utils.hpp>
 
 #include "include/configs/common/utils.h"
@@ -8,6 +9,29 @@
 
 
 namespace Configs {
+    namespace {
+        // Xray's pcs and sing-box's certificate_sha256 both hash the whole DER certificate: hex there, base64 here.
+        QStringList certificateSha256FromPcs(const QString& pcs)
+        {
+            static const QRegularExpression sha256Hex(QStringLiteral("^[0-9a-fA-F]{64}$"));
+            QStringList hashes;
+            for (auto value : pcs.split(',', Qt::SkipEmptyParts)) {
+                value = value.trimmed().remove(':');
+                if (sha256Hex.match(value).hasMatch()) hashes << QString::fromLatin1(QByteArray::fromHex(value.toLatin1()).toBase64());
+            }
+            return hashes;
+        }
+
+        QString pcsFromCertificateSha256(const QStringList& hashes)
+        {
+            QStringList pcs;
+            for (const auto& hash : hashes) {
+                if (const auto raw = QByteArray::fromBase64(hash.trimmed().toLatin1()); raw.size() == 32) pcs << QString::fromLatin1(raw.toHex());
+            }
+            return pcs.join(',');
+        }
+    }
+
     bool uTLS::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);
@@ -65,14 +89,73 @@ namespace Configs {
         return {obj, ""};
     }
 
+    QStringList ECH::NormalizeConfig(const QStringList &items) {
+        for (const auto &i : items) {
+            if (i.contains(QStringLiteral("-----BEGIN"))) return items;
+        }
+        const auto joined = items.join(QString()).trimmed();
+        if (joined.isEmpty()) return {};
+        return QStringList{
+            QStringLiteral("-----BEGIN ECH CONFIGS-----"),
+            joined,
+            QStringLiteral("-----END ECH CONFIGS-----")
+        };
+    }
+
+    void ECH::SetQueryTarget(const QString &target) {
+        const QString trimmed = target.trimmed();
+        const int schemeIdx = trimmed.indexOf("://");
+        if (schemeIdx != -1) {
+            const int plusIdx = trimmed.indexOf('+');
+            if (plusIdx > 0 && plusIdx < schemeIdx) {
+                serverName = trimmed.left(plusIdx).trimmed();
+                resolver = trimmed.mid(plusIdx + 1).trimmed();
+            } else {
+                serverName.clear();
+                resolver = trimmed;
+            }
+        } else {
+            serverName = trimmed;
+            resolver.clear();
+        }
+    }
+
+
+    QString ECH::QueryTarget() const {
+        if (resolver.isEmpty()) return serverName;
+        return serverName.isEmpty() ? resolver : serverName + "+" + resolver;
+    }
+
+    QString ECH::ConfigBase64() const {
+        QString b64;
+        for (const auto &l : config) {
+            if (!l.contains("-----")) b64 += l.trimmed();
+        }
+        return b64;
+    }
+
     bool ECH::ParseFromLink(const QString& link)
     {
         auto url = QUrl(link);
         if (!url.isValid() && !url.errorString().startsWith("Invalid port")) return false;
         auto query = QUrlQuery(url.query());
 
+        if (query.hasQueryItem("ech")) {
+            const QString echVal = query.queryItemValue("ech", QUrl::FullyDecoded).trimmed();
+            enabled = !echVal.isEmpty() && echVal != "0" && echVal != "false";
+            if (enabled && echVal != "1" && echVal != "true") {
+                if (echVal.contains("://") || echVal.contains('.')) {
+                    SetQueryTarget(echVal);
+                } else {
+                    config = NormalizeConfig(QStringList{echVal});
+                }
+            }
+        }
+
         if (query.hasQueryItem("ech_enabled")) enabled = query.queryItemValue("ech_enabled") == "true";
-        if (query.hasQueryItem("ech_config")) config = query.queryItemValue("ech_config").split(",");
+        if (query.hasQueryItem("ech_config")) {
+            config = NormalizeConfig(query.queryItemValue("ech_config").split(",", Qt::SkipEmptyParts));
+        }
         if (query.hasQueryItem("ech_config_path")) config_path = query.queryItemValue("ech_config_path");
         if (query.hasQueryItem("ech_server_name")) serverName = query.queryItemValue("ech_server_name");
         return true;
@@ -82,20 +165,27 @@ namespace Configs {
         if (object.isEmpty()) return false;
         if (object.contains("enabled")) enabled = object["enabled"].toBool();
         if (object.contains("config")) {
-            config = QJsonArray2QListString(object["config"].toArray());
+            config = NormalizeConfig(QJsonArray2QListString(object["config"].toArray()));
         }
         if (object.contains("config_path")) config_path = object["config_path"].toString();
         if (object.contains("query_server_name")) serverName = object["query_server_name"].toString();
+        if (object.contains("resolver")) resolver = object["resolver"].toString();
         return true;
     }
     QString ECH::ExportToLink()
     {
         QUrlQuery query;
         if (!enabled) return "";
+
+        const QString b64 = ConfigBase64();
         query.addQueryItem("ech_enabled", "true");
-        if (!config.isEmpty()) query.addQueryItem("ech_config", config.join(","));
+        if (!b64.isEmpty()) query.addQueryItem("ech_config", b64);
         if (!config_path.isEmpty()) query.addQueryItem("ech_config_path", config_path);
         if (!serverName.isEmpty()) query.addQueryItem("ech_server_name", serverName);
+
+        if (!serverName.isEmpty() && !resolver.isEmpty()) query.addQueryItem("ech", serverName + "+" + resolver);
+        else if (serverName.isEmpty() && !b64.isEmpty()) query.addQueryItem("ech", b64);
+        else if (serverName.isEmpty() && !resolver.isEmpty()) query.addQueryItem("ech", resolver);
         return query.toString();
     }
     QJsonObject ECH::ExportToJson()
@@ -108,17 +198,23 @@ namespace Configs {
         }
         if (!config_path.isEmpty()) object["config_path"] = config_path;
         if (!serverName.isEmpty()) object["query_server_name"] = toAceHost(serverName);
+        if (!resolver.isEmpty()) object["resolver"] = resolver;
         return object;
     }
     QJsonObject ECH::ExportIdentity()
     {
         QJsonObject object;
-        if (enabled) object["enabled"] = true;
+        if (!enabled) return object;
+        object["enabled"] = true;
+        if (!serverName.isEmpty()) object["query_server_name"] = toAceHost(serverName);
+        if (!resolver.isEmpty()) object["resolver"] = resolver;
         return object;
     }
     BuildResult ECH::Build()
     {
-        return {ExportToJson(), ""};
+        auto obj = ExportToJson();
+        obj.remove("resolver");
+        return {obj, ""};
     }
 
     bool Reality::ParseFromLink(const QString& link)
@@ -211,6 +307,7 @@ namespace Configs {
         if (query.hasQueryItem("tls_curve_preferences")) curve_preferences = query.queryItemValue("tls_curve_preferences").split(",");
         if (query.hasQueryItem("tls_certificate")) certificate = query.queryItemValue("tls_certificate").split(",");
         if (query.hasQueryItem("tls_certificate_path")) certificate_path = query.queryItemValue("tls_certificate_path");
+        if (query.hasQueryItem("pcs")) certificate_sha256 = certificateSha256FromPcs(query.queryItemValue("pcs", QUrl::FullyDecoded));
         if (query.hasQueryItem("tls_certificate_public_key_sha256")) certificate_public_key_sha256 = query.queryItemValue("tls_certificate_public_key_sha256").split(",");
         if (query.hasQueryItem("tls_client_certificate")) client_certificate = query.queryItemValue("tls_client_certificate").split(",");
         if (query.hasQueryItem("tls_client_certificate_path")) client_certificate_path = query.queryItemValue("tls_client_certificate_path");
@@ -258,6 +355,9 @@ namespace Configs {
             }
         }
         if (object.contains("certificate_path")) certificate_path = object["certificate_path"].toString();
+        if (object.contains("certificate_sha256")) {
+            certificate_sha256 = QJsonArray2QListString(object["certificate_sha256"].toArray());
+        }
         if (object.contains("certificate_public_key_sha256")) {
             certificate_public_key_sha256 = QJsonArray2QListString(object["certificate_public_key_sha256"].toArray());
         }
@@ -318,6 +418,7 @@ namespace Configs {
         if (!curve_preferences.isEmpty()) query.addQueryItem("tls_curve_preferences", curve_preferences.join(","));
         if (!certificate.isEmpty()) query.addQueryItem("tls_certificate", certificate.join(","));
         if (!certificate_path.isEmpty()) query.addQueryItem("tls_certificate_path", certificate_path);
+        if (const auto pcs = pcsFromCertificateSha256(certificate_sha256); !pcs.isEmpty()) query.addQueryItem("pcs", pcs);
         if (!certificate_public_key_sha256.isEmpty()) query.addQueryItem("tls_certificate_public_key_sha256", certificate_public_key_sha256.join(","));
         if (!client_certificate.isEmpty()) query.addQueryItem("tls_client_certificate", client_certificate.join(","));
         if (!client_certificate_path.isEmpty()) query.addQueryItem("tls_client_certificate_path", client_certificate_path);
@@ -360,6 +461,9 @@ namespace Configs {
             object["certificate"] = QListStr2QJsonArray(certificate);
         }
         if (!certificate_path.isEmpty()) object["certificate_path"] = certificate_path;
+        if (!certificate_sha256.isEmpty()) {
+            object["certificate_sha256"] = QListStr2QJsonArray(certificate_sha256);
+        }
         if (!certificate_public_key_sha256.isEmpty()) {
             object["certificate_public_key_sha256"] = QListStr2QJsonArray(certificate_public_key_sha256);
         }
@@ -422,6 +526,9 @@ namespace Configs {
             object["certificate"] = QListStr2QJsonArray(certificate);
         }
         if (!certificate_path.isEmpty()) object["certificate_path"] = certificate_path;
+        if (!certificate_sha256.isEmpty()) {
+            object["certificate_sha256"] = QListStr2QJsonArray(certificate_sha256);
+        }
         if (!certificate_public_key_sha256.isEmpty()) {
             object["certificate_public_key_sha256"] = QListStr2QJsonArray(certificate_public_key_sha256);
         }

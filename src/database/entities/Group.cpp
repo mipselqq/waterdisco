@@ -4,7 +4,10 @@
 #include "include/database/entities/ProfileMetrics.h"
 #include "include/database/ProfilesRepo.h"
 #include "include/global/Configs.hpp"
-#include <QRegularExpression> 
+#include <QRegularExpression>
+#include <QSet>
+
+#include <bit>
 
 #include <algorithm>
 
@@ -169,7 +172,9 @@ namespace Configs
             }
             ms_a = secA.transport + secA.label;
             ms_b = secB.transport + secB.label;
-        } else if (sortAction.method == GroupSortMethod::ByTestResult) {
+        } else if (sortAction.method == GroupSortMethod::ByTestResult ||
+                   sortAction.method == GroupSortMethod::ByLatency) {
+            if (sortAction.method == GroupSortMethod::ByLatency) testSortBy = testBy::latency;
             const auto statusForSort = [testSortBy](const std::shared_ptr<Profile> &profile) {
                 if (testSortBy == testBy::latency) {
                     if (profile->latency > 0) return PerformanceTestStatus::Success;
@@ -237,13 +242,59 @@ namespace Configs
         });
     }
 
-    bool Group::SortProfiles(GroupSortAction sortAction) {
-        if (!mutex.tryLock()) {
-            return false;
+    bool Group::SortReads(SortInput input) const {
+        switch (sort.method) {
+        case GroupSortMethod::Raw:
+        case GroupSortMethod::ById: return false;
+        case GroupSortMethod::ByTestResult:
+        case GroupSortMethod::ByLatency:
+            return input == SortInput::Membership || input == SortInput::TestResult;
+        case GroupSortMethod::ByTraffic:
+            return input == SortInput::Membership || input == SortInput::Traffic;
+        default:
+            return input == SortInput::Membership || input == SortInput::Config;
         }
-        SortProfileIdList(profiles, sortAction, test_sort_by, traffic_sort_by);
-        mutex.unlock();
-        return true;
+    }
+
+    bool Group::KeepsSorted() const { return SortReads(SortInput::Membership); }
+
+    void Group::SetSort(GroupSortAction action) {
+        QMutexLocker locker(&mutex);
+        sort = action;
+    }
+
+    bool Group::SortProfiles(GroupSortAction action) {
+        SetSort(action);
+        return Resort();
+    }
+
+    bool Group::Resort() {
+        for (int attempt = 0; attempt < 3; ++attempt) {
+            QList<int> before;
+            GroupSortAction action;
+            testBy tests;
+            trafficBy traffic;
+            {
+                QMutexLocker locker(&mutex);
+                if (!KeepsSorted()) return false;
+                before = profiles;
+                action = sort;
+                tests = test_sort_by;
+                traffic = traffic_sort_by;
+            }
+            auto after = before;
+            SortProfileIdList(after, action, tests, traffic);
+            QMutexLocker locker(&mutex);
+            if (profiles != before || sort.method != action.method || sort.descending != action.descending) continue;
+            if (profiles == after) return false;
+            profiles = std::move(after);
+            return true;
+        }
+        return false;
+    }
+
+    bool Group::Reposition(const QList<int>& changed) {
+        return changed.isEmpty() ? false : Resort();
     }
 
     bool Group::ReplaceProfiles(const QList<int> &ids) {

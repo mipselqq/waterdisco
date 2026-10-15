@@ -24,14 +24,18 @@
     </qresource>
     <qresource prefix="/Throne">
         <file alias="Throne.png">public/Throne.png</file>
-        <file alias="Dns.png">public/Dns.png</file>
         <file alias="Off.png">public/Off.png</file>
+        <file alias="Connecting.png">public/Connecting.png</file>
         <file alias="Proxy.png">public/Proxy.png</file>
-        <file alias="Proxy-Dns.png">public/Proxy-Dns.png</file>
         <file alias="Tun.png">public/Tun.png</file>
         <file>public/easter.mp4</file>
         <file>dashboard-notice.html</file>
         <file>dashboard-bootstrap.html</file>
+    </qresource>
+    <qresource prefix="/scanner">
+        <file alias="cloudflare-cdn.txt">scanner/cloudflare-cdn.txt</file>
+        <file alias="fastly-cdn.txt">scanner/fastly-cdn.txt</file>
+        <file alias="gcore-cdn.txt">scanner/gcore-cdn.txt</file>
     </qresource>
     <qresource prefix="/schema">
         <file alias="sing-box.json">schema/sing-box.json</file>

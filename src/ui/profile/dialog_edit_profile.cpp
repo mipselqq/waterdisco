@@ -1,5 +1,7 @@
 #include "include/ui/profile/dialog_edit_profile.h"
 
+#include "include/configs/generate.h"
+
 #include "include/ui/profile/edit_advanced.h"
 #include "include/ui/profile/edit_anytls.h"
 #include "include/ui/profile/edit_autoselector.h"
@@ -29,12 +31,14 @@
 #include "include/ui/profile/edit_wireguard.h"
 #include "include/ui/profile/edit_xrayvless.h"
 
+#include "include/database/GroupsRepo.h"
 #include "include/database/ProfilesRepo.h"
 #include "include/global/GuiUtils.hpp"
 #include "include/global/RunningProfiles.hpp"
 #include "include/global/Utils.hpp"
 
 #include <QLabel>
+#include <QLineEdit>
 #include <QPointer>
 #include <QSet>
 
@@ -155,9 +159,15 @@ DialogEditProfile::DialogEditProfile(const QString &_type, int profileOrGroupId,
     setupSingboxStream();
     setupXrayStream();
 
+    addressEffective = new QLineEdit(this);
+    addressEffective->setEnabled(false);
+    addressEffective->hide();
+    ui->gridLayout_2->addWidget(addressEffective, 2, 1);
+
     connect(ui->advanced_button, &QPushButton::clicked, this, [this] {
         auto *advanced = new EditAdvanced(this, ent);
         advanced->setAttribute(Qt::WA_DeleteOnClose);
+        connect(advanced, &QDialog::accepted, this, [this] { updateControls(); });
         advanced->show();
     });
 
@@ -295,6 +305,17 @@ void DialogEditProfile::updateCommonRows() {
         w->setVisible(server);
         w->setEnabled(!locked);
     }
+    const auto endpoint = server && !locked && Configs::EndpointOverrideBlocker(ent).isEmpty()
+                              ? Configs::ResolveEndpointSource(Configs::EffectiveEndpointSource(*ent))
+                              : Configs::EndpointResolution{};
+    const bool overridden = !endpoint.address.isEmpty();
+    ui->address->setVisible(server && !overridden);
+    addressEffective->setVisible(overridden);
+    addressEffective->setText(endpoint.address);
+    const QString own = ui->address->text().trimmed();
+    addressEffective->setToolTip(!overridden ? QString()
+                                 : own.isEmpty() ? tr("Set by %1.").arg(endpoint.origin)
+                                                 : tr("Set by %1; the profile's own address is %2.").arg(endpoint.origin, own));
     ui->advanced_button->setVisible(server || type == "direct");
 }
 
@@ -332,6 +353,7 @@ void DialogEditProfile::accept() {
                (Configs::dataManager->settingsRepo->started_id == ent->id || Configs::RunningUsesProfile(ent->id))) {
         args << MwArg::RestartProxy;
     }
+    if (!newEnt) Configs::RepositionLater(QList<std::shared_ptr<Configs::Profile>>{ent}, Configs::SortInput::Config);
 
     MW_dialog_message(MwMessage::ProfileChanged, args);
     QDialog::accept();

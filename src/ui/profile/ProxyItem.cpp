@@ -2,6 +2,8 @@
 
 #include <QMessageBox>
 
+#include "include/configs/generate.h"
+
 ProxyItem::ProxyItem(QWidget *parent, const std::shared_ptr<Configs::Profile> &ent, QListWidgetItem *item)
     : QWidget(parent), ui(new Ui::ProxyItem) {
     ui->setupUi(this);

@@ -5,7 +5,6 @@
 
 #include <atomic>
 
-#include "3rdparty/qv2ray/v2/ui/QvAutoCompleteTextEdit.hpp"
 #include "include/global/Configs.hpp"
 #include "include/ui/setting/RouteItem.h"
 #include "ui_dialog_manage_routes.h"
@@ -48,10 +47,6 @@ private:
 
     int tooltipID = 0;
 
-    void set_dns_hijack_enability(bool enable) const;
-
-    static bool validate_dns_rules(const QString &rawString);
-
     void show_predefined_dns_editor();
 
     void show_dns_advanced_editor();
@@ -78,8 +73,6 @@ private:
     QString dns_object_text;
 
     QShortcut* deleteShortcut;
-
-    AutoCompleteTextEdit* rule_editor;
 public slots:
     void accept() override;
 

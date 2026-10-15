@@ -8,6 +8,7 @@
 
 #include <optional>
 
+#include "include/database/entities/EndpointSource.h"
 #include "include/ui/group/GroupSort.hpp"
 
 namespace Configs
@@ -113,6 +114,17 @@ namespace Configs
         static SubscriptionOptions FromJson(const QJsonObject &json);
     };
 
+    // A speed-test result such as "48.3 Mbps"; -1 for "N/A", 0 when empty.
+    double bitrateToBps(const QString &str);
+
+    // What changed under a group, so only a kept sort that reads it runs again.
+    enum class SortInput {
+        Membership,
+        Config,
+        TestResult,
+        Traffic,
+    };
+
     class Group {
     public:
         QMutex mutex;
@@ -128,6 +140,8 @@ namespace Configs
         SubscriptionOptions sub_options;
         int front_proxy_id = -1;
         int landing_proxy_id = -1;
+        // Inherit (profiles keep their own addresses), Address or IpList.
+        EndpointSource endpoint;
 
         QList<int> column_width;
         QList<int> calculated_column_width; // memory only, no need to save to db
@@ -136,6 +150,8 @@ namespace Configs
         testBy test_sort_by = testBy::siteScore;
         trafficBy traffic_sort_by = trafficBy::tx;
         typeBy type_sort_by = typeBy::byType;
+        // The order the profiles are kept in as they change; Raw keeps the manual order.
+        GroupSortAction sort;
         testShowItems test_items_to_show = testShowItems::all;
         // Memory only. Pairs of (profileID, row as displayed).
         QList<std::pair<int, int>> selectedProfilesIdIdxPairs;
@@ -146,7 +162,22 @@ namespace Configs
 
         [[nodiscard]] QList<int> Profiles() const;
 
-        bool SortProfiles(GroupSortAction method);
+        [[nodiscard]] bool SortReads(SortInput input) const;
+
+        [[nodiscard]] bool KeepsSorted() const;
+
+        void SetSort(GroupSortAction action);
+
+        // The sorts below load profiles, so call them off the UI thread. Each is true when the order moved.
+
+        // Sorts by `action` and keeps the group sorted that way.
+        bool SortProfiles(GroupSortAction action);
+
+        // Re-applies the kept sort to the whole group.
+        bool Resort();
+
+        // Moves just the changed profiles into place; the rest must still be sorted. Falls back to Resort when many changed.
+        bool Reposition(const QList<int>& changed);
 
         // Reorder without changing membership. Used by live table moves so the
         // UI thread never waits on SortProfiles' full stable_sort.

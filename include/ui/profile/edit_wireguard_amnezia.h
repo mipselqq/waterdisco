@@ -21,6 +21,8 @@ public slots:
     void accept() override;
 
 private:
+    void generateSignature();
+
     Ui::EditWireguardAmnezia *ui;
     std::shared_ptr<Configs::Profile> ent;
 };

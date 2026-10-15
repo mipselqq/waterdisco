@@ -28,6 +28,7 @@
 #include "include/stats/traffic/TrafficLooper.hpp"
 #include "include/stats/autoselector/AutoSelectorMonitor.hpp"
 #include "include/ui/mainWindow/TestRunner.h"
+#include "include/sys/KillSwitch.hpp"
 #include "include/ui/setting/Icon.hpp"
 #include "include/global/CountryHelper.hpp"
 #include "include/ui/stats/dialog_auto_selector.h"
@@ -267,6 +268,7 @@ void MainWindow::refresh_status(const QString &traffic_update) {
     const QString runningDetail = m_vpnEndpointState.isEmpty()
                                       ? (running ? running->runningCountryInfo : QString())
                                       : m_vpnEndpointState;
+    const auto killSwitchState = Sys::KillSwitch::instance()->state();
 
     auto make_title = [=,this](bool isTray) {
         QStringList tt;
@@ -276,6 +278,8 @@ void MainWindow::refresh_status(const QString &traffic_update) {
         if (settings->spmode_vpn && !settings->spmode_system_proxy) tt << "[Tun]";
         if (!settings->spmode_vpn && settings->spmode_system_proxy) tt << "[" + tr("System Proxy") + "]";
         if (settings->spmode_vpn && settings->spmode_system_proxy) tt << "[Tun+" + tr("System Proxy") + "]";
+        if (settings->kill_switch && killSwitchState == Sys::KillSwitch::State::Armed) tt << "[" + tr("Kill switch") + "]";
+        if (settings->kill_switch && killSwitchState == Sys::KillSwitch::State::Failed) tt << "[" + tr("Kill switch: not active") + "]";
         tt << software_name;
         if (!isTray) tt << QString(NKR_VERSION);
         if (!activeRouteName.isEmpty()) {
@@ -291,19 +295,11 @@ void MainWindow::refresh_status(const QString &traffic_update) {
     };
 
     auto icon_status_new = Icon::TrayIconStatus::None;
-
-    if (running != nullptr) {
-        if (settings->spmode_vpn) {
-            icon_status_new = Icon::TrayIconStatus::Vpn;
-        } else if (settings->system_dns_set && settings->spmode_system_proxy) {
-            icon_status_new = Icon::TrayIconStatus::SystemProxyDns;
-        } else if (settings->system_dns_set) {
-            icon_status_new = Icon::TrayIconStatus::Dns;
-        } else if (settings->spmode_system_proxy) {
-            icon_status_new = Icon::TrayIconStatus::SystemProxy;
-        } else {
-            icon_status_new = Icon::TrayIconStatus::Running;
-        }
+    if (m_profileConnecting) icon_status_new = Icon::TrayIconStatus::Connecting;
+    else if (running != nullptr) {
+        if (settings->spmode_vpn) icon_status_new = Icon::TrayIconStatus::Vpn;
+        else if (settings->spmode_system_proxy) icon_status_new = Icon::TrayIconStatus::SystemProxy;
+        else icon_status_new = Icon::TrayIconStatus::Running;
     }
 
     setWindowTitle(make_title(false));
@@ -477,8 +473,6 @@ void MainWindow::refresh_startstop_button() {
     auto mode = StartStopButton::Mode::Off;
     if (running != nullptr) {
         if (settings->spmode_vpn) mode = StartStopButton::Mode::Tun;
-        else if (settings->system_dns_set && settings->spmode_system_proxy) mode = StartStopButton::Mode::SystemProxyDns;
-        else if (settings->system_dns_set) mode = StartStopButton::Mode::Dns;
         else if (settings->spmode_system_proxy) mode = StartStopButton::Mode::SystemProxy;
         else mode = StartStopButton::Mode::Core;
     }

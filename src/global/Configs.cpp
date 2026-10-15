@@ -14,7 +14,9 @@
 #include <include/api/RPC.h>
 
 #include "include/database/GroupsRepo.h"
+#include "include/database/MarkersRepo.h"
 #include "include/database/RoutesRepo.h"
+#include "include/scanner/DefaultIpLists.h"
 
 
 #ifdef Q_OS_WIN
@@ -40,6 +42,11 @@ namespace Configs {
         if (dataManager->routesRepo->GetAllRouteProfileIds().empty()) {
             auto defaultRoute = RouteProfile::GetDefaultChain();
             dataManager->routesRepo->AddRouteProfile(defaultRoute);
+        }
+        // Once only, so lists the user deleted stay deleted.
+        if (!dataManager->markersRepo->IsMarked(Markers::DefaultIpLists)) {
+            Scanner::DefaultIpLists::EnsureAll();
+            dataManager->markersRepo->Mark(Markers::DefaultIpLists);
         }
     }
 
@@ -93,7 +100,7 @@ namespace Configs {
         Configs::dataManager->settingsRepo->windows_set_admin = admin;
 #else
         // Unknown until the core answers; caching that would pin "not elevated" for the session.
-        if (API::defaultClient == nullptr) return false;
+        if (API::defaultClient == nullptr || !API::defaultClient->IsConnected()) return false;
         bool ok;
         const auto isPrivileged = API::defaultClient->IsPrivileged(&ok);
         if (!ok) return false;

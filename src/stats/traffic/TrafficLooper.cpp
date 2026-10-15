@@ -8,6 +8,7 @@
 #include <QElapsedTimer>
 #include <QSet>
 
+#include "include/configs/generate.h"
 #include "include/database/ProfilesRepo.h"
 #include "include/database/GroupsRepo.h"
 #include "include/database/DatabaseManager.h"
@@ -182,6 +183,8 @@ namespace Stats {
         if (Configs::dataManager && Configs::dataManager->profilesRepo) {
             Configs::dataManager->profilesRepo->SaveTrafficBatch(all);
         }
+        // At the save cadence rather than every tick, so a traffic-sorted list moves at most every few seconds.
+        Configs::RepositionLater(all, Configs::SortInput::Traffic);
     }
 
     void TrafficLooper::SetChainGroups(const QList<Configs::TrafficChainGroup>& configGroups) {
@@ -223,7 +226,7 @@ namespace Stats {
                     p->outbound ? p->outbound->DisplayName() : p->name,
                     groupName,
                     p->type,
-                    p->outbound ? p->outbound->DisplayAddress() : QString());
+                    Configs::DisplayEffectiveAddress(p));
             }
         }
     }

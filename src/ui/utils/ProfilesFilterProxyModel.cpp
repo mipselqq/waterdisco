@@ -79,7 +79,8 @@ bool ProfilesFilterProxyModel::profileMatches(int sourceRow) const {
     if (!m_address.isEmpty()) {
         if (m_address.startsWith(portPrefix)) {
             if (!portMatches(key->port)) return false;
-        } else if (!key->address.contains(m_address, Qt::CaseInsensitive)) {
+        } else if (!key->address.contains(m_address, Qt::CaseInsensitive) &&
+                   !key->effectiveAddress.contains(m_address, Qt::CaseInsensitive)) {
             return false;
         }
     }

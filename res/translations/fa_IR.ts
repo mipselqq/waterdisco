@@ -918,7 +918,7 @@ Release note:
     </message>
 </context>
 <context>
-    <name>DialogHotkey</name>
+    <name>DialogIntegration</name>
     <message>
         <source>Hotkey</source>
         <translation>کلید میانبر</translation>
@@ -2016,6 +2016,18 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Connect</source>
+        <translation>اتصال</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>قطع اتصال</translation>
+    </message>
+    <message>
+        <source>Disconnecting</source>
+        <translation>در حال قطع اتصال</translation>
+    </message>
+    <message>
         <source>Program</source>
         <translation>برنامه</translation>
     </message>
@@ -2126,6 +2138,10 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
     <message>
         <source>Disable</source>
         <translation>غیرفعال کردن</translation>
+    </message>
+    <message>
+        <source>Clean up</source>
+        <translation>پاکسازی</translation>
     </message>
     <message>
         <source>Remove Duplicates</source>

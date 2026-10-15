@@ -3,6 +3,7 @@
 #ifndef Q_MOC_RUN
 #include <core/gen/libcore.pb.h>
 #endif
+#include <QByteArray>
 #include <QMap>
 #include <QString>
 #include <QStringList>
@@ -17,6 +18,9 @@ namespace API {
         ~Client();
 
         void Reconnect(QLocalSocket *socket);
+
+        // False until the GUI accepts the core's socket, which is after the core reports itself connected.
+        [[nodiscard]] bool IsConnected() const;
 
         // QString returns is error string
 
@@ -39,8 +43,6 @@ namespace API {
 
         libcore::QueryIPTestResponse QueryIPTest(bool *rpcOK);
 
-        QString SetSystemDNS(bool *rpcOK, bool clear) const;
-
         [[nodiscard]] libcore::QueryConnectionsResp QueryConnections() const;
 
         // Ids already gone are a no-op; closedCount (optional) receives how many were actually live.
@@ -62,6 +64,8 @@ namespace API {
 
         libcore::WarpRegisterResponse WarpRegister(bool *rpcOK, const QString &tunnelType, const QString &proxy,
                                                    const QStringList &apiHosts);
+
+        libcore::GenQuicSignatureResponse GenQuicSignature(bool *rpcOK, const QString &domain);
 
         QString InstallDashboard(bool *rpcOK, const QString &archivePath, const QString &targetDir) const;
 
@@ -90,6 +94,21 @@ namespace API {
         libcore::DiagnosticsResponse CaptureDiagnostics(bool *rpcOK, const libcore::DiagnosticsRequest &request, int timeoutMs);
 
         void StopDiagnostics(bool *rpcOK);
+
+        // Scanner calls are scoped to request.session_id: StopScan cancels that session only, never URL tests.
+        libcore::ScanProbeResponse ScanProbe(bool *rpcOK, const libcore::ScanProbeRequest &request, QString *coreError, int timeoutMs);
+
+        [[nodiscard]] libcore::QueryScanResponse QueryScan(bool *rpcOK, const QString &sessionId, qint64 afterSeq) const;
+
+        void StopScan(bool *rpcOK, const QString &sessionId) const;
+
+        libcore::TestResp ScanURLTest(bool *rpcOK, const libcore::ScanURLTestRequest &request, QString *coreError, int timeoutMs);
+
+        // Up when any target accepts a TCP connection through the default interface.
+        [[nodiscard]] bool ScanCheckNetwork(bool *rpcOK, const QStringList &targets, int timeoutMs, QString *error = nullptr) const;
+
+        // Returns the error text; empty on success.
+        QString ParseRuleSet(bool *rpcOK, const QByteArray &content, QStringList *cidrs, int *skippedRules = nullptr) const;
 
     private:
         class LocalSocketChannel;

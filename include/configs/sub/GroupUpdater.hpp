@@ -53,6 +53,9 @@ namespace Subscription {
 
         void ImportBatch(const QStringList &payloads, const Finish &finish = nullptr);
 
+        // Copies land in the current group and keep their source's endpoint, which no link carries.
+        void CloneProfiles(const QList<int> &ids, const Finish &finish = nullptr);
+
         void SetUrlTester(UrlTester tester);
 
     signals:

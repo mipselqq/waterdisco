@@ -1,6 +1,7 @@
 #include "include/ui/mainwindow.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <QBuffer>
 #include <QFileInfo>
@@ -11,6 +12,7 @@
 #include <QUrl>
 
 #include "3rdparty/QrDecoder.h"
+#include "include/api/remote/Server.hpp"
 #include "include/configs/sub/GroupUpdater.hpp"
 #include "include/configs/sub/RouteUpdater.hpp"
 #include "include/database/GroupsRepo.h"
@@ -18,6 +20,7 @@
 #include "include/database/RoutesRepo.h"
 #include "include/global/PeriodicRunner.hpp"
 #include "include/sys/AutoRun.hpp"
+#include "include/sys/KillSwitch.hpp"
 #include "include/ui/mainWindow/MainWindowInternal.h"
 #include "include/ui/mainWindow/TestRunner.h"
 #include "include/ui/utils/ProfilesTableModel.h"
@@ -353,10 +356,6 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
         if (changed(MwArg::DisableTray)) {
             tray->setVisible(!settings->disable_tray);
         }
-        if (changed(MwArg::SystemDns)) {
-            if (settings->show_system_dns) ui->system_dns->show();
-            else ui->system_dns->hide();
-        }
         if (changed(MwArg::ChoosePort)) {
             settings->inbound_socks_port = MkPort(settings->inbound_address);
             if (settings->spmode_system_proxy) {
@@ -371,10 +370,19 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
             if (auto group = Configs::dataManager->groupsRepo->CurrentGroup();
                 group && group->calculated_column_width.size() > ProfilesTableModel::ColType)
                 group->calculated_column_width[ProfilesTableModel::ColType] = 0;
+            // Both settings feed the security a Type sort reads.
+            for (const int gid : Configs::dataManager->groupsRepo->GetAllGroupIds()) {
+                const auto group = Configs::dataManager->groupsRepo->GetGroup(gid);
+                if (group != nullptr && ProfilesTableModel::columnOfSort(group->sort.method) == ProfilesTableModel::ColType) {
+                    Configs::ResortLater(gid);
+                }
+            }
             refresh_proxy_list({}, true);
         }
         auto suggestRestartProxy = settings->Save();
         Throne::PeriodicRunner::instance()->CheckNow();
+        if (changed(MwArg::KillSwitch) || changed(MwArg::Vpn)) Sys::KillSwitch::instance()->apply();
+        if (changed(MwArg::RemoteApi)) RemoteApi::Server::instance()->apply(RemoteApi::ConfigFromSettings());
         if (changed(MwArg::Route)) {
             settings->Save();
             suggestRestartProxy = true;
@@ -412,6 +420,8 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
         break;
     case MwMessage::GroupsChanged:
         refresh_groups();
+        profilesTableModel->invalidateAddresses();
+        if (changed(MwArg::RestartProxy)) noteRestartNeeded(tr("Group"));
         break;
     case MwMessage::SubscriptionFinished:
         refresh_proxy_list({}, true);
@@ -428,11 +438,16 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
         on_subscription_group_changed(args.value(0).toInt(), disturbed);
         break;
     }
+    case MwMessage::GroupOrderChanged:
+        if (args.contains(Int2String(settings->current_group))) refresh_proxy_list({}, true);
+        break;
     case MwMessage::CoreCrashed:
         profile_stop();
         break;
     case MwMessage::CoreStarted: {
         Configs::IsAdmin(true);
+        // The core may just have been given root, which the guard needs too.
+        if (Sys::KillSwitch::instance()->failedForPrivileges()) Sys::KillSwitch::instance()->apply();
         if (settings->remember_enable && settings->remember_system_proxy) {
             set_spmode_system_proxy(true, false);
         }
@@ -440,16 +455,9 @@ void MainWindow::dialog_message_impl(MwMessage cmd, const QStringList &args) {
             set_spmode_vpn(true, settings->flag_restart_tun_on);
             settings->flag_restart_tun_on = false;
         }
-        if (settings->flag_dns_set) {
-            set_system_dns(true);
-        }
         bool requestedIDIsValid = false;
         const int requestedID = args.value(0).toInt(&requestedIDIsValid);
         startAfterCoreReady(requestedIDIsValid ? requestedID : Configs::NoProfileId);
-        if (settings->system_dns_set) {
-            set_system_dns(true);
-            ui->system_dns->setChecked(true);
-        }
         refresh_status();
         break;
     }

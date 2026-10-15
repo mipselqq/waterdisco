@@ -45,6 +45,7 @@ namespace Configs {
                 outbound_json TEXT NOT NULL,
                 traffic_dl INTEGER NOT NULL DEFAULT 0,
                 traffic_up INTEGER NOT NULL DEFAULT 0,
+                endpoint_json TEXT NOT NULL DEFAULT '{}',
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 FOREIGN KEY(gid) REFERENCES groups(id) ON DELETE CASCADE
@@ -61,6 +62,8 @@ namespace Configs {
             db.exec("ALTER TABLE profiles ADD COLUMN site_score INTEGER NOT NULL DEFAULT 0");
         if (!profilesColumnExists("performance_test_status"))
             db.exec("ALTER TABLE profiles ADD COLUMN performance_test_status INTEGER NOT NULL DEFAULT 0");
+        if (!profilesColumnExists("endpoint_json"))
+            db.exec("ALTER TABLE profiles ADD COLUMN endpoint_json TEXT NOT NULL DEFAULT '{}'");
 
         // Import the old fork's sentinel representation once, then keep an
         // explicit status so a real score of zero is never ambiguous.
@@ -111,6 +114,7 @@ namespace Configs {
         profile->ul_speed = json["ul_speed"].toString();
         profile->test_country = json["test_country"].toString();
         profile->ip_out = json["ip_out"].toString();
+        profile->endpoint = EndpointSource::FromJson(json["endpoint"].toObject());
         if (profile->rx_speed_mbps <= 0.0
             && profile->performance_test_status == PerformanceTestStatus::Success) {
             profile->rx_speed_mbps = ParseSpeedMbps(profile->dl_speed);
@@ -152,13 +156,14 @@ namespace Configs {
             outboundJson = QString::fromUtf8(outboundDoc.toJson(QJsonDocument::Compact));
         }
         QString name = profile->outbound ? profile->outbound->name : QString();
+        QString endpointJson = QString::fromUtf8(QJsonDocument(profile->endpoint.ToJson()).toJson(QJsonDocument::Compact));
 
         db.exec(R"(
             INSERT INTO profiles
             (id, type, name, gid, latency, latency_at, connect_time_ms, rx_speed_mbps,
             site_score, performance_test_status, dl_speed, ul_speed, test_country,
-            ip_out, outbound_json, traffic_dl, traffic_up)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ip_out, outbound_json, traffic_dl, traffic_up, endpoint_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 type = excluded.type, name = excluded.name, gid = excluded.gid,
                 latency = excluded.latency, latency_at = excluded.latency_at,
@@ -170,6 +175,7 @@ namespace Configs {
                 test_country = excluded.test_country, ip_out = excluded.ip_out,
                 outbound_json = excluded.outbound_json,
                 traffic_dl = excluded.traffic_dl, traffic_up = excluded.traffic_up,
+                endpoint_json = excluded.endpoint_json,
                 updated_at = strftime('%s', 'now')
         )",
             id,
@@ -188,7 +194,8 @@ namespace Configs {
             profile->ip_out.toStdString(),
             outboundJson.toStdString(),
             static_cast<long long>(profile->traffic_downlink),
-            static_cast<long long>(profile->traffic_uplink)
+            static_cast<long long>(profile->traffic_uplink),
+            endpointJson.toStdString()
         );
     }
 
@@ -216,6 +223,7 @@ namespace Configs {
         row.outbound_json = outboundJson.toStdString();
         row.traffic_dl = static_cast<long long>(profile->traffic_downlink);
         row.traffic_up = static_cast<long long>(profile->traffic_uplink);
+        row.endpoint_json = QJsonDocument(profile->endpoint.ToJson()).toJson(QJsonDocument::Compact).toStdString();
         return row;
     }
 
@@ -244,6 +252,8 @@ namespace Configs {
 
         json["traffic_dl"] = static_cast<qint64>(stmt.getColumn(15).getInt64());
         json["traffic_up"] = static_cast<qint64>(stmt.getColumn(16).getInt64());
+        if (const auto endpointDoc = QJsonDocument::fromJson(QByteArray(stmt.getColumn(17).getText()));
+            endpointDoc.isObject()) json["endpoint"] = endpointDoc.object();
         
         return profileFromJson(json);
     }
@@ -252,7 +262,7 @@ namespace Configs {
         auto query = db.query(R"(
             SELECT id, type, name, gid, latency, latency_at, connect_time_ms, rx_speed_mbps,
                    site_score, performance_test_status, dl_speed, ul_speed, test_country,
-                   ip_out, outbound_json, traffic_dl, traffic_up
+                   ip_out, outbound_json, traffic_dl, traffic_up, endpoint_json
             FROM profiles WHERE id = ?
         )", id);
         if (!query || !query->executeStep()) {
@@ -273,15 +283,16 @@ namespace Configs {
         profile->id = newId;
         if (profile->outbound) profile->outbound->profile_id = newId;
         profile->gid = gid < 0 ? Configs::dataManager->settingsRepo->current_group : gid;
-        QMutexLocker locker(&mutex);
-        identityMap[newId] = std::weak_ptr<Profile>(profile);
-        saveToDatabase(profile.get(), profile->id);
-        if (auto group = dataManager->groupsRepo->GetGroup(profile->gid)) {
-            group->AddProfile(profile->id);
-            dataManager->groupsRepo->Save(group);
-        } else {
-            return false;
+        {
+            QMutexLocker locker(&mutex);
+            identityMap[newId] = std::weak_ptr<Profile>(profile);
+            saveToDatabase(profile.get(), profile->id);
         }
+        auto group = dataManager->groupsRepo->GetGroup(profile->gid);
+        if (group == nullptr) return false;
+        group->AddProfile(profile->id);
+        dataManager->groupsRepo->Save(group);
+        RepositionLater(QList<std::shared_ptr<Profile>>{profile}, SortInput::Membership);
         return true;
     }
 
@@ -347,7 +358,7 @@ namespace Configs {
         }
         std::string sql = "SELECT id, type, name, gid, latency, latency_at, connect_time_ms, rx_speed_mbps, "
                          "site_score, performance_test_status, dl_speed, ul_speed, test_country, "
-                         "ip_out, outbound_json, traffic_dl, traffic_up FROM profiles WHERE id IN (" +
+                         "ip_out, outbound_json, traffic_dl, traffic_up, endpoint_json FROM profiles WHERE id IN (" +
                          idList.toStdString() + ") ORDER BY id";
         auto query = db.query(sql);
         if (!query) return result;

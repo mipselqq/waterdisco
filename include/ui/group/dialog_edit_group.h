@@ -21,6 +21,9 @@ public:
 
     ~DialogEditGroup() override;
 
+    // The accepted edit changed the endpoint of a group whose inheriting profile the running config uses.
+    [[nodiscard]] bool RestartNeeded() const { return restartNeeded; }
+
 private:
     Ui::DialogEditGroup *ui;
 
@@ -35,6 +38,10 @@ private:
     } LANDING;
 
     Configs::SubscriptionOptions subOptions;
+
+    Configs::EndpointSource endpoint;
+
+    bool restartNeeded = false;
 
     QHash<QString, int> proxyNameToId;
 

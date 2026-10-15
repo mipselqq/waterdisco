@@ -112,6 +112,13 @@ namespace Qv2ray::ui {
             rule.format = tcpudpFormat;
             highlightingRules.append(rule);
         }
+
+        searchFormat.setBackground(darkMode ? QColor(150, 110, 0) : QColor(255, 225, 90));
+        searchFormat.setForeground(darkMode ? Qt::white : Qt::black);
+    }
+
+    void SyntaxHighlighter::setSearchPattern(const QRegularExpression &pattern) {
+        searchPattern = pattern;
     }
 
     void SyntaxHighlighter::highlightBlock(const QString &text) {
@@ -121,6 +128,15 @@ namespace Qv2ray::ui {
             while (matchIterator.hasNext()) {
                 QRegularExpressionMatch match = matchIterator.next();
                 setFormat(match.capturedStart(), match.capturedLength(), rule.format);
+            }
+        }
+
+        // Last, so search hits paint over the syntax colors.
+        if (!searchPattern.pattern().isEmpty()) {
+            QRegularExpressionMatchIterator matchIterator = searchPattern.globalMatch(text);
+            while (matchIterator.hasNext()) {
+                QRegularExpressionMatch match = matchIterator.next();
+                if (match.capturedLength() > 0) setFormat(match.capturedStart(), match.capturedLength(), searchFormat);
             }
         }
 

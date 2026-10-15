@@ -358,6 +358,23 @@ void HideWindow(QWidget *w) {
 #endif
 }
 
+QStringList LogFontFamilies(const QString &preferred) {
+    QStringList families;
+    if (const QString chosen = preferred.trimmed(); !chosen.isEmpty()) families << chosen;
+    families << QStringList{"Consolas", "Menlo", "SF Mono", "DejaVu Sans Mono", "Noto Sans Mono", "Ubuntu Mono", "monospace"};
+    families.removeDuplicates();
+    return families;
+}
+
+QString ResolveLogFontFamily(const QString &preferred) {
+    for (const auto &family : LogFontFamilies(preferred)) {
+        if (family != QStringLiteral("monospace") && QFontDatabase::hasFamily(family)) return family;
+    }
+    QFont generic(QStringLiteral("monospace"));
+    generic.setStyleHint(QFont::Monospace);
+    return QFontInfo(generic).family();
+}
+
 void runOnUiThread(const std::function<void()> &callback, bool wait) {
     auto *app = QCoreApplication::instance();
     if (app == nullptr) return;

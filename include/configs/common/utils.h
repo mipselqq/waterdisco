@@ -9,6 +9,8 @@ namespace Configs
 
     void mergeUrlQuery(QUrlQuery& baseQuery, const QString& strQuery);
 
+    QString formDecodedQueryValue(const QUrlQuery& query, const QString& key);
+
     void mergeJsonObjects(QJsonObject& baseObject, const QJsonObject& obj);
 
     QStringList jsonObjectToQStringList(const QJsonObject& obj);
@@ -36,6 +38,7 @@ namespace Configs
     // Punycode for non-ASCII hosts. A comma-separated list is converted per entry.
     QString toAceHost(const QString& host);
 
+    bool IsPrivateHost(const QString& host);
     QString getHeadersString(QStringList headers);
 
     QStringList parseHeaderPairs(const QString& rawHeader);

@@ -196,12 +196,7 @@ void MainWindow::openTraySelector(bool routing) {
     TrayProfileSelector::Callbacks cb;
     cb.startProfile = [this](int id) { profile_start(id); };
     cb.stopProfile = [this]() { profile_stop(false, false, true); };
-    cb.chooseRoute = [this](int id) {
-        if (Configs::dataManager->settingsRepo->current_route_id == id) return;
-        Configs::dataManager->settingsRepo->current_route_id = id;
-        Configs::dataManager->settingsRepo->Save();
-        if (Configs::dataManager->settingsRepo->started_id >= 0) profile_start(Configs::dataManager->settingsRepo->started_id);
-    };
+    cb.chooseRoute = [this](int id) { choose_route(id); };
     cb.isRunning = [this]() { return running != nullptr; };
     cb.runningId = [this]() { return running ? running->id : -1; };
     cb.runningGid = [this]() { return running ? running->gid : -1; };
@@ -230,6 +225,14 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     const QEvent::Type type = event->type();
+
+    // Accepting the override keeps any window-level Esc shortcut from taking the key first.
+    if ((type == QEvent::ShortcutOverride || type == QEvent::KeyPress) && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape
+        && obj->isWidgetType() && ui->logToolbar->isAncestorOf(static_cast<QWidget *>(obj))) {
+        if (type == QEvent::ShortcutOverride) event->accept();
+        else logFilterButton->setChecked(false);
+        return true;
+    }
 
     if (type == QEvent::Resize && obj == ui->toolButton_program) {
         const int h = ui->toolButton_program->height();

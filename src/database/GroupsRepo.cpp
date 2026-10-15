@@ -38,6 +38,9 @@ namespace Configs {
                 type_sort_by INTEGER NOT NULL DEFAULT 0,
                 sub_options_json TEXT NOT NULL DEFAULT '{}',
                 sub_metadata_json TEXT NOT NULL DEFAULT '{}',
+                endpoint_json TEXT NOT NULL DEFAULT '{}',
+                sort_method INTEGER NOT NULL DEFAULT 0,
+                sort_descending INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
             )
@@ -49,6 +52,12 @@ namespace Configs {
             db.exec("ALTER TABLE groups ADD COLUMN sub_options_json TEXT NOT NULL DEFAULT '{}'");
         if (!groupsColumnExists("sub_metadata_json"))
             db.exec("ALTER TABLE groups ADD COLUMN sub_metadata_json TEXT NOT NULL DEFAULT '{}'");
+        if (!groupsColumnExists("endpoint_json"))
+            db.exec("ALTER TABLE groups ADD COLUMN endpoint_json TEXT NOT NULL DEFAULT '{}'");
+        if (!groupsColumnExists("sort_method"))
+            db.exec("ALTER TABLE groups ADD COLUMN sort_method INTEGER NOT NULL DEFAULT 0");
+        if (!groupsColumnExists("sort_descending"))
+            db.exec("ALTER TABLE groups ADD COLUMN sort_descending INTEGER NOT NULL DEFAULT 0");
 
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS groups_order (
@@ -80,6 +89,7 @@ namespace Configs {
         json["sub_metadata"] = group->sub_info.toJson();
         json["sub_last_update"] = static_cast<qint64>(group->sub_last_update);
         json["sub_options"] = group->sub_options.ToJson();
+        json["endpoint"] = group->endpoint.ToJson();
         json["front_proxy_id"] = group->front_proxy_id;
         json["landing_proxy_id"] = group->landing_proxy_id;
         json["column_width"] = QListInt2QJsonArray(group->column_width);
@@ -88,6 +98,8 @@ namespace Configs {
         json["test_sort_by"] = static_cast<int>(group->test_sort_by);
         json["traffic_sort_by"] = static_cast<int>(group->traffic_sort_by);
         json["type_sort_by"] = static_cast<int>(group->type_sort_by);
+        json["sort_method"] = static_cast<int>(group->sort.method);
+        json["sort_descending"] = group->sort.descending;
         json["test_items_to_show"] = static_cast<int>(group->test_items_to_show);
 
         return json;
@@ -108,6 +120,7 @@ namespace Configs {
         if (!group->sub_info.valid && !group->info.isEmpty()) group->sub_info = ParseSubUserInfo(group->info);
         group->sub_last_update = json["sub_last_update"].toVariant().toLongLong();
         group->sub_options = SubscriptionOptions::FromJson(json["sub_options"].toObject());
+        group->endpoint = EndpointSource::FromJson(json["endpoint"].toObject());
         group->front_proxy_id = json["front_proxy_id"].toInt();
         group->landing_proxy_id = json["landing_proxy_id"].toInt();
         group->column_width = QJsonArray2QListInt(json["column_width"].toArray());
@@ -116,6 +129,10 @@ namespace Configs {
         group->test_sort_by = static_cast<testBy>(json["test_sort_by"].toInt(0));
         group->traffic_sort_by = static_cast<trafficBy>(json["traffic_sort_by"].toInt(0));
         group->type_sort_by = static_cast<typeBy>(json["type_sort_by"].toInt(0));
+        if (const int method = json["sort_method"].toInt(0); method > 0 && method <= GroupSortMethod::ByLatency) {
+            group->sort.method = static_cast<GroupSortMethod::GroupSortMethod>(method);
+            group->sort.descending = json["sort_descending"].toBool();
+        }
         group->test_items_to_show = static_cast<testShowItems>(json["test_items_to_show"].toInt(0));
         
         return group;
@@ -132,14 +149,15 @@ namespace Configs {
         QString profilesJson = QString::fromUtf8(profilesDoc.toJson(QJsonDocument::Compact));
         QString subOptionsJson = QString::fromUtf8(QJsonDocument(group->sub_options.ToJson()).toJson(QJsonDocument::Compact));
         QString subMetadataJson = QString::fromUtf8(QJsonDocument(group->sub_info.toJson()).toJson(QJsonDocument::Compact));
+        QString endpointJson = QString::fromUtf8(QJsonDocument(group->endpoint.ToJson()).toJson(QJsonDocument::Compact));
 
         db.exec(R"(
             INSERT INTO groups
             (id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
              front_proxy_id, landing_proxy_id,
              column_width_json, profiles_json, scroll_last_profile, test_sort_by, traffic_sort_by, test_items_to_show,
-             type_sort_by, sub_options_json, sub_metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             type_sort_by, sub_options_json, sub_metadata_json, endpoint_json, sort_method, sort_descending)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 archive = excluded.archive, skip_auto_update = excluded.skip_auto_update,
                 auto_clear_unavailable = excluded.auto_clear_unavailable, name = excluded.name,
@@ -149,7 +167,8 @@ namespace Configs {
                 scroll_last_profile = excluded.scroll_last_profile, test_sort_by = excluded.test_sort_by,
                 traffic_sort_by = excluded.traffic_sort_by, test_items_to_show = excluded.test_items_to_show,
                 type_sort_by = excluded.type_sort_by, sub_options_json = excluded.sub_options_json,
-                sub_metadata_json = excluded.sub_metadata_json,
+                sub_metadata_json = excluded.sub_metadata_json, endpoint_json = excluded.endpoint_json,
+                sort_method = excluded.sort_method, sort_descending = excluded.sort_descending,
                 updated_at = strftime('%s', 'now')
         )",
             id,
@@ -170,7 +189,10 @@ namespace Configs {
             static_cast<int>(group->test_items_to_show),
             static_cast<int>(group->type_sort_by),
             subOptionsJson.toStdString(),
-            subMetadataJson.toStdString()
+            subMetadataJson.toStdString(),
+            endpointJson.toStdString(),
+            static_cast<int>(group->sort.method),
+            group->sort.descending ? 1 : 0
         );
     }
 
@@ -179,7 +201,7 @@ namespace Configs {
             SELECT id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
                    front_proxy_id, landing_proxy_id,
                    column_width_json, profiles_json, scroll_last_profile, test_sort_by, traffic_sort_by, test_items_to_show,
-                   type_sort_by, sub_options_json, sub_metadata_json
+                   type_sort_by, sub_options_json, sub_metadata_json, endpoint_json, sort_method, sort_descending
             FROM groups WHERE id = ?
         )", id);
         if (!query || !query->executeStep()) {
@@ -227,6 +249,12 @@ namespace Configs {
             subMetaDoc.isObject()) {
             json["sub_metadata"] = subMetaDoc.object();
         }
+        if (const auto endpointDoc = QJsonDocument::fromJson(QByteArray(query->getColumn(19).getText()));
+            endpointDoc.isObject()) {
+            json["endpoint"] = endpointDoc.object();
+        }
+        json["sort_method"] = query->getColumn(20).getInt();
+        json["sort_descending"] = query->getColumn(21).getInt() != 0;
 
         auto group = groupFromJson(json);
         // Refreshes could map several identical servers onto one id, leaving it in the persisted list once per server (#1775).
@@ -354,7 +382,76 @@ namespace Configs {
         QMutexLocker locker(&mutex);
         saveToDatabase(group.get(), group->id);
         memMap[group->id] = group;
-        
+
         return true;
+    }
+
+    namespace {
+        struct PendingSort {
+            QSet<int> changed;
+            bool full = false;
+        };
+
+        QMutex sortQueueMutex;
+        QHash<int, PendingSort> pendingSorts;
+        bool sortWorkerRunning = false;
+
+        void drainSorts() {
+            for (;;) {
+                QHash<int, PendingSort> batch;
+                {
+                    QMutexLocker locker(&sortQueueMutex);
+                    if (pendingSorts.isEmpty()) {
+                        sortWorkerRunning = false;
+                        return;
+                    }
+                    batch.swap(pendingSorts);
+                }
+                QStringList moved;
+                for (auto it = batch.cbegin(); it != batch.cend(); ++it) {
+                    const auto group = dataManager->groupsRepo->GetGroup(it.key());
+                    if (group == nullptr) continue;
+                    const bool reordered = it->full ? group->Resort() : group->Reposition(it->changed.values());
+                    if (!reordered) continue;
+                    dataManager->groupsRepo->Save(group);
+                    moved << Int2String(it.key());
+                }
+                if (!moved.isEmpty() && MW_dialog_message) MW_dialog_message(MwMessage::GroupOrderChanged, moved);
+            }
+        }
+
+        // Requests landing while a sort runs merge into one job per group.
+        void enqueueSort(int gid, SortInput input, const QList<int> &changed, bool full) {
+            if (!dataManager || !dataManager->groupsRepo) return;
+            const auto group = dataManager->groupsRepo->GetGroup(gid);
+            if (group == nullptr || !group->SortReads(input)) return;
+            QMutexLocker locker(&sortQueueMutex);
+            auto &pending = pendingSorts[gid];
+            pending.full = pending.full || full;
+            if (!pending.full) {
+                for (int id : changed) pending.changed.insert(id);
+            }
+            if (sortWorkerRunning) return;
+            sortWorkerRunning = true;
+            runOnNewThread(drainSorts);
+        }
+    }
+
+    void ResortLater(int gid) {
+        enqueueSort(gid, SortInput::Membership, {}, true);
+    }
+
+    void RepositionLater(const QHash<int, QList<int>>& changedByGroup, SortInput input) {
+        for (auto it = changedByGroup.cbegin(); it != changedByGroup.cend(); ++it) {
+            enqueueSort(it.key(), input, it.value(), false);
+        }
+    }
+
+    void RepositionLater(const QList<std::shared_ptr<Profile>>& profiles, SortInput input) {
+        QHash<int, QList<int>> changedByGroup;
+        for (const auto& profile : profiles) {
+            if (profile != nullptr) changedByGroup[profile->gid] << profile->id;
+        }
+        RepositionLater(changedByGroup, input);
     }
 }

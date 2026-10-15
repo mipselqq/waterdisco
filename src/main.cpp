@@ -31,6 +31,7 @@
 #include "include/sys/windows/eventHandler.h"
 #include "include/sys/windows/WinVersion.h"
 #include <qfontdatabase.h>
+#include <windows.h>
 #endif
 #ifdef Q_OS_LINUX
 #include <include/sys/linux/coreDump.h>
@@ -147,6 +148,22 @@ void loadTranslate(const QString& locale) {
 }
 
 namespace {
+#ifdef Q_OS_WIN
+    // An elevated relaunch starts before its parent tears down; until the parent exits, the DB and the instance server are still its own.
+    void WaitForRelaunchParent(QStringList &arguments) {
+        const QString prefix = "-wait_pid=";
+        for (qsizetype i = 0; i < arguments.size(); i++) {
+            if (!arguments.at(i).startsWith(prefix)) continue;
+            const auto pid = arguments.takeAt(i).mid(prefix.size()).toULong();
+            if (const HANDLE parent = OpenProcess(SYNCHRONIZE, FALSE, pid)) {
+                WaitForSingleObject(parent, 30000);
+                CloseHandle(parent);
+            }
+            return;
+        }
+    }
+#endif
+
     constexpr auto FALLBACK_MARKER = "config/.install-dir-unwritable";
 
     // QFileInfo::isWritable reports the read-only attribute, not what a UAC-filtered token can actually do.
@@ -243,6 +260,9 @@ int main(int argc, char* argv[]) {
 #endif
 
     QStringList arguments = QApplication::arguments();
+#ifdef Q_OS_WIN
+    WaitForRelaunchParent(arguments);
+#endif
     // Must run before the working directory moves below: argument paths may be relative to it.
     const QString launchDeeplink = Deeplink_ExtractFromArgs(arguments);
     const QStringList launchFiles = LaunchFiles_ExtractFromArgs(arguments, QDir::current());
@@ -302,7 +322,6 @@ int main(int argc, char* argv[]) {
     if (Configs::dataManager->settingsRepo->argv.contains("-tray")) Configs::dataManager->settingsRepo->flag_tray = true;
     if (Configs::dataManager->settingsRepo->argv.contains("-debug")) Configs::dataManager->settingsRepo->flag_debug = true;
     if (Configs::dataManager->settingsRepo->argv.contains("-flag_restart_tun_on")) Configs::dataManager->settingsRepo->flag_restart_tun_on = true;
-    if (Configs::dataManager->settingsRepo->argv.contains("-flag_restart_dns_set")) Configs::dataManager->settingsRepo->flag_dns_set = true;
     Configs::dataManager->settingsRepo->flag_use_appdata = useAppdata;
     if(useAppdata && !appdataDir.isEmpty()) Configs::dataManager->settingsRepo->appdataDir = appdataDir;
 #ifdef NKR_CPP_DEBUG
@@ -332,9 +351,8 @@ int main(int argc, char* argv[]) {
     {
         Configs::dataManager->settingsRepo->windows_set_admin = false; // so that if permission denied, we will run as user on the next run
         Configs::dataManager->settingsRepo->Save();
-        WinCommander::runProcessElevated(QApplication::applicationFilePath(), {}, "", 1, false);
-        QApplication::quit();
-        return 0;
+        // A declined UAC prompt falls through and this instance carries on as user.
+        if (WinCommander::runProcessElevated(QApplication::applicationFilePath(), {}, "", 1, false) == 0) return 0;
     }
 #endif
 

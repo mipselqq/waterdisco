@@ -20,20 +20,30 @@ type URLTestResult struct {
 }
 
 func BatchURLTest(ctx context.Context, i Box, outboundTags []string, url string, maxConcurrency int, twice bool, timeout time.Duration, dynamicFallShort bool, globalBestMs int64) []*URLTestResult {
+	// Drop results a previous poller did not drain; tags repeat every ranked chunk.
+	_ = URLReporter.Results()
+	results := batchURLTestTo(ctx, i, outboundTags, url, maxConcurrency, twice, timeout, dynamicFallShort, globalBestMs, URLReporter.AddResult)
+	URLReporter.Reclaim(results)
+	return results
+}
+
+// BatchURLTestTo hands every finished result to publish; aborted tags are returned but never published.
+func BatchURLTestTo(ctx context.Context, i Box, outboundTags []string, url string, maxConcurrency int, twice bool, timeout time.Duration, publish func(*URLTestResult)) []*URLTestResult {
+	return batchURLTestTo(ctx, i, outboundTags, url, maxConcurrency, twice, timeout, false, 0, publish)
+}
+
+func batchURLTestTo(ctx context.Context, i Box, outboundTags []string, url string, maxConcurrency int, twice bool, timeout time.Duration, dynamicFallShort bool, globalBestMs int64, publish func(*URLTestResult)) []*URLTestResult {
 	if timeout <= 0 {
 		timeout = URLTestTimeout
 	}
-	// Drop results a previous poller did not drain; tags like proxy-1-0 repeat
-	// every ranked chunk and would otherwise be applied to the wrong profiles.
-	_ = URLReporter.Results()
 
 	bestSuccessfulMs := globalBestMs
-	results := runBatch(ctx, i, outboundTags, maxConcurrency, batchProbe[URLTestResult]{
+	return runBatch(ctx, i, outboundTags, maxConcurrency, batchProbe[URLTestResult]{
 		run: func(ctx context.Context, tag string, outbound adapter.Outbound) *URLTestResult {
 			if err := awaitTunnels(ctx, i, tag); err != nil {
 				return &URLTestResult{Tag: tag, Error: err}
 			}
-			client, closeClient := outboundHTTPClient(ctx, outbound)
+			client, closeClient := outboundHTTPClient(ctx, i, tag, outbound)
 			defer closeClient()
 			runProbe := func(limit time.Duration) (time.Duration, error) {
 				probeCtx := ctx
@@ -81,10 +91,8 @@ func BatchURLTest(ctx context.Context, i Box, outboundTags []string, url string,
 		fail: func(tag string, err error) *URLTestResult {
 			return &URLTestResult{Tag: tag, Error: err}
 		},
-		publish: URLReporter.AddResult,
+		publish: publish,
 	})
-	URLReporter.Reclaim(results)
-	return results
 }
 
 func urlTest(ctx context.Context, client *http.Client, url string, timeout time.Duration) (time.Duration, error) {
