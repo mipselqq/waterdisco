@@ -24,7 +24,14 @@ if ! command -v protoc-gen-go-grpc >/dev/null 2>&1; then
 fi
 
 echo "[gen_proto] generating Go bindings from libcore.proto"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf -- "$TMP_DIR"' EXIT
 (
   cd "$GEN_DIR"
-  protoc -I . --go_out=. --go-grpc_out=. libcore.proto
+  protoc -I . --go_out="$TMP_DIR" --go-grpc_out="$TMP_DIR" libcore.proto
 )
+for generated in libcore.pb.go libcore_grpc.pb.go; do
+  if ! cmp -s "$TMP_DIR/$generated" "$GEN_DIR/$generated"; then
+    cp "$TMP_DIR/$generated" "$GEN_DIR/$generated"
+  fi
+done

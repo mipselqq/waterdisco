@@ -10,6 +10,7 @@ BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/Waterdisco}"
 CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
+BUILD_ONLY="${BUILD_ONLY:-0}"
 CORE_PATH="${CORE_PATH:-}"
 CORE_GO_TAGS="${CORE_GO_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_openvpn,with_openconnect,with_purego,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
 
@@ -41,10 +42,11 @@ Options:
   --prefix <path>      Install dir (default: /opt/Waterdisco)
   --core <path>        Path to ThroneCore binary
   --skip-build         Do not build, only install from existing artifacts
+  --build-only         Build artifacts without installing them
   -h, --help           Show this help
 
 Environment overrides:
-  BUILD_DIR, INSTALL_DIR, CMAKE_BUILD_TYPE, SKIP_BUILD, CORE_PATH, CORE_GO_TAGS
+  BUILD_DIR, INSTALL_DIR, CMAKE_BUILD_TYPE, SKIP_BUILD, BUILD_ONLY, CORE_PATH, CORE_GO_TAGS, BUILD_JOBS
 EOF
 }
 
@@ -69,6 +71,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_BUILD=1
       shift
       ;;
+    --build-only)
+      BUILD_ONLY=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -79,26 +85,59 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-need_cmd cmake
+if [[ "$SKIP_BUILD" != "1" && "$EUID" -eq 0 ]]; then
+  BUILD_USER="${SUDO_USER:-$(stat -c %U "$ROOT_DIR")}"
+  if [[ -n "$BUILD_USER" && "$BUILD_USER" != "root" ]]; then
+    need_cmd runuser
+    # Older sudo runs left this cache owned by root. Repair the default build tree once.
+    if [[ "$BUILD_DIR" == "$ROOT_DIR/build" && -d "$BUILD_DIR" ]]; then
+      chown -R "$BUILD_USER:$(id -gn "$BUILD_USER")" "$BUILD_DIR"
+    fi
+    for generated in "$ROOT_DIR/core/gen/libcore.pb.go" "$ROOT_DIR/core/gen/libcore_grpc.pb.go"; do
+      if [[ -f "$generated" ]]; then
+        chown "$BUILD_USER:$(id -gn "$BUILD_USER")" "$generated"
+      fi
+    done
+    log "Building as $BUILD_USER so the CMake and Go caches remain reusable"
+    runuser -u "$BUILD_USER" -- env \
+      BUILD_DIR="$BUILD_DIR" CMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+      CORE_PATH="$CORE_PATH" CORE_GO_TAGS="$CORE_GO_TAGS" \
+      BUILD_JOBS="${BUILD_JOBS:-}" BUILD_ONLY=1 \
+      bash "$ROOT_DIR/script/install_linux_build.sh" --build-only
+    if [[ "$BUILD_ONLY" == "1" ]]; then exit 0; fi
+    SKIP_BUILD=1
+    if [[ -z "$CORE_PATH" ]]; then CORE_PATH="$BUILD_DIR/ThroneCore"; fi
+  fi
+fi
 
 if [[ "$SKIP_BUILD" != "1" ]]; then
+  need_cmd cmake
   need_cmd go
 fi
 
 if [[ "$SKIP_BUILD" != "1" ]]; then
-  if command -v ninja >/dev/null 2>&1; then
+  if [[ -f "$BUILD_DIR/CMakeCache.txt" ]]; then
+    CMAKE_GENERATOR="$(sed -n 's/^CMAKE_GENERATOR:INTERNAL=//p' "$BUILD_DIR/CMakeCache.txt" | head -n 1)"
+    CACHED_BUILD_TYPE="$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' "$BUILD_DIR/CMakeCache.txt" | head -n 1)"
+    CACHED_SOURCE="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$BUILD_DIR/CMakeCache.txt" | head -n 1)"
+    [[ "$CACHED_SOURCE" == "$ROOT_DIR" ]] || die "Build dir belongs to another source tree: $BUILD_DIR"
+  elif command -v ninja >/dev/null 2>&1; then
     CMAKE_GENERATOR="Ninja"
   else
     CMAKE_GENERATOR="Unix Makefiles"
   fi
 
-  log "[1/2] Configuring CMake (${CMAKE_BUILD_TYPE}, generator: ${CMAKE_GENERATOR})"
-  cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -G "$CMAKE_GENERATOR" -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE"
+  if [[ ! -f "$BUILD_DIR/CMakeCache.txt" || "$CACHED_BUILD_TYPE" != "$CMAKE_BUILD_TYPE" ]]; then
+    log "[1/2] Configuring CMake (${CMAKE_BUILD_TYPE}, generator: ${CMAKE_GENERATOR})"
+    cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -G "$CMAKE_GENERATOR" -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE"
+  else
+    log "[1/2] Reusing CMake configuration in $BUILD_DIR"
+  fi
 
-  BUILD_JOBS="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+  BUILD_JOBS="${BUILD_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
   export CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS"
-  log "[2/2] Building Waterdisco with nproc=${BUILD_JOBS} jobs (progress below)"
-  cmake --build "$BUILD_DIR" --target Throne --parallel "$BUILD_JOBS" --verbose
+  log "[2/2] Building Waterdisco with ${BUILD_JOBS} jobs (progress below)"
+  cmake --build "$BUILD_DIR" --target Throne --parallel "$BUILD_JOBS"
 
   if [[ -z "$CORE_PATH" ]]; then
     log "Building ThroneCore from core"
@@ -136,6 +175,18 @@ fi
 [[ -n "$CORE_PATH" ]] || die "ThroneCore not found. Pass explicit path: --core /path/to/ThroneCore"
 [[ -x "$CORE_PATH" ]] || die "ThroneCore is missing or not executable: $CORE_PATH"
 [[ -f "$ICON_SRC" ]] || die "Icon not found: $ICON_SRC"
+
+if [[ "$BUILD_ONLY" == "1" ]]; then
+  log "Build artifacts are ready in $BUILD_DIR"
+  exit 0
+fi
+
+if [[ "$EUID" -ne 0 ]]; then
+  need_cmd sudo
+  log "Installing with elevated privileges"
+  exec sudo env BUILD_DIR="$BUILD_DIR" INSTALL_DIR="$INSTALL_DIR" CORE_PATH="$CORE_PATH" \
+    SKIP_BUILD=1 bash "$ROOT_DIR/script/install_linux_build.sh" --skip-build
+fi
 
 STAGE_DIR="$(mktemp -d)"
 trap 'rm -rf "$STAGE_DIR"' EXIT
