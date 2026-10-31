@@ -8,7 +8,7 @@
 namespace Configs
 {
 
-    inline QStringList vmessSecurity = {"auto", "none", "zero", "aes-128-gcm", "chacha20-poly1305"};
+    inline QStringList vmessSecurity = {"auto", "none", "zero", "aes-128-gcm", "chacha20-poly1305", "aes-128-cfb"};
 
     class vmess : public outbound
     {
@@ -61,5 +61,7 @@ namespace Configs
 
         QString DisplayType() override;
         SecurityInfo GetSecurity() override;
+
+        void Validate(Validation::Issues &issues) override;
     };
 }

@@ -3,14 +3,17 @@
 #include "Database.h"
 #include "include/database/entities/RouteProfile.h"
 #include <3rdparty/SQLiteCpp/include/SQLiteCpp.h>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <map>
+#include <optional>
 #include <QString>
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QMutex>
+#include <QSet>
 
 namespace Configs {
     class RoutesRepo {
@@ -18,6 +21,7 @@ namespace Configs {
         Database& db;
         mutable std::mutex mutex;
         mutable std::map<int, std::weak_ptr<RouteProfile>> identityMap;
+        std::atomic<quint64> revision{0};
 
         QJsonObject routeRuleToJson(const RouteRule* rule) const;
         
@@ -51,6 +55,10 @@ namespace Configs {
 
         int NewRouteProfileID() const;
 
+        // Points every group override at the global profile again, stops a deleted profile's subscription from
+        // importing, and moves current_route_id off a deleted id.
+        void forgetDeleted(const QSet<int>& deleted, const QSet<int>& owners);
+
     public:
         explicit RoutesRepo(Database& database);
         
@@ -60,17 +68,32 @@ namespace Configs {
         bool AddRouteProfile(std::shared_ptr<RouteProfile>& routeProfile);
         
         std::shared_ptr<RouteProfile> GetRouteProfile(int id) const;
-        
+
+        // Without loading the rules; nullopt when the profile follows the global DNS settings or does not exist.
+        std::optional<RouteDns> GetCustomDns(int id) const;
+
+        // Without loading it.
+        bool HasRouteProfile(int id) const;
+
+        // The routing profiles group gid's subscription imports into (source_gid), lowest id first.
+        QList<int> OwnedBy(int gid) const;
+
+        // Every delete resets what pointed at the profile; see forgetDeleted.
         void DeleteRouteProfile(int id);
-        
-        // Replaces the whole set.
-        void UpdateRouteProfiles(const QList<std::shared_ptr<RouteProfile>>& routeProfiles);
-        
+
+        void DeleteRouteProfiles(const QList<int>& ids);
+
+        // Saves the list and deletes removedIds; a profile created elsewhere meanwhile is left alone.
+        void UpdateRouteProfiles(const QList<std::shared_ptr<RouteProfile>>& routeProfiles, const QList<int>& removedIds);
+
         QList<int> GetAllRouteProfileIds() const;
 
         QList<std::shared_ptr<RouteProfile>> GetAllRouteProfiles() const;
         
         // No-op unless id >= 0.
         bool Save(const std::shared_ptr<RouteProfile>& routeProfile);
+
+        // Any thread; moves with every write.
+        quint64 Revision() const { return revision.load(); }
     };
 }

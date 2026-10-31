@@ -5,7 +5,9 @@
 #include <QMutex>
 #include "include/global/HTTPRequestHelper.hpp"
 
-// Declaration order is descending urgency; only the highest occupied level is ever rendered.
+namespace libcore { struct SpeedTestResult; }
+
+// Declaration order is descending urgency; only one panel of the highest occupied level is ever rendered.
 enum class DataViewPriority { Critical, High, Medium, Low };
 
 enum class DataViewItem { Download, SpeedTest, LatencyTest, AutoSelector, VpnEndpoint, PendingRestart, Scanner };
@@ -61,12 +63,19 @@ public:
         int found = 0;
     };
 
+    // The view fits two lines beside the top bar's checkboxes; whatever a panel cannot fit goes to the tool tip.
+    struct Content {
+        QString html;
+        QString toolTip;
+    };
+
     static constexpr auto RestartActionUrl = "throne-action:restart-proxy";
     static constexpr auto DismissRestartActionUrl = "throne-action:dismiss-restart";
 
     void setDownloadReport(const DownloadProgressReport &report, bool show);
 
     void seedSpeedTest(int totalProfiles);
+    void setSpeedtestProgress(const QString &profileName, const libcore::SpeedTestResult &result);
 
     void setRankedSpeedtestProgress(const QString &stage, const QString &profileName,
                                     int tested, int skipped, int totalProfiles);
@@ -77,11 +86,8 @@ public:
 
     void setVpnEndpointStatus(const QString &summary, const QString &detail, bool problem);
 
-    void addPendingRestartReason(const QString &reason);
-
-    void clearPendingRestart();
-
-    bool hasPendingRestart() const;
+    // An empty list hides the panel.
+    void setPendingRestartReasons(const QStringList &reasons);
 
     void setScannerPanel(const QList<ScannerPanelItem> &items);
 
@@ -89,7 +95,7 @@ public:
 
     void addTestProgress(int count = 1);
 
-    QString buildHtml();
+    Content build();
 
 private:
     static QString getProgressBar(long long current, long long total);
@@ -97,12 +103,12 @@ private:
     // Assume mu_ is held.
     [[nodiscard]] bool itemVisible(DataViewItem item) const;
 
-    QString itemHtml(DataViewItem item, bool shared);
+    Content itemContent(DataViewItem item);
 
-    // The *SectionHtml helpers assume buildHtml already holds mu_.
+    // The *Section helpers assume build already holds mu_.
     QString downloadSectionHtml();
 
-    QString speedtestSectionHtml();
+    Content speedtestSection();
 
     QString latencyTestSectionHtml();
 
@@ -110,11 +116,11 @@ private:
 
     QString vpnEndpointSectionHtml();
 
-    QString pendingRestartSectionHtml(bool compact);
+    Content pendingRestartSection();
 
-    QString scannerSectionHtml(bool compact);
+    Content scannerSection();
 
-    // Pool threads seed panels while buildHtml reads them.
+    // Pool threads seed panels while build reads them.
     mutable QMutex mu_;
 
     DownloadPanelState download_ = {};

@@ -1,5 +1,8 @@
 #include "include/ui/mainwindow.h"
 
+#include "include/engine/services/GroupService.h"
+#include "include/ui/utils/ProfilesTableFilterHeader.h"
+
 #include <QAbstractItemModel>
 #include <QAbstractItemView>
 #include <QListWidget>
@@ -14,7 +17,7 @@
 #include "include/global/Utils.hpp"
 #include "include/ui/group/dialog_edit_group.h"
 #include "include/ui/mainWindow/MainWindowInternal.h"
-#include "include/ui/mainWindow/TestRunner.h"
+#include "include/engine/tests/TestRunner.h"
 #include "include/ui/stats/dialog_endpoint_details.h"
 
 namespace {
@@ -113,7 +116,7 @@ void MainWindow::delete_group(int gid) {
         QMessageBox::StandardButton::Yes) {
         return;
     }
-    if (running != nullptr && running->gid == gid) profile_stop(false, true, false);
+    if (const auto running = runningSnapshot(); running != nullptr && running->gid == gid) profile_stop(false, true, false);
     Configs::dataManager->groupsRepo->DeleteGroup(gid);
     MW_dialog_message(MwMessage::GroupsChanged, {});
 }
@@ -214,4 +217,14 @@ void MainWindow::refresh_groups() {
     }
     rebuildGroupSidebar();
     refresh_proxy_list({}, true);
+}
+
+void MainWindow::delete_group(int gid, const QString &title) {
+    // Checked before the stop, so a refused delete leaves the running profile alone.
+    if (const auto refusal = Engine::GroupService::CheckDelete(gid)) {
+        MessageBoxWarning(title, GroupDeleteRefusalText(*refusal));
+        return;
+    }
+    if (const auto running = runningSnapshot(); running != nullptr && running->gid == gid) profile_stop(false, true, false);
+    if (const auto refusal = Engine::GroupService::Delete(gid)) MessageBoxWarning(title, GroupDeleteRefusalText(*refusal));
 }

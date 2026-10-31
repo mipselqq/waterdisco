@@ -2,6 +2,13 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN">
 <context>
+    <name>CommandPalette</name>
+    <message>
+        <source>Settings in Advanced mode</source>
+        <translation>高级模式中的设置</translation>
+    </message>
+</context>
+<context>
     <name>ConnectionsFilterHeader</name>
     <message>
         <location filename="Throne-1.3.1/include/ui/utils/ConnectionsFilterHeader.h" line="134"/>
@@ -202,6 +209,61 @@ Outbound: %4</source>
         <location filename="Throne-1.3.1/src/ui/setting/DiagnosticsTab.cpp" line="120"/>
         <source>Recording… %1 left</source>
         <translation>记录中… 剩余 %1</translation>
+    </message>
+</context>
+<context>
+    <name>DialogAbout</name>
+    <message>
+        <source>About Throne</source>
+        <translation>关于 Throne</translation>
+    </message>
+    <message>
+        <source>Version:</source>
+        <translation>版本：</translation>
+    </message>
+    <message>
+        <source>Open-source and cross platform Desktop Proxy management utility developed as a successor to Nekoray.</source>
+        <translation>开源、跨平台的桌面代理管理工具，作为 Nekoray 的继任者开发。</translation>
+    </message>
+    <message>
+        <source>Support Throne</source>
+        <translation>支持 Throne</translation>
+    </message>
+    <message>
+        <source>Unknown</source>
+        <translation>未知</translation>
+    </message>
+</context>
+<context>
+    <name>DialogUpdate</name>
+    <message>
+        <source>Update (Pre-release)</source>
+        <translation>更新（预发布）</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <source>Throne %1 is available, you are using %2.</source>
+        <translation>Throne %1 已发布，当前版本为 %2。</translation>
+    </message>
+    <message>
+        <source>Release notes are unavailable.</source>
+        <translation>无法获取更新日志。</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <comment>button</comment>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <source>Open in browser</source>
+        <translation>在浏览器中打开</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>关闭</translation>
     </message>
 </context>
 <context>
@@ -1321,6 +1383,58 @@ Throne will restart to complete the restore.</source>
         <source>Backup restored successfully. Throne will now restart for the changes to take effect.</source>
         <translation>备份成功恢复。 Throne 现在将要重启以使得更改生效。</translation>
     </message>
+    <message>
+        <source>A geo asset download is already running.</source>
+        <translation>地理资源下载已在进行中。</translation>
+    </message>
+    <message>
+        <source>The backup file is damaged or incomplete.</source>
+        <translation>备份文件已损坏或不完整。</translation>
+    </message>
+    <message>
+        <source>There is nothing to back up</source>
+        <translation>没有可备份的内容</translation>
+    </message>
+    <message>
+        <source>A subscription update is running; try again when it finishes.</source>
+        <translation>正在更新订阅；请在完成后重试。</translation>
+    </message>
+    <message>
+        <source>The backup&apos;s database is damaged: %1</source>
+        <translation>备份中的数据库已损坏：%1</translation>
+    </message>
+    <message>
+        <source>Trust System Certificates in Xray</source>
+        <translation>Xray 信任系统证书</translation>
+    </message>
+    <message>
+        <source>Xray verifies servers only against its built-in root certificates. Turn this on to also trust the certificates installed in the system, such as a company or self-signed root. A profile or Xray config that sets useSystemCA itself keeps its own value.</source>
+        <translation>Xray 仅使用内置根证书验证服务器。开启后还会信任系统中安装的证书，例如公司或自签名根证书。自行设置了 useSystemCA 的配置文件或 Xray 配置保留其自身的值。</translation>
+    </message>
+    <message>
+        <source>Interface</source>
+        <translation>界面</translation>
+    </message>
+    <message>
+        <source>Simple hides the advanced options. They keep their values and still apply.</source>
+        <translation>简洁模式会隐藏高级选项，它们保留原值并继续生效。</translation>
+    </message>
+    <message>
+        <source>Simple</source>
+        <translation>简洁</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>高级</translation>
+    </message>
+    <message>
+        <source>Allow other devices to connect</source>
+        <translation>允许其他设备连接</translation>
+    </message>
+    <message>
+        <source>Lets other devices on your network use this DNS server, for example a router that sends its DNS through this computer. Anyone who can reach this port can then resolve names through your DNS settings.</source>
+        <translation>允许网络中的其他设备使用此 DNS 服务器，例如通过本机转发 DNS 的路由器。任何能访问此端口的人都可以通过你的 DNS 设置解析域名。</translation>
+    </message>
 </context>
 <context>
     <name>DialogEditGroup</name>
@@ -1415,6 +1529,34 @@ Throne will restart to complete the restore.</source>
         <location filename="Throne-1.3.1/src/ui/group/dialog_edit_group.cpp" line="219"/>
         <source>Please input URL</source>
         <translation>请输入 URL</translation>
+    </message>
+    <message>
+        <source>Default (%1)</source>
+        <translation>默认（%1）</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>默认</translation>
+    </message>
+    <message>
+        <source>%1 (from this subscription)</source>
+        <translation>%1（来自此订阅）</translation>
+    </message>
+    <message>
+        <source>Routing Profile</source>
+        <translation>路由配置档</translation>
+    </message>
+    <message>
+        <source>Use the subscription&apos;s routing profile</source>
+        <translation>使用订阅提供的路由配置档</translation>
+    </message>
+    <message>
+        <source>The routing profile this group&apos;s profiles connect with. Default follows the routing profile chosen in the Routing menu.</source>
+        <translation>此组的配置档连接时使用的路由配置档。“默认”跟随路由菜单中选择的路由配置档。</translation>
+    </message>
+    <message>
+        <source>Each update saves the routing profile the subscription provides (Happ format) as this group&apos;s own routing profile. DNS settings from the subscription are never used.</source>
+        <translation>每次更新时，将订阅提供的路由配置档（Happ 格式）保存为此组自己的路由配置档。从不使用订阅中的 DNS 设置。</translation>
     </message>
 </context>
 <context>
@@ -2540,6 +2682,162 @@ Throne will restart to complete the restore.</source>
         <source>XHTTP maxConnections cannot be specified together with maxConcurrency.</source>
         <translation>XHTTP 中 maxConnections 不能与 maxConcurrency 同时指定。</translation>
     </message>
+    <message>
+        <source>This profile was deleted while you were editing it.</source>
+        <translation>此配置在您编辑时已被删除。</translation>
+    </message>
+    <message>
+        <source>Storage</source>
+        <translation>存储</translation>
+    </message>
+    <message>
+        <source>Tuning</source>
+        <translation>调优</translation>
+    </message>
+    <message>
+        <source>Service</source>
+        <translation>服务</translation>
+    </message>
+    <message>
+        <source>Folder</source>
+        <translation>文件夹</translation>
+    </message>
+    <message>
+        <source>Client ID</source>
+        <translation>客户端 ID</translation>
+    </message>
+    <message>
+        <source>Client Secret</source>
+        <translation>客户端密钥</translation>
+    </message>
+    <message>
+        <source>Refresh Token</source>
+        <translation>刷新令牌</translation>
+    </message>
+    <message>
+        <source>Secrets</source>
+        <translation>密钥</translation>
+    </message>
+    <message>
+        <source>Template</source>
+        <translation>模板</translation>
+    </message>
+    <message>
+        <source>Front Address</source>
+        <translation>前置地址</translation>
+    </message>
+    <message>
+        <source>Front Port</source>
+        <translation>前置端口</translation>
+    </message>
+    <message>
+        <source>Segment Bytes</source>
+        <translation>分段字节数</translation>
+    </message>
+    <message>
+        <source>Flush Interval</source>
+        <translation>刷新间隔</translation>
+    </message>
+    <message>
+        <source>Poll Interval</source>
+        <translation>轮询间隔</translation>
+    </message>
+    <message>
+        <source>Max Poll Interval</source>
+        <translation>最大轮询间隔</translation>
+    </message>
+    <message>
+        <source>Eager Window</source>
+        <translation>积极轮询窗口</translation>
+    </message>
+    <message>
+        <source>Hole Timeout</source>
+        <translation>缺段超时</translation>
+    </message>
+    <message>
+        <source>Session TTL</source>
+        <translation>会话存活时间</translation>
+    </message>
+    <message>
+        <source>Concurrency</source>
+        <translation>并发数</translation>
+    </message>
+    <message>
+        <source>Google Drive folder ID</source>
+        <translation>Google Drive 文件夹 ID</translation>
+    </message>
+    <message>
+        <source>A directory path</source>
+        <translation>目录路径</translation>
+    </message>
+    <message>
+        <source>Where both ends exchange the stream: google-drive uses a Google Drive folder, template any HTTP storage API described by Template, local a folder on this machine.</source>
+        <translation>双方交换数据流的位置：google-drive 使用 Google Drive 文件夹，template 使用模板所描述的任意 HTTP 存储 API，local 使用本机上的文件夹。</translation>
+    </message>
+    <message>
+        <source>google-drive: the folder ID. local: a directory path. template: read as {folder}.</source>
+        <translation>google-drive：文件夹 ID。local：目录路径。template：作为 {folder} 读取。</translation>
+    </message>
+    <message>
+        <source>The Google Drive OAuth client ID.</source>
+        <translation>Google Drive 的 OAuth 客户端 ID。</translation>
+    </message>
+    <message>
+        <source>The Google Drive OAuth client secret.</source>
+        <translation>Google Drive 的 OAuth 客户端密钥。</translation>
+    </message>
+    <message>
+        <source>The OAuth refresh token for the Google account that owns the folder.</source>
+        <translation>拥有该文件夹的 Google 账号的 OAuth 刷新令牌。</translation>
+    </message>
+    <message>
+        <source>Values the template reads as {secret0}, {secret1}, …, separated by commas.</source>
+        <translation>模板以 {secret0}、{secret1}… 读取的值，用逗号分隔。</translation>
+    </message>
+    <message>
+        <source>The storage API&apos;s auth, put, get, list and delete operations, as JSON.</source>
+        <translation>存储 API 的 auth、put、get、list 和 delete 操作，以 JSON 表示。</translation>
+    </message>
+    <message>
+        <source>Optional domain front: the storage API is dialed at this address while TLS still names the API host.</source>
+        <translation>可选的域前置：通过此地址连接存储 API，而 TLS 仍使用 API 的主机名。</translation>
+    </message>
+    <message>
+        <source>Port of the front address. Default: 443.</source>
+        <translation>前置地址的端口。默认：443。</translation>
+    </message>
+    <message>
+        <source>Largest upload per file, in bytes. Default: 524288; Xray caps it at 16 MiB.</source>
+        <translation>每个文件的最大上传量，单位为字节。默认：524288；Xray 将其上限设为 16 MiB。</translation>
+    </message>
+    <message>
+        <source>How long writes are gathered before an upload, in milliseconds. Default: 20.</source>
+        <translation>上传前收集写入数据的时长，单位为毫秒。默认：20。</translation>
+    </message>
+    <message>
+        <source>Shortest wait between checks for new files, in milliseconds. Default: 50.</source>
+        <translation>检查新文件的最短间隔，单位为毫秒。默认：50。</translation>
+    </message>
+    <message>
+        <source>Longest wait between checks while the stream is idle, in milliseconds. Default: 500.</source>
+        <translation>数据流空闲时检查的最长间隔，单位为毫秒。默认：500。</translation>
+    </message>
+    <message>
+        <source>How long after traffic polling stays at the shortest wait, in milliseconds. Default: 2000.</source>
+        <translation>有流量后保持最短轮询间隔的时长，单位为毫秒。默认：2000。</translation>
+    </message>
+    <message>
+        <source>How long a missing segment is waited for before the stream fails, in milliseconds. Default: 30000.</source>
+        <translation>在数据流失败前等待缺失分段的时长，单位为毫秒。默认：30000。</translation>
+    </message>
+    <message>
+        <source>How long an idle session lives before its files are cleaned up, in seconds. Default: 300.</source>
+        <translation>空闲会话在其文件被清理前的存活时长，单位为秒。默认：300。</translation>
+    </message>
+    <message>
+        <source>Parallel storage requests per stream. Default: 8; Xray caps it at 64.</source>
+        <translation>每个数据流的并行存储请求数。默认：8；Xray 将其上限设为 64。</translation>
+    </message>
 </context>
 <context>
     <name>DialogEndpointDetails</name>
@@ -2671,6 +2969,14 @@ Throne will restart to complete the restore.</source>
         <location filename="Throne-1.3.1/include/ui/setting/dialog_integration.ui" line="96"/>
         <source>Shortcuts</source>
         <translation>快捷键</translation>
+    </message>
+    <message>
+        <source>Allow management from the local network</source>
+        <translation>允许从局域网进行管理</translation>
+    </message>
+    <message>
+        <source>Lets devices on the local network import, delete, change settings, back up and restore through the Throne API. This device can always do so.</source>
+        <translation>允许局域网中的设备通过 Throne API 导入、删除、更改设置、备份和恢复。本设备始终可以执行这些操作。</translation>
     </message>
 </context>
 <context>
@@ -3502,6 +3808,18 @@ Use a number followed by ns, us, ms, s, m, h or d.</source>
         <translation>更新了 %1, 失败了 %2:
 %3</translation>
     </message>
+    <message>
+        <source>WARP has no config yet: click Generate Warp Config.</source>
+        <translation>WARP 尚无配置：请点击“生成 Warp 配置”。</translation>
+    </message>
+    <message>
+        <source>%1 (updated by subscription &quot;%2&quot;)</source>
+        <translation>%1（由订阅“%2”更新）</translation>
+    </message>
+    <message>
+        <source>Every update of the subscription &quot;%1&quot; overwrites its rules. Deleting it stops the import.</source>
+        <translation>订阅“%1”的每次更新都会覆盖其规则。删除它将停止导入。</translation>
+    </message>
 </context>
 <context>
     <name>DialogOtpManager</name>
@@ -4069,12 +4387,6 @@ Use a number followed by ns, us, ms, s, m, h or d.</source>
         <translation>恢复默认范围</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/include/ui/setting/dialog_vpn_settings.ui" line="264"/>
-        <location filename="Throne-1.3.1/src/ui/setting/dialog_vpn_settings.cpp" line="146"/>
-        <source>Troubleshooting</source>
-        <translation>排除故障</translation>
-    </message>
-    <message>
         <location filename="Throne-1.3.1/src/ui/setting/dialog_vpn_settings.cpp" line="92"/>
         <location filename="Throne-1.3.1/src/ui/setting/dialog_vpn_settings.cpp" line="96"/>
         <source>Invalid Tun Address</source>
@@ -4107,25 +4419,17 @@ Use a number followed by ns, us, ms, s, m, h or d.</source>
         <translation>&quot;%1&quot; 涵盖一切地址，这将导致 Tun 无法路由任何流量。</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/src/ui/setting/dialog_vpn_settings.cpp" line="147"/>
-        <source>If you have trouble starting VPN, you can force reset Core process here.
-
-If still not working, see documentation for more information.
-https://matsuridayo.github.io/n-configuration/#vpn-tun</source>
-        <translation>如果您在启动 Tun 时有问题，可以在这里强制重置 Core 进程。
-
-如果仍无法工作，请查阅文档以获取更多信息。
-https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/src/ui/setting/dialog_vpn_settings.cpp" line="153"/>
-        <source>Reset</source>
-        <translation>重置</translation>
-    </message>
-    <message>
         <location filename="Throne-1.3.1/src/ui/setting/dialog_vpn_settings.cpp" line="154"/>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+    <message>
+        <source>Restart Core</source>
+        <translation>重启核心</translation>
+    </message>
+    <message>
+        <source>Stops the running profile and restarts the core. Try this when Tun fails to start, then start the profile again.</source>
+        <translation>停止正在运行的配置并重启核心。Tun 无法启动时可尝试此操作，然后重新启动配置。</translation>
     </message>
 </context>
 <context>
@@ -4541,11 +4845,6 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>留空表示使用该分组的每个配置档</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/include/ui/profile/edit_autoselector.ui" line="47"/>
-        <source>Optional regular expression. Only profiles whose name matches are considered — useful to pick out one country or provider.</source>
-        <translation>可选的正则表达式。仅名称匹配的配置档才会被考虑 - 对于筛选某个国家或提供方很有用。</translation>
-    </message>
-    <message>
         <location filename="Throne-1.3.1/include/ui/profile/edit_autoselector.ui" line="54"/>
         <source>Share traffic between the best profiles</source>
         <translation>最优配置档间分享流量</translation>
@@ -4590,16 +4889,6 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <location filename="Throne-1.3.1/include/ui/profile/edit_autoselector.ui" line="151"/>
         <source>Only countries</source>
         <translation>仅指定国家</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/include/ui/profile/edit_autoselector.ui" line="161"/>
-        <source>e.g. DE,NL,FR</source>
-        <translation>如 DE,NL,FR</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/include/ui/profile/edit_autoselector.ui" line="164"/>
-        <source>Comma-separated country codes, empty means any. Uses the country found by the IP test, so profiles that were never IP-tested are skipped while this is set.</source>
-        <translation>逗号间隔的国家代码，空白表示任何国家。使用由 IP 测试找到的国家，因此在设定这个期间，从未进行 IP 测试的配置档会被跳过。</translation>
     </message>
     <message>
         <location filename="Throne-1.3.1/include/ui/profile/edit_autoselector.ui" line="171"/>
@@ -4934,9 +5223,24 @@ https://matsuridayo.github.io/n-configuration/#vpn-tun</translation>
         <translation>%1 有一项将被重复使用的近期测试结果。</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/src/ui/profile/edit_autoselector.cpp" line="292"/>
-        <source>The rest will be measured before the selector starts.</source>
-        <translation>其余的在选择器开始前将被测量。</translation>
+        <source>Optional regular expression, matched anywhere in the profile name and ignoring case. Only profiles whose name matches are used.
+Pick several: germany|nl
+Leave some out: ^(?!.*(germany|🇩🇪)).*$ uses every name that contains neither.</source>
+        <translation>可选的正则表达式，在配置名称的任意位置匹配，不区分大小写。仅使用名称匹配的配置。
+选择多个：germany|nl
+排除部分：^(?!.*(germany|🇩🇪)).*$ 会使用所有两者都不包含的名称。</translation>
+    </message>
+    <message>
+        <source>e.g. DE,NL,FR or !RU</source>
+        <translation>如 DE,NL,FR 或 !RU</translation>
+    </message>
+    <message>
+        <source>Comma-separated country codes, empty means any. Put ! before a code to exclude that country instead, e.g. !RU uses every country but Russia. Uses the country found by the IP test, so profiles that were never IP-tested are skipped while this is set.</source>
+        <translation>逗号间隔的国家代码，空白表示任何国家。在代码前加 ! 则排除该国家，例如 !RU 使用除俄罗斯以外的所有国家。使用由 IP 测试找到的国家，因此在设定这个期间，从未进行 IP 测试的配置档会被跳过。</translation>
+    </message>
+    <message>
+        <source>The rest will be measured as the selector starts: it runs as soon as enough profiles work, and switches to the full ranking once all are measured.</source>
+        <translation>其余的将在选择器启动时测量：一旦有足够的配置档可用，选择器就会运行，并在全部测量完成后切换到完整排名。</translation>
     </message>
 </context>
 <context>
@@ -8026,6 +8330,77 @@ Improves hole-punching reliability. Requires IPv4.</source>
         <source>Remove %1?</source>
         <translation>删除 %1 吗?</translation>
     </message>
+    <message>
+        <source>This group was deleted while you were editing it.</source>
+        <translation>此分组在您编辑时已被删除。</translation>
+    </message>
+</context>
+<context>
+    <name>LiveChart</name>
+    <message>
+        <source>Down</source>
+        <translation>下载</translation>
+    </message>
+    <message>
+        <source>Up</source>
+        <translation>上传</translation>
+    </message>
+    <message>
+        <source>Waiting for traffic</source>
+        <translation>等待流量</translation>
+    </message>
+    <message>
+        <source>The graph fills in once a second while a profile is running.</source>
+        <translation>配置档运行时，图表每秒更新一次。</translation>
+    </message>
+    <message>
+        <source>All lines are hidden</source>
+        <translation>所有曲线均已隐藏</translation>
+    </message>
+    <message>
+        <source>Click an outbound or a direction in the legend to show it.</source>
+        <translation>点击图例中的出站或方向即可显示。</translation>
+    </message>
+    <message>
+        <source>Total</source>
+        <translation>合计</translation>
+    </message>
+    <message>
+        <source>peak of %1 s</source>
+        <translation>%1 秒内峰值</translation>
+    </message>
+    <message>
+        <source>Stopped</source>
+        <translation>已停止</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>未在运行</translation>
+    </message>
+    <message>
+        <source>Started %1</source>
+        <translation>已启动 %1</translation>
+    </message>
+    <message>
+        <source>Switched to %1</source>
+        <translation>已切换到 %1</translation>
+    </message>
+    <message>
+        <source>Smooth lines</source>
+        <translation>平滑曲线</translation>
+    </message>
+    <message>
+        <source>Profile events</source>
+        <translation>配置档事件</translation>
+    </message>
+    <message>
+        <source>Show all lines</source>
+        <translation>显示所有曲线</translation>
+    </message>
+    <message>
+        <source>Clear history</source>
+        <translation>清除历史</translation>
+    </message>
 </context>
 <context>
     <name>MainWindow</name>
@@ -8235,9 +8610,8 @@ Improves hole-punching reliability. Requires IPv4.</source>
         <translation>清除本组测试结果</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/include/ui/mainwindow.ui" line="926"/>
-        <source>Export Sing-box config</source>
-        <translation>导出 Sing-box 配置</translation>
+        <source>Export config</source>
+        <translation>导出配置</translation>
     </message>
     <message>
         <location filename="Throne-1.3.1/include/ui/mainwindow.ui" line="934"/>
@@ -8469,11 +8843,6 @@ Improves hole-punching reliability. Requires IPv4.</source>
         <location filename="Throne-1.3.1/include/ui/mainwindow.ui" line="1296"/>
         <source>Refresh Column Widths</source>
         <translation>刷新列宽</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/include/ui/mainwindow.ui" line="1301"/>
-        <source>Export Xray config</source>
-        <translation>导出 Xray 配置</translation>
     </message>
     <message>
         <location filename="Throne-1.3.1/include/ui/mainwindow.ui" line="1306"/>
@@ -9011,6 +9380,22 @@ Error: %1</source>
         <translation>取消</translation>
     </message>
     <message>
+        <source>Leftover Tun adapter</source>
+        <translation>残留的 Tun 适配器</translation>
+    </message>
+    <message>
+        <source>Windows was still holding the Tun adapter from an earlier session that did not close cleanly. Starting the profile again usually works; if it keeps failing, restart Windows.
+
+Error: %1</source>
+        <translation>Windows 仍占用着上一次未正常关闭的会话留下的 Tun 适配器。通常再次启动该配置档即可；如果仍然失败，请重启 Windows。
+
+错误: %1</translation>
+    </message>
+    <message>
+        <source>Start Again</source>
+        <translation>再次启动</translation>
+    </message>
+    <message>
         <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_profile_lifecycle.cpp" line="321"/>
         <source>[Auto selector] Running the best %1 of %2 ranked profiles.</source>
         <translation>[自动选择器] 正在运行排名最优的 %1 / %2 个配置档。</translation>
@@ -9124,22 +9509,12 @@ Error: %1</source>
         <translation>复制了 %1 项</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_profiles.cpp" line="193"/>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_setup.cpp" line="1028"/>
-        <source>Config copied</source>
-        <translation>配置已复制</translation>
+        <source>Copy</source>
+        <translation>复制</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_profiles.cpp" line="194"/>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_setup.cpp" line="1029"/>
-        <source>Copy core config</source>
-        <translation>复制核心配置</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_profiles.cpp" line="195"/>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_setup.cpp" line="1030"/>
-        <source>Copy test config</source>
-        <translation>复制测试配置</translation>
+        <source>Copied</source>
+        <translation>已复制</translation>
     </message>
     <message>
         <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_profiles.cpp" line="305"/>
@@ -9538,6 +9913,78 @@ Error: %1</source>
         <location filename="Throne-1.3.1/src/ui/mainWindow/TestRunner.cpp" line="645"/>
         <source>[%1] speed test error: %2</source>
         <translation>[%1] 速度测试错误：%2</translation>
+    </message>
+    <message>
+        <source>route</source>
+        <translation>路由</translation>
+    </message>
+    <message>
+        <source>aux</source>
+        <translation>辅助</translation>
+    </message>
+    <message>
+        <source>Traffic statistics are disabled</source>
+        <translation>流量统计已禁用</translation>
+    </message>
+    <message>
+        <source>Untick “Disable Traffic Stats” in Basic Settings → Miscellaneous to record speeds again.</source>
+        <translation>在“基本设置 → 杂项”中取消勾选“禁用流量统计”即可重新记录速度。</translation>
+    </message>
+    <message>
+        <source>Open Traffic Statistics…</source>
+        <translation>打开流量统计…</translation>
+    </message>
+    <message>
+        <source>This group was deleted while you were editing it.</source>
+        <translation>此分组在您编辑时已被删除。</translation>
+    </message>
+    <message>
+        <source>The Xray config &quot;%1&quot; needs &quot;%2&quot;, but the installed %3 does not contain it.</source>
+        <translation>Xray 配置“%1”需要“%2”，但已安装的 %3 中没有它。</translation>
+    </message>
+    <message>
+        <source>The Xray config &quot;%1&quot; needs geo data files that are not installed: %2. Download them under Basic Settings &gt; Miscellaneous &gt; Xray Geo Assets.</source>
+        <translation>Xray 配置“%1”需要未安装的地理数据文件：%2。请在“基本设置 &gt; 杂项 &gt; Xray 地理资源”中下载。</translation>
+    </message>
+    <message>
+        <source>Geo asset files are already being downloaded.</source>
+        <translation>地理资源文件正在下载中。</translation>
+    </message>
+    <message>
+        <source>Update is unavailable while a background Throne (PID %1) runs from this installation; stop it first.</source>
+        <translation>从此安装目录运行的后台 Throne（PID %1）仍在运行，无法更新；请先停止它。</translation>
+    </message>
+    <message>
+        <source>Kill switch is blocking traffic</source>
+        <translation>Kill Switch 正在阻断流量</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+    <message>
+        <source>Advanced Mode</source>
+        <translation>高级模式</translation>
+    </message>
+    <message>
+        <source>Show every option. Simple mode hides the advanced ones; they keep their values and still apply.</source>
+        <translation>显示所有选项。简洁模式会隐藏高级选项，但它们保留原值并继续生效。</translation>
+    </message>
+    <message>
+        <source>[Auto selector] %1 working profiles found; starting now while the remaining %2 are still being measured.</source>
+        <translation>[自动选择器] 已找到 %1 个可用配置档；现在启动，其余 %2 个仍在测量中。</translation>
+    </message>
+    <message>
+        <source>[Auto selector] Every profile is measured and the best ones changed — rebuilding with the full ranking.</source>
+        <translation>[自动选择器] 所有配置档均已测量，且最佳配置档有变化——按完整排名重新构建。</translation>
+    </message>
+    <message>
+        <source>The current routing profile is updated by the subscription &quot;%1&quot;.</source>
+        <translation>当前路由配置档由订阅“%1”更新。</translation>
+    </message>
+    <message>
+        <source>The group &quot;%1&quot; uses its own routing profile, so the running profile keeps it.</source>
+        <translation>组“%1”使用自己的路由配置档，因此正在运行的配置档保持不变。</translation>
     </message>
 </context>
 <context>
@@ -10613,25 +11060,6 @@ How to update?</source>
         <translation>无更新</translation>
     </message>
     <message>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_system.cpp" line="605"/>
-        <source>Update found: %1
-Release note:
-%2</source>
-        <translation>发现更新: %1
-更新日志:
-%2</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_system.cpp" line="610"/>
-        <source>Open in browser</source>
-        <translation>浏览器中打开</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_system.cpp" line="611"/>
-        <source>Close</source>
-        <translation>关闭</translation>
-    </message>
-    <message>
         <location filename="Throne-1.3.1/src/ui/mainWindow/mainwindow_system.cpp" line="632"/>
         <source>Update is ready, restart to install?</source>
         <translation>更新已准备好，重启进行安装吗？</translation>
@@ -11093,6 +11521,94 @@ Release note:
         <location filename="Throne-1.3.1/src/ui/utils/DataViewHtmlGenerator.cpp" line="153"/>
         <source>Ignore</source>
         <translation>忽略</translation>
+    </message>
+    <message>
+        <source>Proxy</source>
+        <translation>代理</translation>
+    </message>
+    <message>
+        <source>Other outbounds</source>
+        <translation>其他出站</translation>
+    </message>
+    <message>
+        <source>Download stalled: no data arrived for %1 seconds.</source>
+        <translation>下载停滞：%1 秒内未收到数据。</translation>
+    </message>
+    <message>
+        <source>Throne needs at least one group.</source>
+        <translation>Throne 至少需要一个分组。</translation>
+    </message>
+    <message>
+        <source>This group&apos;s subscription is being updated. Try again when it finishes.</source>
+        <translation>此分组的订阅正在更新。请在更新完成后重试。</translation>
+    </message>
+    <message>
+        <source>Close the editor of this group or of one of its profiles first.</source>
+        <translation>请先关闭此分组或其某个配置的编辑器。</translation>
+    </message>
+    <message>
+        <source>This group no longer exists.</source>
+        <translation>此分组已不存在。</translation>
+    </message>
+    <message>
+        <source>Changed: %1</source>
+        <translation>已更改：%1</translation>
+    </message>
+    <message>
+        <source>%1 was removed by the update and stays stopped: no single profile with the same name replaces it.</source>
+        <translation>%1 已在更新中被移除并保持停止：没有唯一的同名配置档可以替代它。</translation>
+    </message>
+    <message>
+        <source>%1 was replaced by the update; connecting to the profile with the same name.</source>
+        <translation>%1 已在更新中被替换；正在连接到同名配置档。</translation>
+    </message>
+    <message>
+        <source>the routing profile is not in the Happ format</source>
+        <translation>路由配置档不是 Happ 格式</translation>
+    </message>
+    <message>
+        <source>a raw routing profile is not accepted from a subscription</source>
+        <translation>不接受来自订阅的原始路由配置档</translation>
+    </message>
+    <message>
+        <source>unknown routing link action &quot;%1&quot;</source>
+        <translation>未知的路由链接操作“%1”</translation>
+    </message>
+    <message>
+        <source>the routing profile is not valid base64</source>
+        <translation>路由配置档不是有效的 base64</translation>
+    </message>
+    <message>
+        <source>the routing profile is not a JSON object</source>
+        <translation>路由配置档不是 JSON 对象</translation>
+    </message>
+    <message>
+        <source>[Routing] %1: the routing profile the subscription provides was ignored: %2</source>
+        <translation>[路由] %1：已忽略订阅提供的路由配置档：%2</translation>
+    </message>
+    <message>
+        <source>[Routing] %1: the routing profile the subscription provides was not applied, the routing profiles are open for editing.</source>
+        <translation>[路由] %1：未应用订阅提供的路由配置档，因为路由配置档正在编辑中。</translation>
+    </message>
+    <message>
+        <source>%1 entries, %2 skipped</source>
+        <translation>%1 条，跳过 %2 条</translation>
+    </message>
+    <message>
+        <source>%1 entries</source>
+        <translation>%1 条</translation>
+    </message>
+    <message>
+        <source>%1 routing</source>
+        <translation>%1 路由</translation>
+    </message>
+    <message>
+        <source>[Routing] %1: created the routing profile &quot;%2&quot; from the subscription (%3)</source>
+        <translation>[路由] %1：已从订阅创建路由配置档“%2”（%3）</translation>
+    </message>
+    <message>
+        <source>[Routing] %1: updated the routing profile &quot;%2&quot; from the subscription (%3)</source>
+        <translation>[路由] %1：已从订阅更新路由配置档“%2”（%3）</translation>
     </message>
 </context>
 <context>
@@ -11679,21 +12195,6 @@ Remove that endpoint from this routing profile as well?</source>
     </message>
 </context>
 <context>
-    <name>SpeedWidget</name>
-    <message>
-        <location filename="Throne-1.3.1/3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.cpp" line="186"/>
-        <location filename="Throne-1.3.1/3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.cpp" line="187"/>
-        <source>Proxy</source>
-        <translation>代理</translation>
-    </message>
-    <message>
-        <location filename="Throne-1.3.1/3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.cpp" line="189"/>
-        <location filename="Throne-1.3.1/3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.cpp" line="190"/>
-        <source>Direct</source>
-        <translation>直连</translation>
-    </message>
-</context>
-<context>
     <name>StartStopButton</name>
     <message>
         <location filename="Throne-1.3.1/src/ui/widget/StartStopButton.cpp" line="60"/>
@@ -11719,6 +12220,10 @@ Remove that endpoint from this routing profile as well?</source>
         <location filename="Throne-1.3.1/src/ui/widget/StartStopButton.cpp" line="64"/>
         <source>Stopping…</source>
         <translation>正在停止…</translation>
+    </message>
+    <message>
+        <source>Kill switch is blocking traffic</source>
+        <translation>Kill Switch 正在阻断流量</translation>
     </message>
 </context>
 <context>
@@ -11872,6 +12377,43 @@ Remove that endpoint from this routing profile as well?</source>
         <location filename="Throne-1.3.1/src/ui/widget/TrayProfileSelector.cpp" line="215"/>
         <source>Page %1/%2</source>
         <translation>页面 %1/%2</translation>
+    </message>
+</context>
+<context>
+    <name>Engine::CoreSupervisor</name>
+    <message>
+        <source>Throne could not open the local channel the core connects to (%1), so no profile can start.</source>
+        <translation>Throne 无法打开核心用于连接的本地通道（%1），因此无法启动任何配置档。</translation>
+    </message>
+    <message>
+        <source>Core unavailable</source>
+        <translation>核心不可用</translation>
+    </message>
+    <message>
+        <source>The core did not connect within %1 s, restarting it.</source>
+        <translation>核心未在 %1 秒内连接，正在重启。</translation>
+    </message>
+    <message>
+        <source>The core keeps exiting, so it is no longer restarted. Use Restart Core to try again.</source>
+        <translation>核心反复退出，已不再自动重启。请使用“重启核心”重试。</translation>
+    </message>
+</context>
+<context>
+    <name>GuiStartup</name>
+    <message>
+        <source>Throne is running in the background</source>
+        <translation>Throne 正在后台运行</translation>
+    </message>
+    <message>
+        <source>A background Throne (PID %1) is running on this computer (data directory: %2). Tun mode is unavailable here while it runs; stop it or use thronectl.</source>
+        <translation>此计算机上正在运行后台 Throne（PID %1，数据目录：%2）。它运行期间此处无法使用 Tun 模式；请停止它或使用 thronectl。</translation>
+    </message>
+</context>
+<context>
+    <name>Engine::ConnectionManager</name>
+    <message>
+        <source>A background Throne (PID %1) owns Tun on this computer; stop it or use thronectl.</source>
+        <translation>此计算机上的 Tun 由后台 Throne（PID %1）占用；请停止它或使用 thronectl。</translation>
     </message>
 </context>
 </TS>

@@ -7,8 +7,9 @@
 #include <QSet>
 
 #include "include/database/ProfilesRepo.h"
+#include "include/engine/EngineEvents.h"
 #include "include/global/Configs.hpp"
-#include "include/ui/mainwindow.h"
+#include "include/global/Logger.hpp"
 
 
 namespace Configs {
@@ -41,6 +42,8 @@ namespace Configs {
                 endpoint_json TEXT NOT NULL DEFAULT '{}',
                 sort_method INTEGER NOT NULL DEFAULT 0,
                 sort_descending INTEGER NOT NULL DEFAULT 0,
+                route_id INTEGER NOT NULL DEFAULT -1,
+                import_sub_route INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
             )
@@ -58,6 +61,10 @@ namespace Configs {
             db.exec("ALTER TABLE groups ADD COLUMN sort_method INTEGER NOT NULL DEFAULT 0");
         if (!groupsColumnExists("sort_descending"))
             db.exec("ALTER TABLE groups ADD COLUMN sort_descending INTEGER NOT NULL DEFAULT 0");
+        if (!groupsColumnExists("route_id"))
+            db.exec("ALTER TABLE groups ADD COLUMN route_id INTEGER NOT NULL DEFAULT -1");
+        if (!groupsColumnExists("import_sub_route"))
+            db.exec("ALTER TABLE groups ADD COLUMN import_sub_route INTEGER NOT NULL DEFAULT 0");
 
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS groups_order (
@@ -92,6 +99,8 @@ namespace Configs {
         json["endpoint"] = group->endpoint.ToJson();
         json["front_proxy_id"] = group->front_proxy_id;
         json["landing_proxy_id"] = group->landing_proxy_id;
+        json["route_id"] = group->route_id;
+        json["import_sub_route"] = group->import_sub_route;
         json["column_width"] = QListInt2QJsonArray(group->column_width);
         json["profiles"] = QListInt2QJsonArray(group->profiles);
         json["scroll_last_profile"] = group->scroll_last_profile;
@@ -123,6 +132,8 @@ namespace Configs {
         group->endpoint = EndpointSource::FromJson(json["endpoint"].toObject());
         group->front_proxy_id = json["front_proxy_id"].toInt();
         group->landing_proxy_id = json["landing_proxy_id"].toInt();
+        group->route_id = json["route_id"].toInt(-1);
+        group->import_sub_route = json["import_sub_route"].toBool();
         group->column_width = QJsonArray2QListInt(json["column_width"].toArray());
         group->profiles = QJsonArray2QListInt(json["profiles"].toArray());
         group->scroll_last_profile = json["scroll_last_profile"].toInt(-1);
@@ -156,8 +167,9 @@ namespace Configs {
             (id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
              front_proxy_id, landing_proxy_id,
              column_width_json, profiles_json, scroll_last_profile, test_sort_by, traffic_sort_by, test_items_to_show,
-             type_sort_by, sub_options_json, sub_metadata_json, endpoint_json, sort_method, sort_descending)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             type_sort_by, sub_options_json, sub_metadata_json, endpoint_json, sort_method, sort_descending,
+             route_id, import_sub_route)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 archive = excluded.archive, skip_auto_update = excluded.skip_auto_update,
                 auto_clear_unavailable = excluded.auto_clear_unavailable, name = excluded.name,
@@ -169,6 +181,7 @@ namespace Configs {
                 type_sort_by = excluded.type_sort_by, sub_options_json = excluded.sub_options_json,
                 sub_metadata_json = excluded.sub_metadata_json, endpoint_json = excluded.endpoint_json,
                 sort_method = excluded.sort_method, sort_descending = excluded.sort_descending,
+                route_id = excluded.route_id, import_sub_route = excluded.import_sub_route,
                 updated_at = strftime('%s', 'now')
         )",
             id,
@@ -192,7 +205,9 @@ namespace Configs {
             subMetadataJson.toStdString(),
             endpointJson.toStdString(),
             static_cast<int>(group->sort.method),
-            group->sort.descending ? 1 : 0
+            group->sort.descending ? 1 : 0,
+            group->route_id,
+            group->import_sub_route ? 1 : 0
         );
     }
 
@@ -201,7 +216,8 @@ namespace Configs {
             SELECT id, archive, skip_auto_update, auto_clear_unavailable, name, url, info, sub_last_update,
                    front_proxy_id, landing_proxy_id,
                    column_width_json, profiles_json, scroll_last_profile, test_sort_by, traffic_sort_by, test_items_to_show,
-                   type_sort_by, sub_options_json, sub_metadata_json, endpoint_json, sort_method, sort_descending
+                   type_sort_by, sub_options_json, sub_metadata_json, endpoint_json, sort_method, sort_descending,
+                   route_id, import_sub_route
             FROM groups WHERE id = ?
         )", id);
         if (!query || !query->executeStep()) {
@@ -255,6 +271,8 @@ namespace Configs {
         }
         json["sort_method"] = query->getColumn(20).getInt();
         json["sort_descending"] = query->getColumn(21).getInt() != 0;
+        json["route_id"] = query->getColumn(22).getInt();
+        json["import_sub_route"] = query->getColumn(23).getInt() != 0;
 
         auto group = groupFromJson(json);
         // Refreshes could map several identical servers onto one id, leaving it in the persisted list once per server (#1775).
@@ -294,6 +312,7 @@ namespace Configs {
             group->id,
             maxOrder + 1
         );
+        ++revision;
         return true;
     }
 
@@ -318,11 +337,31 @@ namespace Configs {
         return GetGroup(currentGroupId);
     }
 
-    void GroupsRepo::DeleteGroup(int id) {
-        QMutexLocker locker(&mutex);
-        memMap.erase(id);
-        db.exec("DELETE FROM groups_order WHERE group_id = ?", id);
-        db.exec("DELETE FROM groups WHERE id = ?", id);
+    bool GroupsRepo::DeleteGroup(int id) {
+        const auto group = GetGroup(id);
+        const QList<int> listed = group != nullptr ? group->Profiles() : QList<int>{};
+        // Runs under ProfilesRepo's lock, so no profile Save lands between the delete and the tombstones.
+        return dataManager->profilesRepo->DeleteAndForget([&](QList<int>& deletedIds) {
+            QMutexLocker locker(&mutex);
+            QSet<int> profileIds(listed.cbegin(), listed.cend());
+            const bool ok = db.transaction("GroupsRepo::DeleteGroup", [&] {
+                {
+                    const auto owned = db.queryThrow("SELECT id FROM profiles WHERE gid = ?", id);
+                    while (owned->executeStep()) profileIds.insert(owned->getColumn(0).getInt());
+                }
+                db.execThrow("DELETE FROM groups_order WHERE group_id = ?", id);
+                db.execDeleteByIdInThrow("profiles", "id", std::vector<int>(profileIds.cbegin(), profileIds.cend()));
+                db.execThrow("DELETE FROM groups WHERE id = ?", id);
+                return true;
+            });
+            if (!ok) return false;
+            memMap.erase(id);
+            // Only an id that existed: ids past the counter are still to be handed out.
+            if (group != nullptr) tombstones.insert(id);
+            deletedIds = profileIds.values();
+            ++revision;
+            return true;
+        });
     }
 
     QList<int> GroupsRepo::GetAllGroupIds() const {
@@ -358,16 +397,18 @@ namespace Configs {
     }
 
     void GroupsRepo::SetGroupsTabOrder(const QList<int>& order) {
+        QMutexLocker locker(&mutex);
         db.exec("DELETE FROM groups_order");
-        if (!order.isEmpty()) {
-            std::vector<int> pairs;
-            pairs.reserve(order.size() * 2);
-            for (int i = 0; i < order.size(); ++i) {
-                pairs.push_back(order[i]);
-                pairs.push_back(i);
-            }
-            db.execBatchInsertIntPairs("groups_order", "group_id", "display_order", pairs);
+        std::vector<int> pairs;
+        pairs.reserve(order.size() * 2);
+        int position = 0;
+        for (const int id : order) {
+            if (tombstones.contains(id)) continue;
+            pairs.push_back(id);
+            pairs.push_back(position++);
         }
+        if (!pairs.empty()) db.execBatchInsertIntPairs("groups_order", "group_id", "display_order", pairs);
+        ++revision;
     }
 
     bool GroupsRepo::Save(const std::shared_ptr<Group>& group) {
@@ -379,11 +420,17 @@ namespace Configs {
             return false;
         }
         
-        QMutexLocker locker(&mutex);
-        saveToDatabase(group.get(), group->id);
-        memMap[group->id] = group;
-
-        return true;
+        {
+            QMutexLocker locker(&mutex);
+            if (!tombstones.contains(group->id)) {
+                saveToDatabase(group.get(), group->id);
+                memMap[group->id] = group;
+                ++revision;
+                return true;
+            }
+        }
+        LOG_DEBUG(QString("Group %1 was deleted; not saving it").arg(group->id));
+        return false;
     }
 
     namespace {
@@ -407,16 +454,16 @@ namespace Configs {
                     }
                     batch.swap(pendingSorts);
                 }
-                QStringList moved;
+                QList<int> moved;
                 for (auto it = batch.cbegin(); it != batch.cend(); ++it) {
                     const auto group = dataManager->groupsRepo->GetGroup(it.key());
                     if (group == nullptr) continue;
                     const bool reordered = it->full ? group->Resort() : group->Reposition(it->changed.values());
                     if (!reordered) continue;
                     dataManager->groupsRepo->Save(group);
-                    moved << Int2String(it.key());
+                    moved << it.key();
                 }
-                if (!moved.isEmpty() && MW_dialog_message) MW_dialog_message(MwMessage::GroupOrderChanged, moved);
+                if (!moved.isEmpty()) Engine::EngineEvents::GroupOrderChanged(moved);
             }
         }
 

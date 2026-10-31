@@ -6,6 +6,7 @@
 #include <QUuid>
 
 #include "include/global/Utils.hpp"
+#include "include/global/Validation.hpp"
 
 namespace Configs {
     SettingsRepo::SettingsRepo(Database& database) : db(database) {
@@ -24,6 +25,7 @@ namespace Configs {
             {"disable_tray",                  &disable_tray},
             {"random_inbound_port",           &random_inbound_port},
             {"mux_padding",                   &mux_padding},
+            {"mux_brutal",                    &mux_brutal},
             {"mux_default_on",                &mux_default_on},
             {"fragment_default_on",           &fragment_default_on},
             {"tls_tricks_default_on",         &tls_tricks_default_on},
@@ -44,6 +46,7 @@ namespace Configs {
             {"vpn_strict_route",              &vpn_strict_route},
             {"vpn_auto_redirect",             &vpn_auto_redirect},
             {"vpn_l3_bridge",                 &vpn_l3_bridge},
+            {"core_dns_in_lan",               &core_dns_in_lan},
             {"sub_clear",                     &sub_clear},
             {"sub_respect_server_interval",   &sub_respect_server_interval},
             {"sub_show_change_popup",         &sub_show_change_popup},
@@ -60,14 +63,17 @@ namespace Configs {
             {"kill_switch",                   &kill_switch},
             {"remote_api_enable",             &remote_api_enable},
             {"remote_api_lan",                &remote_api_lan},
+            {"remote_api_admin_lan",          &remote_api_admin_lan},
             {"allow_beta_update",             &allow_beta_update},
             {"adblock_enable",                &adblock_enable},
             {"use_custom_icons",              &use_custom_icons},
             {"follow_status_in_taskbar",           &follow_status_in_taskbar},
             {"xray_mux_default_on",           &xray_mux_default_on},
+            {"xray_use_system_ca",            &xray_use_system_ca},
             {"use_dns_object",                &use_dns_object},
             {"skip_delete_confirmation",      &skip_delete_confirmation},
             {"show_config_security",          &show_config_security},
+            {"simple_mode",                   &simple_mode},
             {"log_enable_include",            &log_enable_include},
             {"log_enable_exclude",            &log_enable_exclude},
             {"enable_warp",                   &enable_warp},
@@ -100,6 +106,10 @@ namespace Configs {
             {"profiles_sort_column",   &profiles_sort_column},
             {"inbound_socks_port",     &inbound_socks_port},
             {"mux_concurrency",        &mux_concurrency},
+            {"mux_max_connections",    &mux_max_connections},
+            {"mux_min_streams",        &mux_min_streams},
+            {"mux_brutal_up_mbps",     &mux_brutal_up_mbps},
+            {"mux_brutal_down_mbps",   &mux_brutal_down_mbps},
             {"test_concurrent",        &test_concurrent},
             {"remember_id",            &remember_id},
             {"language",               &language},
@@ -107,6 +117,8 @@ namespace Configs {
             {"max_log_line",           &max_log_line},
             {"log_font_size",          &log_font_size},
             {"stats_tab",              &stats_tab},
+            {"traffic_graph_hidden_dirs", &traffic_graph_hidden_dirs},
+            {"traffic_graph_range",    &traffic_graph_range},
             {"connection_sort",        &connection_sort},
             {"traffic_stats_retention_days", &traffic_stats_retention_days},
             {"sub_auto_update",        &sub_auto_update},
@@ -122,6 +134,8 @@ namespace Configs {
             {"speed_test_timeout_ms",  &speed_test_timeout_ms},
             {"url_test_timeout_ms",    &url_test_timeout_ms},
             {"xray_mux_concurrency",   &xray_mux_concurrency},
+            {"xray_mux_max_connections", &xray_mux_max_connections},
+            {"xray_mux_xudp_concurrency", &xray_mux_xudp_concurrency},
             {"current_route_id",       &current_route_id},
             {"ruleset_mirror",         &ruleset_mirror},
             {"core_dns_in_port",       &core_dns_in_port},
@@ -135,10 +149,13 @@ namespace Configs {
             {"user_agent2",                &user_agent},
             {"test_url",                   &test_latency_url},
             {"direct_test_url",            &direct_test_url},
+            {"exit_lookup_provider",       &exit_lookup_provider},
             {"inbound_address",            &inbound_address},
             {"log_level",                  &log_level},
             {"log_file_level",             &log_file_level},
             {"mux_protocol",               &mux_protocol},
+            {"mux_mode",                   &mux_mode},
+            {"xray_mux_xudp_proxy_udp443", &xray_mux_xudp_proxy_udp443},
             {"fragment_implementation",    &fragment_implementation},
             {"fragment_size",              &fragment_size},
             {"fragment_sleep",             &fragment_sleep},
@@ -162,6 +179,12 @@ namespace Configs {
             {"hk_tun",                     &hotkey_toggle_tun},
             {"remote_api_key",             &remote_api_key},
             {"remote_api_allow",           &remote_api_allow},
+            {"webdav_server",              &webdav_server},
+            {"webdav_user",                &webdav_user},
+            {"webdav_pass",                &webdav_pass},
+            {"webdav_path",                &webdav_path},
+            {"device_id",                  &device_id},
+            {"device_name",                &device_name},
             {"active_routing",             &active_routing},
             {"mw_size",                    &mw_size},
             {"vpn_tun_ipv4_cidr",          &vpn_tun_ipv4_cidr},
@@ -210,11 +233,14 @@ namespace Configs {
 
         stringListMap = {
             {"dns_predefined_rules",     &dns_predefined_rules},
+            {"remote_dns_history",       &remote_dns_history},
+            {"direct_dns_history",       &direct_dns_history},
             {"extra_core_paths",         &extraCorePaths},
             {"log_include_keyword",      &log_include_keyword},
             {"log_include_regex",        &log_include_regex},
             {"log_exclude_keyword",      &log_exclude_keyword},
             {"log_exclude_regex",        &log_exclude_regex},
+            {"traffic_graph_hidden",     &traffic_graph_hidden},
             {"warp_ifc_addrs",           &warp_ifc_addrs},
             {"vpn_private_ranges",       &vpn_private_ranges},
             {"xray_geoip_url_history",   &xray_geoip_url_history},
@@ -241,7 +267,9 @@ namespace Configs {
         auto query = db.query("SELECT key, value FROM settings");
         if (!query) return;
 
+        bool freshInstall = true;
         while (query->executeStep()) {
+            freshInstall = false;
             const QString key = QString::fromStdString(query->getColumn(0).getText());
             const QString str = QString::fromStdString(query->getColumn(1).getText());
 
@@ -255,10 +283,10 @@ namespace Configs {
                     continue;
                 }
             }
-            if (key == "xray_vless_preference") {
+            if (key == "preferred_core") {
                 bool ok = false;
-                int v = str.toInt(&ok);
-                xray_vless_preference = static_cast<Xray::XrayVlessPreference>(ok ? v : 0);
+                const int value = str.toInt(&ok);
+                preferred_core = static_cast<Xray::PreferredCore>(ok && value == Xray::XrayCore ? value : Xray::SingBoxCore);
                 continue;
             }
             // Pre-1.14 DNS rule strategies: only the v4-only case survives as a filter, the rest were no-ops.
@@ -300,6 +328,15 @@ namespace Configs {
                 continue;
             }
         }
+        if (freshInstall) simple_mode = true;
+        // Builds before 1.2.1 saved the translated interval label ("5 мин.", "۱۰ دقیقه"), which the core rejects.
+        if (!Validation::Duration(ntp_interval).isEmpty()) {
+            QString minutes;
+            for (const QChar c : ntp_interval) {
+                if (c.digitValue() >= 0) minutes += QChar(u'0' + c.digitValue());
+            }
+            ntp_interval = minutes.isEmpty() ? QStringLiteral("30m") : minutes + u'm';
+        }
         // Retired keys nothing writes back; the DNS ones would otherwise keep overriding the migrated flags on every load.
         db.exec("DELETE FROM settings WHERE key IN ('direct_dns_strategy', 'remote_dns_strategy', 'log_auto_scroll')");
     }
@@ -334,8 +371,7 @@ namespace Configs {
             addPair(QStringLiteral("shortcuts"), QJsonDocument(obj).toJson(QJsonDocument::Compact).toStdString());
         }
 
-        addPair(QStringLiteral("xray_vless_preference"),
-            std::to_string(static_cast<int>(xray_vless_preference)));
+        addPair(QStringLiteral("preferred_core"), std::to_string(static_cast<int>(preferred_core)));
 
         // qint64 timestamp: out of range for the int map, so persisted here.
         addPair(QStringLiteral("route_auto_update_last"),
@@ -368,6 +404,7 @@ namespace Configs {
 
     bool SettingsRepo::Save() {
         saveAllSettings();
+        ++revision;
         return true;
     }
 

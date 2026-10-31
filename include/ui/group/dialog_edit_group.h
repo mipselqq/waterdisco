@@ -2,10 +2,16 @@
 
 #include <QDialog>
 #include <QHash>
+#include <optional>
 #include "ui_dialog_edit_group.h"
 #include "include/database/entities/Group.h"
+#include "include/engine/EditLocks.h"
 
 class QComboBox;
+
+namespace Validation {
+    class Form;
+}
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -21,13 +27,16 @@ public:
 
     ~DialogEditGroup() override;
 
-    // The accepted edit changed the endpoint of a group whose inheriting profile the running config uses.
+    // The accepted edit changed the endpoint of a group whose inheriting profile the running config uses,
+    // or the routing profile the running profile of this group is built with.
     [[nodiscard]] bool RestartNeeded() const { return restartNeeded; }
 
 private:
     Ui::DialogEditGroup *ui;
 
     std::shared_ptr<Configs::Group> ent;
+
+    std::optional<Engine::EditLock> editLock;
 
     struct {
         int front_proxy;
@@ -44,6 +53,8 @@ private:
     bool restartNeeded = false;
 
     QHash<QString, int> proxyNameToId;
+
+    Validation::Form *form = nullptr;
 
     int resolve_proxy_selection(QComboBox *combo, int fallback) const;
 

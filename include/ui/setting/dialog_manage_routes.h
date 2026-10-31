@@ -5,8 +5,10 @@
 
 #include <atomic>
 
+#include "include/engine/EditLocks.h"
 #include "include/global/Configs.hpp"
 #include "include/ui/setting/RouteItem.h"
+#include "include/ui/utils/ValidationForm.h"
 #include "ui_dialog_manage_routes.h"
 #include "include/database/entities/RouteProfile.h"
 
@@ -27,6 +29,11 @@ public:
 private:
     Ui::DialogManageRoutes *ui;
 
+    Validation::Form* form = nullptr;
+
+    Engine::EditLock settingsLock{Engine::EditTarget::Settings};
+    Engine::EditLock routesLock{Engine::EditTarget::Routes};
+
     RouteItem* routeChainWidget;
 
     void reloadProfileItems();
@@ -43,6 +50,9 @@ private:
 
     QList<std::shared_ptr<Configs::RouteProfile>> chainList;
 
+    // Saved profiles removed from the list, deleted on OK.
+    QList<int> removedIds;
+
     std::shared_ptr<Configs::RouteProfile> currentRoute;
 
     int tooltipID = 0;
@@ -54,6 +64,12 @@ private:
     void show_dns_object_editor();
 
     void generate_warp_config();
+
+    void generate_amnezia_packets();
+
+    QStringList warpAmneziaPackets;
+    QString warpAmneziaError;
+    bool warpAmneziaPending = false;
 
     struct DnsAdvancedDraft {
         int cache_capacity;

@@ -9,6 +9,11 @@ namespace Configs
 {
     inline QStringList vlessFlows = {"xtls-rprx-vision"};
 
+    namespace Checks {
+        // sing-box takes only xtls-rprx-vision, and Vision works only on TLS (or REALITY) directly over TCP.
+        QString VlessFlow(const QString &flow, bool tlsEnabled, const QString &transportType);
+    }
+
     class vless : public outbound
     {
         public:
@@ -52,10 +57,21 @@ namespace Configs
         BuildResult BuildXray() override;
 
         bool IsXray() override {
+            const auto network = transport->type.isEmpty() ? QStringLiteral("raw") : NormalizeXrayNetwork(transport->type);
+            const bool realityEnabled = tls && tls->reality && tls->reality->enabled;
+            const bool xraySupportsProfile = XrayNetworks.contains(network) &&
+                (!realityEnabled || Checks::XrayRealityNetwork(QStringLiteral("reality"), network).isEmpty());
+            if (Configs::dataManager->settingsRepo->preferred_core == Xray::XrayCore && xraySupportsProfile) return true;
+            // sing-box supports Vision, but not its udp443 variant.
+            if (flow.compare(QLatin1String("xtls-rprx-vision-udp443"), Qt::CaseInsensitive) == 0) return true;
+            // mKCP is an Xray transport and is not available in sing-box.
+            if (transport->type.compare(QLatin1String("kcp"), Qt::CaseInsensitive) == 0) return !realityEnabled;
             if (!singBoxTransportNeedsXray(transport->type)) return false;
-            return tls->enabled || tls->reality->enabled;
+            return tls && (tls->enabled || realityEnabled);
         }
 
         QString DisplayType() override;
+
+        void Validate(Validation::Issues &issues) override;
     };
 }

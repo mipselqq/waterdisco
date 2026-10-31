@@ -1,36 +1,48 @@
 #include "include/ui/mainwindow.h"
 #include "NkrVersion.h"
+#include "include/global/AppStateArchive.hpp"
+#include <QTemporaryDir>
+#include <QDateTime>
+#include <QFileDialog>
+#include <QFileInfo>
 
 #include <QApplication>
-#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
-#include <QFileDialog>
-#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMenu>
 #include <QMessageBox>
-#include <QTemporaryDir>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QThread>
+#include <QUrl>
+#include <array>
+#include <optional>
 
 #include "include/api/RPC.h"
 #include "include/api/remote/Server.hpp"
 #include "include/configs/generate.h"
+#include "include/engine/EngineHost.h"
+#include "include/engine/ThreadCheck.h"
+#include "include/engine/app/ExitController.h"
+#include "include/engine/connection/ConnectionManager.h"
+#include "include/engine/services/Dashboard.h"
+#include "include/engine/supervisor/CoreSupervisor.h"
 #include "include/global/Configs.hpp"
 #include "include/global/HTTPRequestHelper.hpp"
-#include "include/global/AppStateArchive.hpp"
 #include "include/global/LocalNetwork.hpp"
 #include "include/global/Logger.hpp"
+#include "include/global/RunningProfiles.hpp"
 #include "include/scanner/ScanManager.h"
+#include "include/sys/HostPresence.hpp"
 #include "include/sys/KillSwitch.hpp"
-#include "include/sys/Process.hpp"
 #include "include/sys/SystemProxy.hpp"
 #include "include/ui/mainWindow/MainWindowInternal.h"
 
+#include "include/ui/app/dialog_update.h"
 #include "include/ui/group/dialog_manage_groups.h"
 #include "include/ui/setting/dialog_basic_settings.h"
 #include "include/ui/setting/dialog_integration.h"
@@ -38,28 +50,14 @@
 #include "include/ui/setting/dialog_otp_manager.h"
 #include "include/ui/setting/dialog_preset_settings.h"
 #include "include/ui/setting/dialog_vpn_settings.h"
+#include "include/ui/setting/RawRouteItem.h"
+#include "include/ui/setting/RouteItem.h"
+#include "include/database/RoutesRepo.h"
 
 #ifdef Q_OS_WIN
 #include "3rdparty/WinCommander.hpp"
 #include "include/sys/windows/WinVersion.h"
 #endif
-#ifdef Q_OS_LINUX
-#include "include/sys/linux/LinuxCap.h"
-#endif
-#ifdef Q_OS_MACOS
-#include "include/sys/macos/MacOS.h"
-#endif
-
-qint64 MainWindow::GetCorePid() {
-    QMutexLocker lock(&coreProcessMutex);
-    return core_process ? core_process->processId() : 0;
-}
-
-QString MainWindow::GetRunningConfigName() {
-    auto ent = running;
-    if (ent == nullptr || ent->outbound == nullptr) return {};
-    return ent->outbound->DisplayTypeAndName();
-}
 
 void MainWindow::on_menu_basic_settings_triggered() {
     USE_DIALOG(DialogBasicSettings)
@@ -71,13 +69,43 @@ void MainWindow::on_menu_manage_groups_triggered() {
 
 void MainWindow::on_menu_routing_settings_triggered() {
     if (dialog_is_using) return;
-    dialog_is_using = true;
+    setDialogInUse(true);
     auto dialog = new DialogManageRoutes(this);
     connect(dialog, &QDialog::finished, this, [=,this] {
         dialog->deleteLater();
-        dialog_is_using = false;
+        setDialogInUse(false);
     });
     dialog->show();
+}
+
+void MainWindow::openRouteProfileEditor(int routeId) {
+    // Also keeps the routing dialog from saving its stale copy over this edit.
+    if (dialog_is_using) return;
+    const auto profile = Configs::dataManager->routesRepo->GetRouteProfile(routeId);
+    if (profile == nullptr) return;
+    setDialogInUse(true);
+
+    const auto onSaved = [this](const std::shared_ptr<Configs::RouteProfile>& chain) {
+        if (!Configs::dataManager->routesRepo->Save(chain)) return;
+        if (chain->id == Configs::ActiveRouteId())
+            connection()->noteRestartNeeded(Engine::RestartReason::Routing);
+    };
+    QDialog* editor;
+    if (profile->isRaw) {
+        auto* raw = new RawRouteItem(this, profile);
+        connect(raw, &RawRouteItem::settingsChanged, this, onSaved);
+        editor = raw;
+    } else {
+        auto* item = new RouteItem(this, profile);
+        connect(item, &RouteItem::settingsChanged, this, onSaved);
+        editor = item;
+    }
+    connect(editor, &QDialog::finished, this, [=, this] {
+        editor->deleteLater();
+        setDialogInUse(false);
+    });
+    editor->setWindowModality(Qt::ApplicationModal);
+    editor->show();
 }
 
 void MainWindow::on_menu_vpn_settings_triggered() {
@@ -94,19 +122,17 @@ void MainWindow::on_menu_otp_manager_triggered() {
 
 void MainWindow::on_menu_integration_settings_triggered() {
     if (dialog_is_using) return;
-    dialog_is_using = true;
+    setDialogInUse(true);
     auto dialog = new DialogIntegration(this, getActionsForShortcut());
     connect(dialog, &QDialog::finished, this, [=,this]
     {
         dialog->deleteLater();
-        dialog_is_using = false;
+        setDialogInUse(false);
     });
     dialog->show();
 }
 
-void MainWindow::on_commitDataRequest() {
-    qDebug() << "Start of data save";
-
+void MainWindow::saveWindowState() {
     auto* settings = Configs::dataManager->settingsRepo.get();
 
     settings->mainWindowGeometry = this->saveGeometry().toBase64(QByteArray::Base64Encoding);
@@ -115,15 +141,6 @@ void MainWindow::on_commitDataRequest() {
         if (settings->mw_size != news) settings->mw_size = news;
     }
     settings->splitter_state = ui->splitter->saveState().toBase64();
-
-    // Backstop only: this runs on a graceful exit, so it must never be the sole write.
-    if (settings->remember_enable && settings->started_id >= 0) settings->remember_id = settings->started_id;
-    settings->remember_system_proxy = settings->spmode_system_proxy;
-    settings->remember_tun = settings->spmode_vpn;
-
-    flushDirtyGroupOrders();
-    settings->Save();
-    qDebug() << "End of data save";
 }
 
 void MainWindow::on_menu_export_application_state_triggered() {
@@ -179,68 +196,41 @@ void MainWindow::on_menu_import_application_state_triggered() {
     on_menu_exit_triggered();
 }
 
-void MainWindow::prepare_exit()
-{
-    qDebug() << "prepare for exit...";
-    mu_exit.lock();
-    if (Configs::dataManager->settingsRepo->prepare_exit)
-    {
-        qDebug() << "prepare exit had already succeeded, ignoring...";
-        mu_exit.unlock();
-        return;
-    }
-    Configs::dataManager->settingsRepo->prepare_exit = true;
-    LOG_INFO("prepare_exit started, tearing down proxy/tun/core");
-    // Before the waits below: their nested event loops would dispatch API requests mid-teardown.
-    RemoteApi::Server::instance()->shutdown();
-    // Unconditional: an uncheck may still have its clear queued.
-    set_system_proxy(false, true);
-    RegisterHiddenMenuShortcuts(true);
-    RegisterHotkey(true);
-    on_commitDataRequest();
-    Scanner::ScanManager::instance()->StopAll(true);
-    Configs::dataManager->settingsRepo->noSave = true; // don't change Configs::dataManager->settingsRepo after this line
-    profile_stop(false, true);
-
-    runOnThread([=, this]()
-    {
-        core_process->Kill();
-    }, DS_cores, true);
-    HideWindow(this);
-    tray->hide();
-    // Only once the core is gone: until then the guard keeps blocking whatever would leak around the dying tunnel.
-    Sys::KillSwitch::instance()->shutdown();
-
-    mu_exit.unlock();
-    qDebug() << "prepare exit done!";
+void MainWindow::on_commitDataRequest() {
+    saveWindowState();
+    exitController()->persistSessionState();
 }
 
 void MainWindow::on_menu_exit_triggered() {
-    // prepare_exit() waits in nested event loops, so a second Exit/Restart click can re-enter here.
-    if (exit_in_progress) return;
-    const bool restart = exit_reason == ExitReason::Restart || exit_reason == ExitReason::RestartWithTun ||
-                         exit_reason == ExitReason::RestartElevated;
+    // A teardown already running quits on its own; a second request would cut its nested waits short.
+    if (Configs::dataManager->settingsRepo->prepare_exit || exitController()->exitInProgress()) return;
+    exitController()->setExitInProgress(true);
+    // A request made during the teardown below may overwrite exit_reason.
+    const auto reason = exit_reason;
+    const bool unattended = m_exitUnattended;
+    const bool restart = reason == ExitReason::Restart || reason == ExitReason::RestartWithTun ||
+                         reason == ExitReason::RestartElevated;
     const auto program = QApplication::applicationFilePath();
     QStringList arguments;
     if (restart) {
         arguments = Configs::dataManager->settingsRepo->argv;
-        if (!arguments.isEmpty()) {
+        if (arguments.length() > 0) {
             arguments.removeFirst();
             arguments.removeAll("-tray");
             arguments.removeAll("-flag_restart_tun_on");
         }
-        if (exit_reason == ExitReason::RestartWithTun) arguments << "-flag_restart_tun_on";
+        if (reason == ExitReason::RestartWithTun) arguments << "-flag_restart_tun_on";
+        if (unattended && m_exitKeepTray) arguments << "-tray";
     }
+
     bool relaunched = false;
 #ifdef Q_OS_WIN
-    if (exit_reason == ExitReason::RestartWithTun || exit_reason == ExitReason::RestartElevated) {
-        static bool elevating = false;
-        if (elevating) return;
-        elevating = true;
+    if (reason == ExitReason::RestartWithTun || reason == ExitReason::RestartElevated) {
+        // Asked before the teardown so a declined UAC prompt leaves this instance running; the new one waits for this pid to exit.
         const auto elevatedArguments = arguments + QStringList{QString("-wait_pid=%1").arg(QCoreApplication::applicationPid())};
         const bool launched = WinCommander::runProcessElevated(program, elevatedArguments, QApplication::applicationDirPath(), 1, false) == 0;
-        elevating = false;
         if (!launched) {
+            exitController()->setExitInProgress(false);
             exit_reason = ExitReason::None;
             MW_show_log(tr("Restart as administrator was cancelled, Throne keeps running"));
             return;
@@ -248,9 +238,9 @@ void MainWindow::on_menu_exit_triggered() {
         relaunched = true;
     }
 #endif
-    exit_in_progress = true;
-    prepare_exit();
-    if (exit_reason == ExitReason::RunUpdater) {
+
+    Engine::host()->shutdown(!unattended);
+    if (reason == ExitReason::RunUpdater) {
         QDir::setCurrent(QApplication::applicationDirPath());
 #ifdef Q_OS_WIN
         QFile::copy("./updater.exe", "./updater.old");
@@ -260,283 +250,39 @@ void MainWindow::on_menu_exit_triggered() {
 #endif
     } else if (restart && !relaunched) {
         QDir::setCurrent(QApplication::applicationDirPath());
+        // Until this process exits it holds the data dir lock and still answers on the instance socket.
+        arguments << QString("-wait_pid=%1").arg(QCoreApplication::applicationPid());
         QProcess::startDetached(program, arguments);
     }
     QCoreApplication::quit();
 }
 
+void MainWindow::request_unattended_exit(ExitReason reason) {
+    if (Configs::dataManager->settingsRepo->prepare_exit || exitController()->exitInProgress()) return;
+    m_exitUnattended = true;
+    m_exitKeepTray = isHidden();
+    exit_reason = reason;
+    on_menu_exit_triggered();
+}
+
 void MainWindow::toggle_system_proxy() {
     auto currentState = Configs::dataManager->settingsRepo->spmode_system_proxy;
     if (currentState) {
-        set_spmode_system_proxy(false);
+        connection()->setSystemProxy(false);
     } else {
-        set_spmode_system_proxy(true);
+        connection()->setSystemProxy(true);
     }
 }
 
 void MainWindow::toggle_tun() {
-    if (m_profileConnecting || m_profileDisconnecting) return;
-    set_spmode_vpn(!Configs::dataManager->settingsRepo->spmode_vpn);
-}
-
-bool MainWindow::get_elevated_permissions(bool interactive) {
-    if (Configs::dataManager->settingsRepo->disable_privilege_req)
-    {
-        MW_show_log(tr("User opted for no privilege req, some features may not work"));
-        return true;
-    }
-    if (Configs::IsAdmin()) return true;
-    if (!interactive) return false;
-#ifdef NKR_ELEVATION_HINT
-    MessageBoxWarning(software_name, tr("This installation cannot grant the core privileges by itself.") + "\n\n" + NKR_ELEVATION_HINT);
-    return false;
-#endif
-#ifdef Q_OS_LINUX
-    if (!Linux_HavePkexec()) {
-        MessageBoxWarning(software_name, "Please install \"pkexec\" first.");
-        return false;
-    }
-    auto n = QMessageBox::warning(GetMessageBoxParent(), software_name, tr("Please give the core root privileges"), QMessageBox::Yes | QMessageBox::No);
-    if (n == QMessageBox::Yes) {
-        const auto corePath = Configs::FindCoreRealPath();
-        auto quotedCorePath = corePath;
-        quotedCorePath.replace("'", "'\\''");
-        const auto command = QString("chown root:root '%1' && chmod u+s '%1'").arg(quotedCorePath);
-        const int ret = Linux_Run_Command("sh", QString("-c \"%1\"").arg(command));
-        if (ret != 0) {
-            MW_show_log(QString("Failed to grant core privileges, code: %1").arg(ret));
-            return false;
-        }
-
-        // The setuid bit only affects a newly spawned core. Restart it now and
-        // let profile_start defer to CoreStarted, rather than requiring a
-        // second Tun click (and a second password prompt).
-        runOnThread([this] {
-            profile_stop(true, true, true);
-            if (core_process != nullptr) core_process->Restart();
-        }, DS_cores, true);
-        MW_show_log(tr("Core privileges granted."));
-        return true;
-    }
-#endif
-#ifdef Q_OS_WIN
-    auto n = QMessageBox::warning(GetMessageBoxParent(), software_name, tr("Please run Throne as admin"), QMessageBox::Yes | QMessageBox::No);
-    if (n == QMessageBox::Yes) {
-        this->exit_reason = ExitReason::RestartWithTun;
-        on_menu_exit_triggered();
-    }
-#endif
-
-#ifdef Q_OS_MACOS
-    if (Configs::isSetuidSet(Configs::FindCoreRealPath().toStdString()))
-    {
-        StopVPNProcess();
-        return true;
-    }
-    auto n = QMessageBox::warning(GetMessageBoxParent(), software_name, tr("Please give the core root privileges"), QMessageBox::Yes | QMessageBox::No);
-    if (n == QMessageBox::Yes)
-    {
-        auto Command = QString("sudo chown root:wheel '%1' && sudo chmod u+s '%1'").arg(Configs::FindCoreRealPath());
-        auto ret = Mac_Run_Command(Command);
-        if (ret == 0) {
-            MessageBoxInfo(tr("Requesting permission"), tr("Please Enter your password in the opened terminal, then try again"));
-            return false;
-        } else {
-            MW_show_log(QString("Failed to run %1 with %2").arg(Command).arg(ret));
-            return false;
-        }
-    }
-#endif
-    return false;
-}
-
-namespace {
-    // networksetup and gsettings runs are slow, and profile start/stop call in from their own threads.
-    QThread *systemProxyThread() {
-        static auto *thread = [] {
-            auto *t = new QThread;
-            t->start();
-            return t;
-        }();
-        return thread;
-    }
-}
-
-void MainWindow::set_system_proxy(bool enable, bool wait) {
-    const auto &settings = Configs::dataManager->settingsRepo;
-    const auto host = LocalNetwork::InboundConnectHost();
-    const auto port = settings->inbound_socks_port;
-    const auto format = settings->proxy_scheme;
-    runOnThread([=] {
-        QString error;
-        if (!enable) {
-            error = SystemProxy_Clear();
-        } else if (Configs::dataManager->settingsRepo->spmode_system_proxy) {
-            // Rechecked: a profile start can queue this after the box was unchecked.
-            error = SystemProxy_Apply(host, port, format);
-        }
-        if (!error.isEmpty()) MW_show_log(tr("System proxy: %1").arg(error));
-    }, systemProxyThread(), wait);
-}
-
-void MainWindow::set_spmode_system_proxy(bool enable, bool save) {
-    set_spmode_system_proxy(enable, ModeChange{.save = save});
-}
-
-bool MainWindow::set_spmode_system_proxy(bool enable, const ModeChange &change) {
-    const auto &settings = Configs::dataManager->settingsRepo;
-    if (enable && settings->disable_mixed_inbound) {
-        if (change.interactive) {
-            runOnUiThread([=, this] {
-               MessageBoxWarning("Invalid Operation", "Cannot set system proxy when mixed inbound is disabled.");
-            });
-        }
-        ui->checkBox_SystemProxy->setChecked(false);
-        return false;
-    }
-    settings->spmode_system_proxy = enable;
-    bool restarted = false;
-    if (running) {
-        set_system_proxy(enable);
-        if (!enable && settings->reset_proxy_on_disable_sp && change.restart) {
-            profile_start(StartRequest{running->id, change.interactive, change.restartSerial});
-            restarted = true;
-        }
-    }
-
-    if (change.save) {
-        settings->remember_system_proxy = enable;
-        settings->Save();
-    }
-
-    refresh_status();
-    return restarted;
-}
-
-void MainWindow::set_spmode_vpn(bool enable, bool save) {
-    set_spmode_vpn(enable, ModeChange{.save = save});
-}
-
-bool MainWindow::set_spmode_vpn(bool enable, const ModeChange &change) {
-    const auto &settings = Configs::dataManager->settingsRepo;
-    if (enable == settings->spmode_vpn) return false;
-
-    if (enable && !Configs::IsAdmin() && !get_elevated_permissions(change.interactive)) {
-        refresh_status();
-        return false;
-    }
-
-    if (change.save) {
-        // Written here, after the elevation check, so a failed enable is not remembered.
-        settings->remember_tun = enable;
-        settings->Save();
-    }
-
-    settings->spmode_vpn = enable;
-    refresh_status();
-
-    if (!change.restart || settings->started_id < 0) return false;
-    profile_start(StartRequest{settings->started_id, change.interactive, change.restartSerial});
-    return true;
-}
-
-bool MainWindow::choose_route(int routeId, bool interactive, quint64 restartSerial) {
-    const auto &settings = Configs::dataManager->settingsRepo;
-    if (settings->current_route_id == routeId) return false;
-    settings->current_route_id = routeId;
-    settings->Save();
-    if (settings->started_id < 0) return false;
-    profile_start(StartRequest{settings->started_id, interactive, restartSerial});
-    return true;
+    const auto state = connection()->connectionState();
+    if (state == ConnectionState::Connecting || state == ConnectionState::Stopping) return;
+    connection()->setTun(!Configs::dataManager->settingsRepo->spmode_vpn);
 }
 
 bool MainWindow::StopVPNProcess() {
-    runOnThread([=, this]
-    {
-        core_process->Kill();
-    }, DS_cores, true);
-
+    supervisor()->killForPrivilegeChange();
     return true;
-}
-
-void MainWindow::RestartCore() {
-    runOnThread([=, this]
-    {
-        profile_stop(true, true, true);
-        core_process->Kill();
-    }, DS_cores);
-}
-
-void MainWindow::kill_switch_state_changed() {
-    const auto state = Sys::KillSwitch::instance()->state();
-    const bool failed = state == Sys::KillSwitch::State::Failed;
-    const bool armed = state == Sys::KillSwitch::State::Armed;
-    const bool enteredFailed = failed && !m_killSwitchWasFailed;
-    const bool enteredArmed = armed && !m_killSwitchWasArmed;
-    m_killSwitchWasFailed = failed;
-    m_killSwitchWasArmed = armed;
-
-    refresh_status();
-    if (!failed && m_killSwitchDialog) m_killSwitchDialog->close();
-    if (enteredFailed) show_kill_switch_problem();
-    if (enteredArmed && !guard_core_restart_pending() && core_lacks_guard_identity()) {
-        restart_core_for_guard(StartRequest{Configs::dataManager->settingsRepo->started_id});
-    }
-}
-
-void MainWindow::show_kill_switch_problem() {
-    auto *killSwitch = Sys::KillSwitch::instance();
-    if (killSwitch->state() != Sys::KillSwitch::State::Failed) return;
-    const bool privilege = killSwitch->failedForPrivileges();
-    if (m_killSwitchDialog) {
-        if (m_killSwitchDialog->property("privilege").toBool() == privilege) {
-            m_killSwitchDialog->setText(killSwitch->failureText());
-            return;
-        }
-        m_killSwitchDialog->close();
-    }
-
-    auto *box = new QMessageBox(QMessageBox::Warning, tr("Kill switch is not active"), killSwitch->failureText(),
-                                QMessageBox::NoButton, this);
-    box->setTextFormat(Qt::PlainText);
-    box->setAttribute(Qt::WA_DeleteOnClose);
-    box->setProperty("privilege", privilege);
-#ifdef Q_OS_WIN
-    auto *fix = box->addButton(privilege ? tr("Restart as Administrator") : tr("Retry"), QMessageBox::AcceptRole);
-#else
-    auto *fix = box->addButton(privilege ? tr("Grant Privileges") : tr("Retry"), QMessageBox::AcceptRole);
-#endif
-    auto *disable = box->addButton(tr("Disable Kill Switch"), QMessageBox::DestructiveRole);
-    auto *cancel = box->addButton(QMessageBox::Cancel);
-    box->setDefaultButton(fix);
-    box->setEscapeButton(cancel);
-    m_killSwitchDialog = box;
-
-    // Custom-button result codes changed in Qt 6.5, so only the clicked button pointer is trusted.
-    connect(box, &QMessageBox::finished, this, [this, box, fix, disable, privilege] {
-        const auto *clicked = box->clickedButton();
-        if (m_killSwitchDialog == box) m_killSwitchDialog = nullptr;
-        if (clicked == disable) {
-            disable_kill_switch();
-            return;
-        }
-        if (clicked != fix) return;
-        if (!privilege) {
-            Sys::KillSwitch::instance()->apply();
-            return;
-        }
-#ifdef Q_OS_WIN
-        // Queued: ShellExecuteEx's UAC pump runs this box's deleteLater, so exiting from here frees it under QMessageBox (#1961).
-        QMetaObject::invokeMethod(this, [this] {
-            exit_reason = ExitReason::RestartElevated;
-            on_menu_exit_triggered();
-        }, Qt::QueuedConnection);
-#else
-        // Otherwise the core restarts once it is privileged, and CoreStarted retries.
-        if (get_elevated_permissions()) Sys::KillSwitch::instance()->apply();
-#endif
-    });
-    box->open();
 }
 
 void MainWindow::show_startstop_menu() {
@@ -558,160 +304,74 @@ void MainWindow::confirm_disable_kill_switch() {
     box->setDefaultButton(cancel);
     box->setEscapeButton(cancel);
     connect(box, &QMessageBox::finished, this, [this, box, disable] {
-        if (box->clickedButton() == disable) disable_kill_switch();
+        if (box->clickedButton() == disable) connection()->disableKillSwitch();
     });
     box->open();
 }
 
-void MainWindow::disable_kill_switch() {
-    Configs::dataManager->settingsRepo->kill_switch = false;
-    Configs::dataManager->settingsRepo->Save();
-    Sys::KillSwitch::instance()->apply();
-}
-
-bool MainWindow::core_lacks_guard_identity() {
-#ifdef Q_OS_WIN
-    return false;
-#else
-    QMutexLocker lock(&coreProcessMutex);
-    return core_process != nullptr && Configs::dataManager->settingsRepo->core_running && !core_process->guard_identity;
-#endif
-}
-
-bool MainWindow::guard_core_restart_pending() const {
-    constexpr qint64 kRestartWindowMs = 15000;
-    return m_guardCoreRestart.isValid() && !m_guardCoreRestart.hasExpired(kRestartWindowMs);
-}
-
-void MainWindow::restart_core_for_guard(const StartRequest &request) {
-    bool haveCore;
-    {
-        // The IPC handler takes this slot under the same lock when the new core connects.
-        QMutexLocker lock(&coreProcessMutex);
-        haveCore = core_process != nullptr;
-        if (haveCore) core_process->start_profile_when_core_is_up = request.profileId;
-    }
-    if (!haveCore) {
-        emit start_finished(request.serial, request.profileId, StartOutcome::CoreUnavailable, {});
-        return;
-    }
-    defer_start_to_core(request);
-    if (guard_core_restart_pending()) return;
-    m_guardCoreRestart.start();
-    MW_show_log(tr("[Kill switch] Restarting the core so that its own traffic passes the kill switch..."));
-    runOnThread([this] {
-        profile_stop(true, true);
-        core_process->Restart();
-    }, DS_cores);
-}
-
 namespace {
 
-bool isNewer(QString assetName) {
+// [major, minor, patch, stage, number]; alpha, beta and rc are stages 1-3, so they rank below the release itself.
+using Version = std::array<int, 5>;
+constexpr int kReleaseStage = 4;
+
+std::optional<Version> parseVersion(const QString &text) {
+    static const QRegularExpression pattern(QStringLiteral(R"(^v?(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.?(\d*))?$)"));
+    const auto match = pattern.match(text.trimmed());
+    if (!match.hasMatch()) return std::nullopt;
+    const auto stage = match.captured(4);
+    const int stageRank = stage.isEmpty() ? kReleaseStage
+                        : stage == QLatin1String("alpha") ? 1
+                        : stage == QLatin1String("beta") ? 2 : 3;
+    return Version{match.captured(1).toInt(), match.captured(2).toInt(), match.captured(3).toInt(), stageRank,
+                   match.captured(5).toInt()};
+}
+
+bool isNewer(const QString &version) {
     if (QString(NKR_VERSION).isEmpty()) return false;
-    assetName = assetName.mid(7); // take out Throne-
-    QString version;
-    auto spl = assetName.split('-');
-    version += spl[0];
-    if (spl[1].contains("beta") || spl[1].contains("alpha") || spl[1].contains("rc")) version += "."+spl[1];
-    auto parts = version.split("."); // [1,2,3,beta,13]
-    auto currentParts = QString(NKR_VERSION).replace("-", ".").split('.');
-    if (parts.size() < 3 || currentParts.size() < 3)
-    {
-        MW_show_log("Version strings seem to be invalid" + QString(NKR_VERSION) + " and " + version);
+    const auto current = parseVersion(NKR_VERSION);
+    const auto offered = parseVersion(version);
+    if (!current || !offered) {
+        MW_show_log("Version strings seem to be invalid " + QString(NKR_VERSION) + " and " + version);
         return false;
     }
-    std::vector<int> verNums;
-    std::vector<int> currNums;
-    verNums.push_back(parts[0].toInt());
-    verNums.push_back(parts[1].toInt());
-    verNums.push_back(parts[2].toInt());
-    if (parts.size() > 3)
-    {
-        if (parts[3] == "alpha") verNums.push_back(1);
-        if (parts[3] == "beta") verNums.push_back(2);
-        if (parts[3] == "rc") verNums.push_back(3);
-        if (parts.size() > 4) verNums.push_back(parts[4].toInt());
-    }
+    return *offered > *current;
+}
 
-    currNums.push_back(currentParts[0].toInt());
-    currNums.push_back(currentParts[1].toInt());
-    currNums.push_back(currentParts[2].toInt());
-    if (currentParts.size() > 3)
-    {
-        if (currentParts[3] == "alpha") currNums.push_back(1);
-        if (currentParts[3] == "beta") currNums.push_back(2);
-        if (currentParts[3] == "rc") currNums.push_back(3);
-        if (currentParts.size() > 4) currNums.push_back(currentParts[4].toInt());
-    }
+// Sections after the running version up to the offered one; a stable release's own section covers its pre-releases.
+QString releaseNotes(const QString &changelog, const QString &target) {
+    const auto current = parseVersion(NKR_VERSION);
+    const auto offered = parseVersion(target);
+    if (!current || !offered) return {};
+    const bool withPreReleases = offered->at(3) != kReleaseStage;
 
-    if (verNums.size() < 3 || currNums.size() < 3)
-    {
-        MW_show_log("Version strings seem to be invalid" + QString(NKR_VERSION) + " and " + version);
-        return false;
-    }
-
-    for (int i=0;i<3;i++)
-    {
-        if (verNums[i] > currNums[i]) return true;
-        if (verNums[i] < currNums[i]) return false;
-    }
-
-    if (verNums.size() == 5 && currNums.size() == 3) return false;
-    if (verNums.size() == 3 && currNums.size() == 5) return true;
-    if (verNums.size() == 5 && currNums.size() == 5)
-    {
-        for (int i=3;i<5;i++)
-        {
-            if (verNums[i] > currNums[i]) return true;
-            if (verNums[i] < currNums[i]) return false;
+    QStringList sections;
+    QString heading;
+    QStringList body;
+    const auto flush = [&] {
+        const auto version = parseVersion(heading);
+        const auto text = body.join('\n').trimmed();
+        if (!version || text.isEmpty() || *version <= *current || *version > *offered) return;
+        if (version->at(3) != kReleaseStage && !withPreReleases) return;
+        sections << QStringLiteral("#### ") + heading + QStringLiteral("\n\n") + text;
+    };
+    for (auto line : changelog.split('\n')) {
+        if (line.endsWith('\r')) line.chop(1);
+        if (line.startsWith(QLatin1String("#### "))) {
+            flush();
+            heading = line.mid(5).trimmed();
+            body.clear();
+        } else {
+            body << line;
         }
-    } else
-    {
-		MW_show_log("There are no updates. You have the latest version - " + QString(NKR_VERSION));
-        return false;
     }
-    return false;
+    flush();
+    return sections.join(QStringLiteral("\n\n"));
 }
 
 constexpr auto dashboardDownloadURL = "https://github.com/SagerNet/sing-box-dashboard/archive/refs/heads/gh-pages.zip";
 
-bool copyOut(const QString &from, const QString &to) {
-    QFile::remove(to);
-    if (!QFile::copy(from, to)) return false;
-    // Resource files are read-only, and QFile::copy carries that onto the copy.
-    return QFile::setPermissions(to, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                     QFileDevice::ReadGroup | QFileDevice::ReadOther);
-}
-
-bool unpackBundledDashboard(const QDir &dest) {
-    if (!QFile::exists(":/dashboard/index.html")) return false;
-    const QDir bundle(":/dashboard");
-    QDirIterator it(bundle.path(), QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        const auto source = it.next();
-        const auto target = dest.filePath(bundle.relativeFilePath(source));
-        if (!QDir().mkpath(QFileInfo(target).absolutePath()) || !copyOut(source, target)) return false;
-    }
-    return true;
-}
-
 } // namespace
-
-void MainWindow::SeedDashboard() {
-    QDir dashDir(Configs::apiDashboardDir);
-    if (!dashDir.exists() && !QDir().mkpath(Configs::apiDashboardDir)) return;
-    if (!QFile::exists(dashDir.filePath("index.html"))) unpackBundledDashboard(dashDir);
-    // Reinstalling replaces the whole directory, so this cannot be a one-time copy.
-    auto src = QFile(":/Throne/dashboard-bootstrap.html");
-    if (!src.open(QIODevice::ReadOnly)) return;
-    const auto data = src.readAll();
-    src.close();
-    if (auto dest = QFile(dashDir.filePath("throne.html")); dest.open(QIODevice::Truncate | QIODevice::WriteOnly)) {
-        dest.write(data);
-        dest.close();
-    }
-}
 
 void MainWindow::OpenDashboard() {
     const auto &settings = *Configs::dataManager->settingsRepo;
@@ -726,7 +386,7 @@ void MainWindow::OpenDashboard() {
     }
 
     const auto show = [this, port] {
-        SeedDashboard();
+        Engine::Dashboard::SeedApi();
         // Fragment, not query: browsers never send it to the server.
         QUrl url(QString("http://127.0.0.1:%1/dashboard/throne.html").arg(port));
         url.setFragment(QString("secret=%1&url=127.0.0.1:%2")
@@ -736,7 +396,7 @@ void MainWindow::OpenDashboard() {
         QDesktopServices::openUrl(url);
     };
 
-    SeedDashboard();
+    Engine::Dashboard::SeedApi();
     if (QFile::exists(QDir(Configs::apiDashboardDir).filePath("index.html"))) {
         show();
         return;
@@ -824,45 +484,47 @@ void MainWindow::CheckUpdate() {
         return;
     }
 
-    QString assets_name, release_download_url, release_url, release_note, note_pre_release;
-    bool exitFlag = false;
+    QString release_tag, release_download_url, release_url;
+    bool pre_release = false;
     QJsonArray array = QString2QJsonArray(resp.data);
     for (const QJsonValue value : array) {
         QJsonObject release = value.toObject();
         if (release["prerelease"].toBool() && !Configs::dataManager->settingsRepo->allow_beta_update) continue;
         for (const QJsonValue asset : release["assets"].toArray()) {
             if (asset["name"].toString().contains(search) && asset["name"].toString().section('.', -1) == QString("zip")) {
-                note_pre_release = release["prerelease"].toBool() ? " (Pre-release)" : "";
+                pre_release = release["prerelease"].toBool();
                 release_url = release["html_url"].toString();
-                release_note = release["body"].toString();
-                assets_name = asset["name"].toString();
+                release_tag = release["tag_name"].toString();
                 release_download_url = asset["browser_download_url"].toString();
-                exitFlag = true;
                 break;
             }
         }
-        if (exitFlag) break;
+        if (!release_download_url.isEmpty()) break;
     }
 
-    if (release_download_url.isEmpty() || !isNewer(assets_name)) {
+    if (release_download_url.isEmpty() || !isNewer(release_tag)) {
         runOnUiThread([=,this] {
             MessageBoxInfo(QObject::tr("Update"), QObject::tr("No update"));
         });
         return;
     }
 
+    options.headers = {{"Accept", "application/vnd.github.raw+json"}};
+    const auto changelog = NetworkRequestHelper::HttpGet(
+        QStringLiteral("https://api.github.com/repos/throneproj/Throne/contents/CHANGELOG.md?ref=") +
+            QString::fromLatin1(QUrl::toPercentEncoding(release_tag)), options);
+    const auto notes = changelog.error.isEmpty() ? releaseNotes(QString::fromUtf8(changelog.data), release_tag) : QString();
+
     runOnUiThread([=,this] {
-        auto allow_updater = !Configs::dataManager->settingsRepo->flag_use_appdata;
-        QMessageBox box(QMessageBox::Question, QObject::tr("Update") + note_pre_release,
-                        QObject::tr("Update found: %1\nRelease note:\n%2").arg(assets_name, release_note));
-        QAbstractButton *btn1 = nullptr;
-        if (allow_updater) {
-            btn1 = box.addButton(QObject::tr("Update"), QMessageBox::AcceptRole);
-        }
-        QAbstractButton *btn2 = box.addButton(QObject::tr("Open in browser"), QMessageBox::AcceptRole);
-        box.addButton(QObject::tr("Close"), QMessageBox::RejectRole);
-        box.exec();
-        if (btn1 == box.clickedButton() && allow_updater) {
+        const auto headless = Sys::HostPresence::OtherHeadless();
+        const bool headlessSameInstall = headless && Sys::HostPresence::SameInstall(*headless, QCoreApplication::applicationDirPath());
+        const bool allow_updater = !Configs::dataManager->settingsRepo->flag_use_appdata && !headlessSameInstall;
+        const auto notice = headlessSameInstall
+            ? tr("Update is unavailable while a background Throne (PID %1) runs from this installation; stop it first.").arg(headless->pid)
+            : QString();
+        auto *dialog = new DialogUpdate(release_tag, pre_release, notes, QUrl(release_url), allow_updater, notice, this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dialog, &DialogUpdate::updateRequested, this, [=,this] {
             runOnNewThread([=,this] {
                 if (!mu_download_update.tryLock()) {
                     runOnUiThread([=,this](){
@@ -891,8 +553,7 @@ void MainWindow::CheckUpdate() {
                     }
                 });
             });
-        } else if (btn2 == box.clickedButton()) {
-            QDesktopServices::openUrl(QUrl(release_url));
-        }
+        });
+        dialog->open();
     });
 }

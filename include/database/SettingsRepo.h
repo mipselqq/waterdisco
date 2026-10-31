@@ -28,6 +28,7 @@ namespace Configs {
         QMap<QString, int*>         intMap;
         QMap<QString, QString*>     stringMap;
         QMap<QString, QStringList*> stringListMap;
+        std::atomic<quint64> revision{0};
 
         void initMaps();
         void createTables() const;
@@ -41,6 +42,9 @@ namespace Configs {
         
         bool Save();
         
+        // Any thread; moves with every Save(), bookkeeping ones such as the traffic graph's state included.
+        quint64 Revision() const { return revision.load(); }
+
         // Runtime state and flags below are never persisted.
         QString core_socket_name = "";
         int started_id = NoProfileId;
@@ -53,7 +57,6 @@ namespace Configs {
         int imported_count = 0;
         bool refreshing_group_list = false;
         bool refreshing_group = false;
-        std::atomic<int> resolve_count = 0;
 
         QStringList argv = {};
         bool flag_use_appdata = false;
@@ -68,6 +71,9 @@ namespace Configs {
         QString test_latency_url = "http://cp.cloudflare.com/";
         // Fetched WITHOUT any proxy, so it must be reachable directly; empty falls back to the OS.
         QString direct_test_url = "";
+        // Both keys are shared with the Android app's settings table; the provider is a Configs_network::ExitLookupProviders() id.
+        bool exit_country_lookup = true;
+        QString exit_lookup_provider = "auto";
         int url_test_timeout_ms = 3000;
         bool disable_tray = false;
         int test_concurrent = 100;
@@ -75,7 +81,14 @@ namespace Configs {
         int current_group = 0;
         QString mux_protocol = "smux";
         bool mux_padding = false;
+        // "max_streams" pools by mux_concurrency streams per connection, "max_connections" by the two below.
+        QString mux_mode = "max_streams";
         int mux_concurrency = 8;
+        int mux_max_connections = 4;
+        int mux_min_streams = 4;
+        bool mux_brutal = false;
+        int mux_brutal_up_mbps = 0;
+        int mux_brutal_down_mbps = 0;
         bool mux_default_on = false;
         // "built-in" = sing-box tls.fragment, "custom" = hiddify dialer-level tls_fragment.
         QString fragment_implementation = "built-in";
@@ -118,6 +131,13 @@ namespace Configs {
         QString splitter_state = "";
         bool enable_stats = true;
         int stats_tab = 0; // either connection or log
+        // LiveChartState of the traffic graph; keys are Stats::TrafficLine keys.
+        QStringList traffic_graph_hidden = {};
+        // Bit 0 hides download, bit 1 upload.
+        int traffic_graph_hidden_dirs = 0;
+        int traffic_graph_range = 1;
+        bool traffic_graph_smooth = true;
+        bool traffic_graph_markers = true;
         // Stats::ConnectionSort; 0 == Stats::Default, the core's own ordering.
         int connection_sort = 0;
         bool connection_sort_asc = false;
@@ -132,6 +152,8 @@ namespace Configs {
         bool follow_status_in_taskbar = true;
         bool skip_delete_confirmation = false;
         bool show_config_security = false;
+        // UI only: config generation never reads it. A fresh install starts simple, an upgraded one advanced.
+        bool simple_mode = false;
         // -1 until a filter column has been used.
         int last_filter_column = -1;
         // Unified profiles table: grouped sections vs one list. Sort column 9 is
@@ -182,10 +204,21 @@ namespace Configs {
         // Remote API
         bool remote_api_enable = false;
         bool remote_api_lan = false;
+        bool remote_api_admin_lan = false;
         int remote_api_port = 9095;
         QString remote_api_key = "";
         // CIDRs separated by commas or whitespace; empty allows every LAN address.
         QString remote_api_allow = "";
+
+        // WebDAV backup and this device's identity: device-local, see BackupArchive::DeviceLocalSettingKeys().
+        QString webdav_server = "";
+        QString webdav_user = "";
+        QString webdav_pass = "";
+        QString webdav_path = "Throne";
+        bool webdav_use_proxy = false;
+        // Generated on first use; an empty name means the host name.
+        QString device_id = "";
+        QString device_name = "";
 
         // Remember
         bool remember_system_proxy = false;
@@ -213,6 +246,9 @@ namespace Configs {
         bool remote_dns_disable_ipv6 = false;
         QString direct_dns = "localhost";
         bool direct_dns_disable_ipv6 = false;
+        // Servers typed into the remote / direct DNS fields, newest first.
+        QStringList remote_dns_history = {};
+        QStringList direct_dns_history = {};
         int dns_cache_capacity = 65536;
         bool dns_disable_cache = false;
         bool dns_disable_expire = false;
@@ -284,7 +320,8 @@ namespace Configs {
         QString warp_ep = "";
         QStringList warp_reserved = {};
         bool warp_tos_accepted = false;
-        QString warp_mode = "wireguard"; // "wireguard" or "masque"
+        QString warp_mode = "wireguard"; // "wireguard", "amnezia", or "masque"
+        QStringList warp_amnezia_packets = {}; // AmneziaWG I1-I5, generated with the identity so config builds need no RPC
         QString warp_masque_private_key = "";
         QString warp_masque_peer_public_key = "";
         QString warp_masque_ep = "";
@@ -311,12 +348,18 @@ namespace Configs {
         QString core_box_api_secret = "";
         QString core_box_underlying_dns = "";
         int core_dns_in_port = 5533;
+        bool core_dns_in_lan = false;
 
         // Xray
         QString xray_log_level = "warning";
         int xray_mux_concurrency = 8;
+        int xray_mux_max_connections = 0;
+        int xray_mux_xudp_concurrency = 16;
+        QString xray_mux_xudp_proxy_udp443 = "reject";
         bool xray_mux_default_on = false;
-        Xray::XrayVlessPreference xray_vless_preference = Xray::XhttpAndReality;
+        // Xray otherwise trusts only its built-in root certificates.
+        bool xray_use_system_ca = false;
+        Xray::PreferredCore preferred_core = Xray::SingBoxCore;
         // Fetched on demand into GetBasePath(), which the core exposes to Xray via XRAY_LOCATION_ASSET.
         QString xray_geoip_url = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/release/geoip.dat";
         QString xray_geosite_url = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/release/geosite.dat";

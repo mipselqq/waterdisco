@@ -53,5 +53,7 @@ namespace Configs
         }
 
         QString DisplayType() override;
+
+        void Validate(Validation::Issues &issues) override;
     };
 }

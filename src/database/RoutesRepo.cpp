@@ -1,4 +1,5 @@
 #include "include/database/RoutesRepo.h"
+#include "include/database/GroupsRepo.h"
 #include "include/global/Configs.hpp"
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -25,6 +26,9 @@ namespace Configs {
                 remote_last_update INTEGER NOT NULL DEFAULT 0,
                 endpoint_profile_ids TEXT NOT NULL DEFAULT '[]',
                 inner_hop_endpoint_ids TEXT NOT NULL DEFAULT '[]',
+                dns_json TEXT NOT NULL DEFAULT '',
+                custom_dns INTEGER NOT NULL DEFAULT 0,
+                source_gid INTEGER NOT NULL DEFAULT -1,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
             )
@@ -47,6 +51,12 @@ namespace Configs {
             db.exec("ALTER TABLE route_profiles ADD COLUMN endpoint_profile_ids TEXT NOT NULL DEFAULT '[]'");
         if (!routeProfilesColumnExists("inner_hop_endpoint_ids"))
             db.exec("ALTER TABLE route_profiles ADD COLUMN inner_hop_endpoint_ids TEXT NOT NULL DEFAULT '[]'");
+        if (!routeProfilesColumnExists("dns_json"))
+            db.exec("ALTER TABLE route_profiles ADD COLUMN dns_json TEXT NOT NULL DEFAULT ''");
+        if (!routeProfilesColumnExists("custom_dns"))
+            db.exec("ALTER TABLE route_profiles ADD COLUMN custom_dns INTEGER NOT NULL DEFAULT 0");
+        if (!routeProfilesColumnExists("source_gid"))
+            db.exec("ALTER TABLE route_profiles ADD COLUMN source_gid INTEGER NOT NULL DEFAULT -1");
 
         db.exec(R"(
             CREATE TABLE IF NOT EXISTS route_rules (
@@ -89,6 +99,10 @@ namespace Configs {
                 tls_spoof TEXT,
                 tls_spoof_method TEXT,
                 package_name_json TEXT,
+                tls_fragment INTEGER NOT NULL DEFAULT 0,
+                tls_fragment_fallback_delay TEXT,
+                tls_record_fragment INTEGER NOT NULL DEFAULT 0,
+                disabled INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (route_profile_id, rule_order),
                 FOREIGN KEY(route_profile_id) REFERENCES route_profiles(id) ON DELETE CASCADE
             )
@@ -103,6 +117,14 @@ namespace Configs {
             db.exec("ALTER TABLE route_rules ADD COLUMN tls_spoof_method TEXT");
         if (!routeRulesColumnExists("package_name_json"))
             db.exec("ALTER TABLE route_rules ADD COLUMN package_name_json TEXT");
+        if (!routeRulesColumnExists("tls_fragment"))
+            db.exec("ALTER TABLE route_rules ADD COLUMN tls_fragment INTEGER NOT NULL DEFAULT 0");
+        if (!routeRulesColumnExists("tls_fragment_fallback_delay"))
+            db.exec("ALTER TABLE route_rules ADD COLUMN tls_fragment_fallback_delay TEXT");
+        if (!routeRulesColumnExists("tls_record_fragment"))
+            db.exec("ALTER TABLE route_rules ADD COLUMN tls_record_fragment INTEGER NOT NULL DEFAULT 0");
+        if (!routeRulesColumnExists("disabled"))
+            db.exec("ALTER TABLE route_rules ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0");
     }
 
     bool RoutesRepo::routeRulesColumnExists(const char* columnName) const {
@@ -128,6 +150,7 @@ namespace Configs {
         
         json["name"] = rule->name;
         json["type"] = rule->type;
+        json["disabled"] = rule->disabled;
         json["ip_version"] = rule->ip_version;
         json["network"] = rule->network;
         json["protocol"] = rule->protocol;
@@ -158,6 +181,9 @@ namespace Configs {
         json["no_drop"] = rule->no_drop;
         json["override_address"] = rule->override_address;
         json["override_port"] = rule->override_port;
+        json["tls_fragment"] = rule->tls_fragment;
+        json["tls_fragment_fallback_delay"] = rule->tls_fragment_fallback_delay;
+        json["tls_record_fragment"] = rule->tls_record_fragment;
         json["tls_spoof"] = rule->tls_spoof;
         json["tls_spoof_method"] = rule->tls_spoof_method;
         json["sniffers"] = QListStr2QJsonArray(rule->sniffers);
@@ -172,6 +198,7 @@ namespace Configs {
         
         rule->name = json["name"].toString();
         rule->type = json["type"].toInt();
+        rule->disabled = json["disabled"].toBool();
         rule->ip_version = json["ip_version"].toString();
         rule->network = json["network"].toString();
         rule->protocol = json["protocol"].toString();
@@ -202,6 +229,9 @@ namespace Configs {
         rule->no_drop = json["no_drop"].toBool();
         rule->override_address = json["override_address"].toString();
         rule->override_port = json["override_port"].toString();
+        rule->tls_fragment = json["tls_fragment"].toBool();
+        rule->tls_fragment_fallback_delay = json["tls_fragment_fallback_delay"].toString();
+        rule->tls_record_fragment = json["tls_record_fragment"].toBool();
         rule->tls_spoof = json["tls_spoof"].toString();
         rule->tls_spoof_method = json["tls_spoof_method"].toString();
         rule->sniffers = QJsonArray2QListString(json["sniffers"].toArray());
@@ -224,6 +254,7 @@ namespace Configs {
         json["remoteURL"] = routeProfile->remoteURL;
         json["autoUpdate"] = routeProfile->autoUpdate;
         json["remoteLastUpdate"] = routeProfile->remoteLastUpdate;
+        json["sourceGid"] = routeProfile->source_gid;
 
         QJsonArray endpointsArray;
         for (const int endpointID : routeProfile->endpointProfileIDs) endpointsArray.append(endpointID);
@@ -232,6 +263,8 @@ namespace Configs {
         QJsonArray innerHopsArray;
         for (const int endpointID : routeProfile->innerHopEndpointIDs) innerHopsArray.append(endpointID);
         json["innerHopEndpointIDs"] = innerHopsArray;
+        json["customDns"] = routeProfile->customDns;
+        if (routeProfile->dns) json["dns"] = routeProfile->dns->ToJson();
 
         QJsonArray rulesArray;
         for (const auto& rule : routeProfile->Rules) {
@@ -255,12 +288,15 @@ namespace Configs {
         routeProfile->remoteURL = json["remoteURL"].toString();
         routeProfile->autoUpdate = json["autoUpdate"].toBool();
         routeProfile->remoteLastUpdate = static_cast<qint64>(json["remoteLastUpdate"].toDouble());
+        routeProfile->source_gid = json["sourceGid"].toInt(-1);
         for (const auto& endpointValue : json["endpointProfileIDs"].toArray()) {
             if (endpointValue.isDouble()) routeProfile->endpointProfileIDs.append(endpointValue.toInt());
         }
         for (const auto& endpointValue : json["innerHopEndpointIDs"].toArray()) {
             if (endpointValue.isDouble()) routeProfile->innerHopEndpointIDs.append(endpointValue.toInt());
         }
+        if (json["dns"].isObject()) routeProfile->dns = RouteDns::FromJson(json["dns"].toObject());
+        routeProfile->customDns = json["customDns"].toBool() && routeProfile->dns.has_value();
 
         if (json.contains("rules") && json["rules"].isArray()) {
             QJsonArray rulesArray = json["rules"].toArray();
@@ -276,14 +312,10 @@ namespace Configs {
     }
 
     void RoutesRepo::saveToDatabase(const RouteProfile* routeProfile, int id) const {
-        try {
-            db.execThrow("BEGIN IMMEDIATE");
+        db.transaction("RoutesRepo::saveToDatabase", [&] {
             saveToDatabaseInTx(routeProfile, id);
-            db.execThrow("COMMIT");
-        } catch (std::exception& e) {
-            try { db.execThrow("ROLLBACK"); } catch (...) {}
-            NotifyError("RoutesRepo::saveToDatabase", e);
-        }
+            return true;
+        });
     }
 
     void RoutesRepo::saveToDatabaseInTx(const RouteProfile* routeProfile, int id) const {
@@ -295,11 +327,14 @@ namespace Configs {
         for (const int endpointID : routeProfile->innerHopEndpointIDs) innerHopsArray.append(endpointID);
         const QString innerHopsJson = QString::fromUtf8(QJsonDocument(innerHopsArray).toJson(QJsonDocument::Compact));
 
+        const QString dnsJson = routeProfile->dns
+            ? QString::fromUtf8(QJsonDocument(routeProfile->dns->ToJson()).toJson(QJsonDocument::Compact)) : QString();
+
         db.execThrow(R"(
             INSERT INTO route_profiles (id, name, default_outbound_id, is_raw, raw_route, prevent_modifications,
                 is_remote, remote_url, auto_update, remote_last_update, endpoint_profile_ids,
-                inner_hop_endpoint_ids)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                inner_hop_endpoint_ids, dns_json, custom_dns, source_gid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name, default_outbound_id = excluded.default_outbound_id,
                 is_raw = excluded.is_raw, raw_route = excluded.raw_route,
@@ -308,6 +343,8 @@ namespace Configs {
                 auto_update = excluded.auto_update, remote_last_update = excluded.remote_last_update,
                 endpoint_profile_ids = excluded.endpoint_profile_ids,
                 inner_hop_endpoint_ids = excluded.inner_hop_endpoint_ids,
+                dns_json = excluded.dns_json, custom_dns = excluded.custom_dns,
+                source_gid = excluded.source_gid,
                 updated_at = strftime('%s', 'now')
         )",
             id,
@@ -321,7 +358,10 @@ namespace Configs {
             routeProfile->autoUpdate ? 1 : 0,
             static_cast<long long>(routeProfile->remoteLastUpdate),
             endpointsJson.toStdString(),
-            innerHopsJson.toStdString()
+            innerHopsJson.toStdString(),
+            dnsJson.toStdString(),
+            routeProfile->customDns ? 1 : 0,
+            routeProfile->source_gid
         );
 
         db.execThrow("DELETE FROM route_rules WHERE route_profile_id = ?", id);
@@ -377,8 +417,9 @@ namespace Configs {
                  process_name_json, process_path_json, process_path_regex_json, rule_set_json,
                  invert, outbound_id, action, reject_method, no_drop,
                  override_address, override_port, sniffers_json, sniff_override_dest, strategy,
-                 wifi_ssid_json, wifi_bssid_json, tls_spoof, tls_spoof_method, package_name_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 wifi_ssid_json, wifi_bssid_json, tls_spoof, tls_spoof_method, package_name_json,
+                 tls_fragment, tls_fragment_fallback_delay, tls_record_fragment, disabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 ruleOrder++,
@@ -418,7 +459,11 @@ namespace Configs {
                 wifiBssidJson.toStdString(),
                 rule->tls_spoof.toStdString(),
                 rule->tls_spoof_method.toStdString(),
-                packageNameJson.toStdString()
+                packageNameJson.toStdString(),
+                rule->tls_fragment ? 1 : 0,
+                rule->tls_fragment_fallback_delay.toStdString(),
+                rule->tls_record_fragment ? 1 : 0,
+                rule->disabled ? 1 : 0
             );
         }
     }
@@ -467,6 +512,10 @@ namespace Configs {
         ruleJson["tls_spoof"] = QString::fromStdString(stmt.getColumn(baseCol + 34).getText());
         ruleJson["tls_spoof_method"] = QString::fromStdString(stmt.getColumn(baseCol + 35).getText());
         ruleJson["package_name"] = parseJsonArray(stmt.getColumn(baseCol + 36).getText());
+        ruleJson["tls_fragment"] = stmt.getColumn(baseCol + 37).getInt() != 0;
+        ruleJson["tls_fragment_fallback_delay"] = QString::fromStdString(stmt.getColumn(baseCol + 38).getText());
+        ruleJson["tls_record_fragment"] = stmt.getColumn(baseCol + 39).getInt() != 0;
+        ruleJson["disabled"] = stmt.getColumn(baseCol + 40).getInt() != 0;
         return ruleJson;
     }
 
@@ -486,6 +535,10 @@ namespace Configs {
         json["endpointProfileIDs"] = endpointsDoc.isArray() ? endpointsDoc.array() : QJsonArray();
         const auto innerHopsDoc = QJsonDocument::fromJson(QString::fromStdString(stmt.getColumn(11).getText()).toUtf8());
         json["innerHopEndpointIDs"] = innerHopsDoc.isArray() ? innerHopsDoc.array() : QJsonArray();
+        if (const auto dnsDoc = QJsonDocument::fromJson(QString::fromStdString(stmt.getColumn(12).getText()).toUtf8()); dnsDoc.isObject())
+            json["dns"] = dnsDoc.object();
+        json["customDns"] = stmt.getColumn(13).getInt() != 0;
+        json["sourceGid"] = stmt.getColumn(14).getInt();
         json["rules"] = QJsonArray();
         return routeProfileFromJson(json);
     }
@@ -505,7 +558,8 @@ namespace Configs {
             "process_name_json, process_path_json, process_path_regex_json, rule_set_json, "
             "invert, outbound_id, action, reject_method, no_drop, "
             "override_address, override_port, sniffers_json, sniff_override_dest, strategy, "
-            "wifi_ssid_json, wifi_bssid_json, tls_spoof, tls_spoof_method, package_name_json "
+            "wifi_ssid_json, wifi_bssid_json, tls_spoof, tls_spoof_method, package_name_json, "
+            "tls_fragment, tls_fragment_fallback_delay, tls_record_fragment, disabled "
             "FROM route_rules WHERE route_profile_id IN (" + idList.toStdString() + ") ORDER BY route_profile_id, rule_order";
         auto rulesQuery = db.query(sql);
         if (!rulesQuery) return;
@@ -522,7 +576,7 @@ namespace Configs {
         auto profileQuery = db.query(R"(
             SELECT id, name, default_outbound_id, is_raw, raw_route, prevent_modifications,
                    is_remote, remote_url, auto_update, remote_last_update, endpoint_profile_ids,
-                   inner_hop_endpoint_ids
+                   inner_hop_endpoint_ids, dns_json, custom_dns, source_gid
             FROM route_profiles WHERE id = ?
         )", id);
         if (!profileQuery || !profileQuery->executeStep()) {
@@ -539,7 +593,8 @@ namespace Configs {
                    process_name_json, process_path_json, process_path_regex_json, rule_set_json,
                    invert, outbound_id, action, reject_method, no_drop,
                    override_address, override_port, sniffers_json, sniff_override_dest, strategy,
-                   wifi_ssid_json, wifi_bssid_json, tls_spoof, tls_spoof_method, package_name_json
+                   wifi_ssid_json, wifi_bssid_json, tls_spoof, tls_spoof_method, package_name_json,
+                   tls_fragment, tls_fragment_fallback_delay, tls_record_fragment, disabled
             FROM route_rules WHERE route_profile_id = ? ORDER BY rule_order
         )", id);
         if (rulesQuery) {
@@ -562,6 +617,7 @@ namespace Configs {
         QMutexLocker locker(&mutex);
         identityMap[newId] = std::weak_ptr<RouteProfile>(routeProfile);
         saveToDatabase(routeProfile.get(), routeProfile->id);
+        ++revision;
         return true;
     }
 
@@ -577,43 +633,112 @@ namespace Configs {
         return routeProfile;
     }
 
-    void RoutesRepo::DeleteRouteProfile(int id) {
+    std::optional<RouteDns> RoutesRepo::GetCustomDns(int id) const {
         QMutexLocker locker(&mutex);
-        identityMap.erase(id);
-        db.exec("DELETE FROM route_profiles WHERE id = ?", id);
+        if (auto it = identityMap.find(id); it != identityMap.end()) {
+            if (auto shared = it->second.lock()) return shared->ActiveDns();
+        }
+        auto query = db.query("SELECT custom_dns, dns_json FROM route_profiles WHERE id = ?", id);
+        if (!query || !query->executeStep() || query->getColumn(0).getInt() == 0) return std::nullopt;
+        const auto doc = QJsonDocument::fromJson(QString::fromStdString(query->getColumn(1).getText()).toUtf8());
+        if (!doc.isObject()) return std::nullopt;
+        return RouteDns::FromJson(doc.object());
     }
 
-    void RoutesRepo::UpdateRouteProfiles(const QList<std::shared_ptr<RouteProfile>>& routeProfiles) {
-        QSet<int> existingIds;
-        auto query = db.query("SELECT id FROM route_profiles");
-        if (query) {
-            while (query->executeStep()) {
-                existingIds.insert(query->getColumn(0).getInt());
-            }
-        }
-
+    bool RoutesRepo::HasRouteProfile(int id) const {
+        if (id < 0) return false;
         QMutexLocker locker(&mutex);
-        QSet<int> newIds;
-        for (const auto& routeProfile : routeProfiles) {
-            newIds.insert(routeProfile->id);
-            if (routeProfile->id < 0) {
-                routeProfile->id = NewRouteProfileID();
+        if (auto it = identityMap.find(id); it != identityMap.end() && !it->second.expired()) return true;
+        auto query = db.query("SELECT 1 FROM route_profiles WHERE id = ?", id);
+        return query && query->executeStep();
+    }
+
+    QList<int> RoutesRepo::OwnedBy(int gid) const {
+        QList<int> ids;
+        if (gid < 0) return ids;
+        auto query = db.query("SELECT id FROM route_profiles WHERE source_gid = ? ORDER BY id", gid);
+        if (query) {
+            while (query->executeStep()) ids.append(query->getColumn(0).getInt());
+        }
+        return ids;
+    }
+
+    void RoutesRepo::DeleteRouteProfile(int id) {
+        DeleteRouteProfiles({id});
+    }
+
+    void RoutesRepo::DeleteRouteProfiles(const QList<int>& ids) {
+        if (ids.isEmpty()) return;
+        std::vector<int> doomed(ids.cbegin(), ids.cend());
+        QSet<int> owners;
+        {
+            QMutexLocker locker(&mutex);
+            QString idList;
+            for (const int id : ids) idList += (idList.isEmpty() ? "" : ",") + QString::number(id);
+            if (auto query = db.query("SELECT source_gid FROM route_profiles WHERE id IN (" + idList.toStdString() + ")")) {
+                while (query->executeStep()) {
+                    if (const int gid = query->getColumn(0).getInt(); gid >= 0) owners.insert(gid);
+                }
             }
-            saveToDatabase(routeProfile.get(), routeProfile->id);
+            for (const int id : ids) identityMap.erase(id);
+            db.execDeleteByIdIn("route_profiles", "id", doomed);
+            ++revision;
+        }
+        // Outside the lock: the groups repo takes its own.
+        forgetDeleted(QSet<int>(ids.cbegin(), ids.cend()), owners);
+    }
+
+    void RoutesRepo::forgetDeleted(const QSet<int>& deleted, const QSet<int>& owners) {
+        auto& groupsRepo = dataManager->groupsRepo;
+        for (const int gid : groupsRepo->GetAllGroupIds()) {
+            const auto group = groupsRepo->GetGroup(gid);
+            if (group == nullptr) continue;
+            bool changed = false;
+            if (deleted.contains(group->route_id)) {
+                group->route_id = -1;
+                changed = true;
+                MW_show_log(QStringLiteral("[Groups] %1: routing profile reset to Default (its profile was deleted)").arg(group->name));
+            }
+            if (owners.contains(gid) && group->import_sub_route) {
+                group->import_sub_route = false;
+                changed = true;
+                MW_show_log(QStringLiteral("[Groups] %1: stopped importing the subscription's routing profile (it was deleted)").arg(group->name));
+            }
+            if (changed) groupsRepo->Save(group);
         }
 
-        std::vector<int> toDelete;
-        for (int id : existingIds) {
-            if (!newIds.contains(id)) toDelete.push_back(id);
+        auto& settings = dataManager->settingsRepo;
+        if (!deleted.contains(settings->current_route_id)) return;
+        const auto remaining = GetAllRouteProfileIds();
+        if (!remaining.isEmpty()) {
+            settings->current_route_id = remaining.first();
+        } else {
+            auto fallback = RouteProfile::GetDefaultChain();
+            AddRouteProfile(fallback);
+            settings->current_route_id = fallback->id;
         }
+        settings->Save();
+    }
 
-        for (const auto& routeProfile : routeProfiles) {
-            identityMap[routeProfile->id] = std::weak_ptr<RouteProfile>(routeProfile);
+    void RoutesRepo::UpdateRouteProfiles(const QList<std::shared_ptr<RouteProfile>>& routeProfiles, const QList<int>& removedIds) {
+        QSet<int> kept;
+        {
+            QMutexLocker locker(&mutex);
+            for (const auto& routeProfile : routeProfiles) {
+                if (routeProfile->id < 0) {
+                    routeProfile->id = NewRouteProfileID();
+                }
+                kept.insert(routeProfile->id);
+                saveToDatabase(routeProfile.get(), routeProfile->id);
+                identityMap[routeProfile->id] = std::weak_ptr<RouteProfile>(routeProfile);
+            }
+            ++revision;
         }
-        for (int id : toDelete) identityMap.erase(id);
-        if (!toDelete.empty()) {
-            db.execDeleteByIdIn("route_profiles", "id", toDelete);
+        QList<int> doomed;
+        for (const int id : removedIds) {
+            if (id >= 0 && !kept.contains(id) && !doomed.contains(id)) doomed << id;
         }
+        DeleteRouteProfiles(doomed);
     }
 
     QList<int> RoutesRepo::GetAllRouteProfileIds() const {
@@ -633,7 +758,7 @@ namespace Configs {
         QList<int> idsInOrder;
         QSet<int> cachedProfiles;
 
-        auto profileQuery = db.query("SELECT id, name, default_outbound_id, is_raw, raw_route, prevent_modifications, is_remote, remote_url, auto_update, remote_last_update, endpoint_profile_ids, inner_hop_endpoint_ids FROM route_profiles ORDER BY id");
+        auto profileQuery = db.query("SELECT id, name, default_outbound_id, is_raw, raw_route, prevent_modifications, is_remote, remote_url, auto_update, remote_last_update, endpoint_profile_ids, inner_hop_endpoint_ids, dns_json, custom_dns, source_gid FROM route_profiles ORDER BY id");
         if (!profileQuery) return routeProfiles;
 
         QMutexLocker locker(&mutex);
@@ -695,6 +820,7 @@ namespace Configs {
         QMutexLocker locker(&mutex);
         saveToDatabase(routeProfile.get(), routeProfile->id);
         identityMap[routeProfile->id] = std::weak_ptr<RouteProfile>(routeProfile);
+        ++revision;
         
         return true;
     }

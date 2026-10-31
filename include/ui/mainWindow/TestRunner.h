@@ -19,6 +19,11 @@
 #include "include/database/entities/Profile.h"
 
 class MainWindow;
+namespace Engine {
+    QMutex& SharedTestSession();
+    std::atomic<bool>& SharedTestStopRequested();
+    std::atomic<quint64>& SharedTestGeneration();
+}
 
 // Not a QObject: queued signals would reorder the synchronous progress path.
 class TestRunner {
@@ -140,10 +145,10 @@ private:
     MainWindow* mw_;
 
     // Held for a whole sweep, so it must never double as a per-batch latch.
-    QMutex session_;
+    QMutex& session_ = Engine::SharedTestSession();
     // A poll thread is not joined, so a late tick must not drain the next batch.
-    std::atomic<quint64> sessionGen_ = 0;
-    std::atomic<bool> stopRequested_ = false;
+    std::atomic<quint64>& sessionGen_ = Engine::SharedTestGeneration();
+    std::atomic<bool>& stopRequested_ = Engine::SharedTestStopRequested();
     std::atomic<bool> testingCurrent_ = false;
 
     // Tests bypass the clash tracker, so their bytes are counted only here, diffed per tag.

@@ -1,6 +1,7 @@
 #pragma once
 #include <QList>
 #include <QString>
+#include <QStringList>
 #include <memory>
 
 class QWidget;
@@ -11,8 +12,11 @@ namespace Configs_network {
         QList<int> reserved;
     };
 
+    // Fresh offline QUIC flight from the core. Blocking RPC; never call on the UI thread.
+    QStringList GenerateWarpCamouflage(QString &error);
+
     // Blocking (RPC); never call on the UI thread. tunnelType: "wireguard" | "masque".
     std::shared_ptr<WarpIdentity> RegisterWarp(const QString &tunnelType, QString *error);
-    // Asks once (persisted in settings warp_tos_accepted) whether the user accepts Cloudflare's WARP terms; UI thread only.
+    // Asks once (persisted in settings warp_tos_accepted) whether the user accepts Cloudflare's WARP terms; UI thread only. Without a QApplication it returns the stored answer.
     bool ConfirmWarpTerms(QWidget *parent);
 }

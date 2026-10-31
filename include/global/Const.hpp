@@ -18,7 +18,7 @@ namespace Configs {
     }
 
     namespace SingboxOptions {
-        inline QStringList SniffProtocols = {"http", "tls", "quic", "stun", "dns", "bittorrent", "dtls", "ssh", "rdp"};
+        inline QStringList SniffProtocols = {"http", "tls", "quic", "stun", "dns", "bittorrent", "dtls", "ssh", "rdp", "ntp"};
         inline QStringList ActionTypes = {"route", "reject", "hijack-dns", "route-options", "sniff", "resolve"};
         inline QStringList rejectMethods = {"default", "drop", "reply"};
     }
@@ -61,14 +61,12 @@ namespace Configs {
     }
 
     namespace Xray {
-        inline QStringList XrayLogLevels = {"debug", "info", "warning", "error", "none"};
-        inline QStringList XrayVlessPreferenceString = {"XHTTP Only", "XHTTP And Reality", "All VLESS"};
-        enum XrayVlessPreference {
-            XhttpOnly,
-            XhttpAndReality,
-            AllVLESS,
+        enum PreferredCore {
+            SingBoxCore,
+            XrayCore,
         };
-
+        inline QStringList PreferredCoreString = {"sing-box", "Xray"};
+        inline QStringList XrayLogLevels = {"debug", "info", "warning", "error", "none"};
         struct GeoAssetProvider {
             QString name;
             QString geoip;

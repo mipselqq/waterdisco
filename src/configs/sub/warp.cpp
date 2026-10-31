@@ -1,6 +1,7 @@
 #include <include/configs/sub/warp.h>
 #include <include/api/RPC.h>
 #include <include/global/Configs.hpp>
+#include <include/global/HTTPRequestHelper.hpp>
 #include <include/global/LocalNetwork.hpp>
 #include <QMessageBox>
 #include <QObject>
@@ -9,12 +10,8 @@
 namespace Configs_network {
     namespace {
         QString warpProxy(QString *error) {
+            if (!RequestUsesMixedInbound(false, error)) return {};
             const auto &settings = Configs::dataManager->settingsRepo;
-            if (!settings->net_use_proxy && !settings->spmode_system_proxy) return {};
-            if (settings->started_id < 0) {
-                *error = QObject::tr("Request with proxy but no profile started.");
-                return {};
-            }
             QString host = LocalNetwork::InboundConnectHost();
             if (host.contains(':')) host = "[" + host + "]";
             QString credentials;
@@ -54,9 +51,32 @@ namespace Configs_network {
         return identity;
     }
 
+    QStringList GenerateWarpCamouflage(QString &error) {
+        error.clear();
+        bool rpcOK = false;
+        const auto reply = API::defaultClient
+            ? API::defaultClient->GenQuicSignature(&rpcOK, QStringLiteral("www.cloudflare.com"))
+            : libcore::GenQuicSignatureResponse{};
+        error = rpcOK ? QString::fromStdString(reply.error.value_or("")) : QObject::tr("Failed to reach the core.");
+        QStringList packets;
+        for (const auto &packet : reply.packets) packets << QString::fromStdString(packet);
+        if (error.isEmpty() && (packets.isEmpty() || packets.size() > 5 || packets.contains(QString())))
+            error = QObject::tr("The core returned an invalid QUIC signature.");
+        if (!error.isEmpty()) {
+            error = QObject::tr("Failed to generate WARP QUIC signature: %1").arg(error);
+            return {};
+        }
+        return packets;
+    }
+
     bool ConfirmWarpTerms(QWidget *parent) {
         const auto &settings = Configs::dataManager->settingsRepo;
         if (settings->warp_tos_accepted) return true;
+        if (!IsGuiApp()) {
+            LogHeadlessDialog(QStringLiteral("ConfirmWarpTerms"), QStringLiteral("Cloudflare WARP"),
+                              QStringLiteral("Accept the Cloudflare WARP terms of service?"), QStringLiteral("false"));
+            return settings->warp_tos_accepted;
+        }
 
         QMessageBox box(QMessageBox::Question, QObject::tr("Cloudflare WARP"),
                         QObject::tr("Generating a WARP identity registers a new device with Cloudflare.<br><br>"

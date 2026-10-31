@@ -1,4 +1,5 @@
 #include "include/ui/utils/DataViewHtmlGenerator.h"
+#include <QTextDocument>
 
 #include "include/global/Configs.hpp"
 #include "include/ui/setting/ThemeManager.hpp"
@@ -13,18 +14,22 @@ namespace {
         DataViewPriority priority;
     };
 
-    // Within one level, panels render in this order.
+    // Within one level, the first visible panel in this order is the one shown; ambient status comes last.
     constexpr std::array kItemPriorities = {
         ItemPriority{DataViewItem::SpeedTest, DataViewPriority::Critical},
         ItemPriority{DataViewItem::LatencyTest, DataViewPriority::Critical},
         ItemPriority{DataViewItem::PendingRestart, DataViewPriority::Medium},
         ItemPriority{DataViewItem::Scanner, DataViewPriority::Medium},
+        ItemPriority{DataViewItem::Download, DataViewPriority::Medium},
         ItemPriority{DataViewItem::VpnEndpoint, DataViewPriority::Medium},
         ItemPriority{DataViewItem::AutoSelector, DataViewPriority::Medium},
-        ItemPriority{DataViewItem::Download, DataViewPriority::Medium},
     };
 
-    constexpr int kScannerPanelLines = 3;
+    constexpr int kScannerPanelLines = 2;
+
+    QString dataViewToolTip(const QStringList &lines) {
+        return lines.isEmpty() ? QString() : Qt::convertFromPlainText(lines.join(u'\n'), Qt::WhiteSpaceNormal);
+    }
 
     constexpr std::array kPriorityOrder = {
         DataViewPriority::Critical,
@@ -78,6 +83,11 @@ void DataViewHtmlGenerator::setRankedSpeedtestProgress(const QString &stage, con
     testProgress.store(tested + skipped);
 }
 
+void DataViewHtmlGenerator::setSpeedtestProgress(const QString &profileName, const libcore::SpeedTestResult &) {
+    QMutexLocker lk(&mu_);
+    speedtest_.profileName = profileName;
+}
+
 void DataViewHtmlGenerator::seedLatencyTest(LatencyTestPanelState::Kind kind, int totalProfiles) {
     QMutexLocker lk(&mu_);
     testProgress.store(0);
@@ -101,28 +111,10 @@ void DataViewHtmlGenerator::setVpnEndpointStatus(const QString &summary, const Q
     vpnEndpoint_.visible = !summary.isEmpty();
 }
 
-void DataViewHtmlGenerator::addPendingRestartReason(const QString &reason) {
+void DataViewHtmlGenerator::setPendingRestartReasons(const QStringList &reasons) {
     QMutexLocker lk(&mu_);
-    QString trimmed = reason.trimmed();
-    if (trimmed.isEmpty()) trimmed = QObject::tr("Settings");
-    if (!pendingRestart_.reasons.contains(trimmed)) {
-        if (pendingRestart_.reasons.size() < 4) {
-            pendingRestart_.reasons << trimmed;
-        } else if (pendingRestart_.reasons.last() != QStringLiteral("...")) {
-            pendingRestart_.reasons << QStringLiteral("...");
-        }
-    }
-    pendingRestart_.visible = true;
-}
-
-void DataViewHtmlGenerator::clearPendingRestart() {
-    QMutexLocker lk(&mu_);
-    pendingRestart_ = {};
-}
-
-bool DataViewHtmlGenerator::hasPendingRestart() const {
-    QMutexLocker lk(&mu_);
-    return pendingRestart_.visible;
+    pendingRestart_.reasons = reasons;
+    pendingRestart_.visible = !reasons.isEmpty();
 }
 
 void DataViewHtmlGenerator::setScannerPanel(const QList<ScannerPanelItem> &items) {
@@ -141,19 +133,12 @@ void DataViewHtmlGenerator::addTestProgress(int count) {
     testProgress.fetch_add(count);
 }
 
-QString DataViewHtmlGenerator::buildHtml() {
+DataViewHtmlGenerator::Content DataViewHtmlGenerator::build() {
     QMutexLocker lk(&mu_);
     for (const auto priority : kPriorityOrder) {
-        int occupied = 0;
         for (const auto &entry : kItemPriorities) {
-            if (entry.priority == priority && itemVisible(entry.item)) ++occupied;
+            if (entry.priority == priority && itemVisible(entry.item)) return itemContent(entry.item);
         }
-        if (occupied == 0) continue;
-        QString html;
-        for (const auto &entry : kItemPriorities) {
-            if (entry.priority == priority) html += itemHtml(entry.item, occupied > 1);
-        }
-        return html;
     }
     return {};
 }
@@ -171,60 +156,56 @@ bool DataViewHtmlGenerator::itemVisible(DataViewItem item) const {
     return false;
 }
 
-QString DataViewHtmlGenerator::itemHtml(DataViewItem item, bool shared) {
-    if (!itemVisible(item)) return {};
+DataViewHtmlGenerator::Content DataViewHtmlGenerator::itemContent(DataViewItem item) {
     switch (item) {
-        case DataViewItem::Download:       return downloadSectionHtml();
-        case DataViewItem::SpeedTest:      return speedtestSectionHtml();
-        case DataViewItem::LatencyTest:    return latencyTestSectionHtml();
-        case DataViewItem::AutoSelector:   return autoSelectorSectionHtml();
-        case DataViewItem::VpnEndpoint:    return vpnEndpointSectionHtml();
-        case DataViewItem::PendingRestart: return pendingRestartSectionHtml(shared && !scanner_.isEmpty());
-        case DataViewItem::Scanner:        return scannerSectionHtml(shared);
+        case DataViewItem::Download:       return {downloadSectionHtml(), {}};
+        case DataViewItem::SpeedTest:      return speedtestSection();
+        case DataViewItem::LatencyTest:    return {latencyTestSectionHtml(), {}};
+        case DataViewItem::AutoSelector:   return {autoSelectorSectionHtml(), {}};
+        case DataViewItem::VpnEndpoint:    return {vpnEndpointSectionHtml(), {}};
+        case DataViewItem::PendingRestart: return pendingRestartSection();
+        case DataViewItem::Scanner:        return scannerSection();
     }
     return {};
 }
 
-QString DataViewHtmlGenerator::scannerSectionHtml(bool compact) {
+DataViewHtmlGenerator::Content DataViewHtmlGenerator::scannerSection() {
     const auto &tokens = themeManager()->tokens;
-    // The view fits about three lines; when shared, the scanner takes one.
-    if (compact) {
-        QString line = dataViewScannerProgressLine(scanner_.first());
-        if (scanner_.size() > 1) line += QObject::tr(" · +%n more", nullptr, static_cast<int>(scanner_.size() - 1));
-        return QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>").arg(tokens.info.name(), line.toHtmlEscaped());
-    }
     const qsizetype shown = scanner_.size() > kScannerPanelLines ? kScannerPanelLines - 1 : scanner_.size();
-    QString res;
-    for (qsizetype i = 0; i < shown; ++i) {
+    Content res;
+    QStringList all;
+    for (qsizetype i = 0; i < scanner_.size(); ++i) {
         const auto &item = scanner_.at(i);
         QString line = dataViewScannerProgressLine(item);
         if (item.found > 0) line += QObject::tr(" · %1 found").arg(item.found);
-        res += QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
-                   .arg(tokens.info.name(), line.toHtmlEscaped());
+        all << line;
+        if (i >= shown) continue;
+        res.html += QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
+                        .arg(tokens.info.name(), line.toHtmlEscaped());
     }
     if (shown < scanner_.size()) {
-        res += QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
-                   .arg(tokens.muted.name(), QObject::tr("+%1 more").arg(scanner_.size() - shown).toHtmlEscaped());
+        res.html += QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
+                        .arg(tokens.muted.name(), QObject::tr("+%1 more").arg(scanner_.size() - shown).toHtmlEscaped());
+        res.toolTip = dataViewToolTip(all);
     }
     return res;
 }
 
-QString DataViewHtmlGenerator::pendingRestartSectionHtml(bool compact) {
+DataViewHtmlGenerator::Content DataViewHtmlGenerator::pendingRestartSection() {
     const auto &tokens = themeManager()->tokens;
-    QString res = QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
-                      .arg(tokens.info.name(), QObject::tr("Settings changed, restart to apply").toHtmlEscaped());
-    // Without the reasons line, the Restart/Ignore links stay visible above the scan line.
-    if (!compact && !pendingRestart_.reasons.isEmpty()) {
-        res += QString("<p style='text-align:center;margin:0;opacity:0.75;'>%1</p>")
-                   .arg(pendingRestart_.reasons.join(QStringLiteral(", ")).toHtmlEscaped());
+    Content res;
+    res.html = QString("<p style='text-align:center;margin:0;color:%1;'>%2</p>")
+                   .arg(tokens.info.name(), QObject::tr("Settings changed, restart to apply").toHtmlEscaped());
+    res.html += QString("<p style='text-align:center;margin:0;'>"
+                        "<a style='color:%1;' href='%2'>%3</a>"
+                        "&nbsp;&nbsp;&#183;&nbsp;&nbsp;"
+                        "<a style='color:%4;' href='%5'>%6</a>"
+                        "</p>")
+                    .arg(tokens.accent.name(), QString(RestartActionUrl), QObject::tr("Restart").toHtmlEscaped(),
+                         tokens.muted.name(), QString(DismissRestartActionUrl), QObject::tr("Ignore").toHtmlEscaped());
+    if (!pendingRestart_.reasons.isEmpty()) {
+        res.toolTip = dataViewToolTip({QObject::tr("Changed: %1").arg(pendingRestart_.reasons.join(QStringLiteral(", ")))});
     }
-    res += QString("<p style='text-align:center;margin:0;'>"
-                   "<a style='color:%1;' href='%2'>%3</a>"
-                   "&nbsp;&nbsp;&#183;&nbsp;&nbsp;"
-                   "<a style='color:%4;' href='%5'>%6</a>"
-                   "</p>")
-               .arg(tokens.accent.name(), QString(RestartActionUrl), QObject::tr("Restart").toHtmlEscaped(),
-                    tokens.muted.name(), QString(DismissRestartActionUrl), QObject::tr("Ignore").toHtmlEscaped());
     return res;
 }
 
@@ -272,7 +253,7 @@ QString DataViewHtmlGenerator::downloadSectionHtml() {
         .arg(download_.report.fileName, stat, progressText);
 }
 
-QString DataViewHtmlGenerator::speedtestSectionHtml() {
+DataViewHtmlGenerator::Content DataViewHtmlGenerator::speedtestSection() {
     if (speedtest_.kind == SpeedtestPanelState::Kind::Speed) {
         auto firstLine = speedtest_.stage.isEmpty()
             ? QStringLiteral("Running Speedtest: %1").arg(speedtest_.profileName)
@@ -285,7 +266,7 @@ QString DataViewHtmlGenerator::speedtestSectionHtml() {
                              .arg(speedtest_.tested).arg(speedtest_.skipped);
         }
         const QString elapsedLine = elapsedPanelLine(speedtest_.startedAtMs);
-        return QString("<p style='%1'>%2</p>%3").arg(QLatin1String(kPanelLineStyle), firstLine, elapsedLine);
+        return {QString("<p style='%1'>%2</p>%3").arg(QLatin1String(kPanelLineStyle), firstLine, elapsedLine), {}};
     } else {
         QString res;
         auto content = QString("Running Country Test");
@@ -297,7 +278,7 @@ QString DataViewHtmlGenerator::speedtestSectionHtml() {
         }
         res += QString("<p style='%1'>%2</p>").arg(QLatin1String(kPanelLineStyle), content);
         res += elapsedPanelLine(speedtest_.startedAtMs);
-        return res;
+        return {res, {}};
     }
 }
 

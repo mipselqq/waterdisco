@@ -9,6 +9,7 @@
 #include "include/database/entities/Profile.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
@@ -22,6 +23,8 @@ namespace Configs
             QRegularExpression name;
             bool hasName = false;
             QSet<QString> countries;
+            // "!RU": removed whether or not includes are given.
+            QSet<QString> excludedCountries;
         };
 
         MemberFilters buildFilters(const autoSelector *selector)
@@ -32,8 +35,12 @@ namespace Configs
                                                   QRegularExpression::CaseInsensitiveOption);
                 filters.hasName = filters.name.isValid();
             }
-            for (const auto &code : selector->countryFilter.split(',', Qt::SkipEmptyParts)) {
-                filters.countries.insert(code.trimmed().toUpper());
+            for (const auto &item : selector->countryFilter.split(',', Qt::SkipEmptyParts)) {
+                auto code = item.trimmed();
+                const bool exclude = code.startsWith('!');
+                if (exclude) code = code.mid(1).trimmed();
+                if (code.isEmpty()) continue;
+                (exclude ? filters.excludedCountries : filters.countries).insert(code.toUpper());
             }
             return filters;
         }
@@ -72,8 +79,13 @@ namespace Configs
             if (filters.hasName && !filters.name.match(member->outbound->DisplayName()).hasMatch()) {
                 return AutoSelectorSkip::NameFilter;
             }
-            if (!filters.countries.isEmpty() && !filters.countries.contains(member->test_country.toUpper())) {
-                return AutoSelectorSkip::CountryFilter;
+            if (!filters.countries.isEmpty() || !filters.excludedCountries.isEmpty()) {
+                // Unknown country is skipped either way: an exclusion cannot vouch for a profile never IP-tested.
+                const auto country = member->test_country.trimmed().toUpper();
+                if (country.isEmpty() || filters.excludedCountries.contains(country)
+                    || (!filters.countries.isEmpty() && !filters.countries.contains(country))) {
+                    return AutoSelectorSkip::CountryFilter;
+                }
             }
             // Only a fresh failure excludes a member; an old one would exile it permanently.
             if (selector->excludeUnavailable && member->latency < 0 && hasFreshResult(member, selector, now))
@@ -125,10 +137,8 @@ namespace Configs
             return effectiveLatency(dataManager->profilesRepo->GetProfile(id), selector, now);
         }
 
-        bool byLatency(int left, int right, const autoSelector *selector, qint64 now)
+        bool byLatency(int leftLatency, int rightLatency)
         {
-            const int leftLatency = effectiveLatencyOf(left, selector, now);
-            const int rightLatency = effectiveLatencyOf(right, selector, now);
             const int leftRank = latencyRank(leftLatency);
             const int rightRank = latencyRank(rightLatency);
             if (leftRank != rightRank) return leftRank < rightRank;
@@ -136,50 +146,78 @@ namespace Configs
             return false;
         }
 
+        // Read once up front: a sweep still running rewrites latencies, and a comparator that changes its answer mid-sort is UB.
+        void sortByLatency(QList<int> &ids, const autoSelector *selector, qint64 now, const QSet<int> &untrusted = {})
+        {
+            QHash<int, int> latency;
+            latency.reserve(ids.size());
+            for (int id : std::as_const(ids)) {
+                latency.insert(id, untrusted.contains(id) ? 0 : effectiveLatencyOf(id, selector, now));
+            }
+            std::stable_sort(ids.begin(), ids.end(),
+                             [&latency](int left, int right) { return byLatency(latency.value(left), latency.value(right)); });
+        }
+
         QList<int> eligibleMembers(const std::shared_ptr<Profile> &ent,
                                    const autoSelector *selector,
                                    AutoSelectorPlan *plan)
         {
             QList<int> members;
-            auto group = dataManager->groupsRepo->GetGroup(selector->gid);
-            if (group == nullptr) {
+            if (selector->gids.isEmpty()) {
+                if (plan != nullptr) plan->error = "Auto selector tracks no group";
+                return members;
+            }
+            QList<std::shared_ptr<Group>> groups;
+            for (int gid : selector->gids) {
+                if (auto group = dataManager->groupsRepo->GetGroup(gid); group != nullptr) {
+                    groups << group;
+                } else if (plan != nullptr) {
+                    plan->missingGroups++;
+                }
+            }
+            if (groups.isEmpty()) {
                 if (plan != nullptr) plan->error = "Auto selector points at a group that no longer exists";
                 return members;
             }
             const auto filters = buildFilters(selector);
             const auto now = QDateTime::currentSecsSinceEpoch();
-            const auto landing = group->landing_proxy_id >= 0
-                                     ? dataManager->profilesRepo->GetProfile(group->landing_proxy_id)
-                                     : nullptr;
-            const auto front = group->front_proxy_id >= 0
-                                   ? dataManager->profilesRepo->GetProfile(group->front_proxy_id)
-                                   : nullptr;
             QMap<AutoSelectorSkip, int> skips;
             QList<int> unavailable;
-            for (int id : group->Profiles()) {
-                if (id == ent->id) continue;
-                auto member = dataManager->profilesRepo->GetProfile(id);
-                if (plan != nullptr) plan->membersInGroup++;
-                const auto skip = eligibilityOf(member, selector, filters, now);
-                if (skip != AutoSelectorSkip::None && skip != AutoSelectorSkip::Unavailable) {
-                    skips[skip]++;
-                    continue;
-                }
-                if (member->outbound->IsXrayFullConfig()) {
-                    if (!xrayFullConfigFitsChain(landing, front)) {
-                        skips[AutoSelectorSkip::XrayFullChained]++;
+            QSet<int> seen;
+            for (const auto &group : groups) {
+                // Each member is wrapped in its own group's proxies, so the chain checks run per group.
+                const auto landing = group->landing_proxy_id >= 0
+                                         ? dataManager->profilesRepo->GetProfile(group->landing_proxy_id)
+                                         : nullptr;
+                const auto front = group->front_proxy_id >= 0
+                                       ? dataManager->profilesRepo->GetProfile(group->front_proxy_id)
+                                       : nullptr;
+                for (int id : group->Profiles()) {
+                    if (id == ent->id || seen.contains(id)) continue;
+                    seen.insert(id);
+                    auto member = dataManager->profilesRepo->GetProfile(id);
+                    if (plan != nullptr) plan->membersInGroups++;
+                    const auto skip = eligibilityOf(member, selector, filters, now);
+                    if (skip != AutoSelectorSkip::None && skip != AutoSelectorSkip::Unavailable) {
+                        skips[skip]++;
                         continue;
                     }
-                } else if (coreTransitions(landing, member, front) > 2) {
-                    skips[AutoSelectorSkip::CoreTransitions]++;
-                    continue;
+                    if (member->outbound->IsXrayFullConfig()) {
+                        if (!xrayFullConfigFitsChain(landing, front)) {
+                            skips[AutoSelectorSkip::XrayFullChained]++;
+                            continue;
+                        }
+                    } else if (coreTransitions(landing, member, front) > 2) {
+                        skips[AutoSelectorSkip::CoreTransitions]++;
+                        continue;
+                    }
+                    if (skip == AutoSelectorSkip::Unavailable) {
+                        unavailable << id;
+                        continue;
+                    }
+                    members << id;
+                    if (plan != nullptr && effectiveLatency(member, selector, now) > 0) plan->rankedByTest++;
                 }
-                if (skip == AutoSelectorSkip::Unavailable) {
-                    unavailable << id;
-                    continue;
-                }
-                members << id;
-                if (plan != nullptr && effectiveLatency(member, selector, now) > 0) plan->rankedByTest++;
             }
             // Every member's last test failing is an outage, not a dead subscription: excluding
             // them all would leave nothing that could discover the servers came back.
@@ -215,8 +253,7 @@ namespace Configs
             for (int id : members) {
                 if (!placed.contains(id)) newcomers << id;
             }
-            std::stable_sort(newcomers.begin(), newcomers.end(),
-                             [selector, now](int left, int right) { return byLatency(left, right, selector, now); });
+            sortByLatency(newcomers, selector, now);
             ordered << newcomers;
             return ordered;
         }
@@ -292,8 +329,9 @@ namespace Configs
         return eligibleMembers(ent, selector, nullptr);
     }
 
-    QList<int> AutoSelectorUnmeasuredCandidates(const std::shared_ptr<Profile> &ent, const QList<int> &stale)
+    QList<int> AutoSelectorUnmeasuredCandidates(const std::shared_ptr<Profile> &ent, const QList<int> &stale, int *working)
     {
+        if (working != nullptr) *working = 0;
         if (ent == nullptr) return {};
         auto selector = ent->AutoSelector();
         if (selector == nullptr) return {};
@@ -307,21 +345,58 @@ namespace Configs
                 needed << id;
                 continue;
             }
-            if (effectiveLatencyOf(id, selector, now) == 0) needed << id;
+            const int latency = effectiveLatencyOf(id, selector, now);
+            if (latency == 0) needed << id;
+            else if (latency > 0 && working != nullptr) ++*working;
         }
         return needed;
     }
 
-    QList<int> RerankAutoSelectorPool(const std::shared_ptr<Profile> &ent)
+    bool AutoSelectorMemberWorks(const std::shared_ptr<Profile> &ent, const std::shared_ptr<Profile> &member)
+    {
+        if (ent == nullptr) return false;
+        const auto selector = ent->AutoSelector();
+        return selector != nullptr && effectiveLatency(member, selector, QDateTime::currentSecsSinceEpoch()) > 0;
+    }
+
+    int AutoSelectorStartQuorum(const std::shared_ptr<Profile> &ent)
+    {
+        if (ent == nullptr) return 0;
+        auto selector = ent->AutoSelector();
+        if (selector == nullptr) return 0;
+        selector->Normalize();
+        return std::min(std::max(selector->expected, selector->activeSize), selector->buildLimit);
+    }
+
+    bool AutoSelectorBuildChanged(const std::shared_ptr<Profile> &ent)
+    {
+        if (ent == nullptr) return false;
+        const auto selector = ent->AutoSelector();
+        if (selector == nullptr) return false;
+        const auto plan = PlanAutoSelector(ent);
+        if (!plan.error.isEmpty()) return false;
+
+        const QSet<int> next(plan.build.begin(), plan.build.end());
+        const QSet<int> built(selector->lastBuilt.begin(), selector->lastBuilt.end());
+        for (int id : built) {
+            if (!next.contains(id)) return true;
+        }
+        // The build drops members that fail validation, so an unbuilt one counts only when it is known to work.
+        const auto now = QDateTime::currentSecsSinceEpoch();
+        for (int id : next) {
+            if (!built.contains(id) && effectiveLatencyOf(id, selector, now) > 0) return true;
+        }
+        return false;
+    }
+
+    QList<int> RerankAutoSelectorPool(const std::shared_ptr<Profile> &ent, const QList<int> &untrusted)
     {
         if (ent == nullptr) return {};
         auto selector = ent->AutoSelector();
         if (selector == nullptr) return {};
 
         auto members = eligibleMembers(ent, selector, nullptr);
-        const auto now = QDateTime::currentSecsSinceEpoch();
-        std::stable_sort(members.begin(), members.end(),
-                         [selector, now](int left, int right) { return byLatency(left, right, selector, now); });
+        sortByLatency(members, selector, QDateTime::currentSecsSinceEpoch(), QSet<int>(untrusted.begin(), untrusted.end()));
         if (members.size() > selector->poolCap) members = members.mid(0, selector->poolCap);
 
         selector->pool = members;

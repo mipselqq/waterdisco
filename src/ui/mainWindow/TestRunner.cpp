@@ -4,6 +4,7 @@
 
 #include "include/api/RPC.h"
 #include "include/configs/generate.h"
+#include "include/engine/services/AssetUpdates.h"
 #include "include/database/GroupsRepo.h"
 #include "include/database/ProfilesRepo.h"
 #include "include/stats/traffic/TrafficStatsManager.hpp"
@@ -407,7 +408,7 @@ void TestRunner::runRankedUrlProbe(const Target& target, bool fallShort, int lim
     }
 
     if (!rpcOK) {
-        if (!stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
+        if (!stopRequested_.load()) Engine::AssetUpdates::HandleXrayGeoError(mw_, coreError, contextName(target.entID), true);
         return;
     }
     for (const auto& res : result.results) {
@@ -668,7 +669,7 @@ bool TestRunner::runRankedDownloadTarget(const Target& target, int timeoutMs, bo
 
     if (!rpcOK) {
         if (stopRequested_.load()) return false;
-        mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
+        Engine::AssetUpdates::HandleXrayGeoError(mw_, coreError, contextName(target.entID), true);
         const auto ids = targetIDs();
         for (int id : ids) markUnresolved(id);
         persistProfileIDs(ids);
@@ -885,7 +886,7 @@ void TestRunner::runRankedSpeedTests(const QList<int>& requestedIDs, RankedStart
             MW_show_log(testFinishLog(
                 canChooseProfile ? MainWindow::tr("Speedtest finished!") : MainWindow::tr("Speedtest interrupted."),
                 elapsedMs));
-            if (bestID >= 0 && (!mw->running || mw->running->id != bestID)) {
+            if (bestID >= 0 && (!mw->runningSnapshot() || mw->runningSnapshot()->id != bestID)) {
                 mw->profile_start(bestID);
             }
         });
@@ -1032,7 +1033,7 @@ void TestRunner::runUrlProbe(const Target& target) {
     if (!rpcOK || result.results.empty()) {
         // A failed Test RPC yields no per-result errors, so inspect it here for the
         // geo-asset prompt - the same flow profile start uses.
-        if (!rpcOK && !stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
+        if (!rpcOK && !stopRequested_.load()) Engine::AssetUpdates::HandleXrayGeoError(mw_, coreError, contextName(target.entID), true);
         return;
     }
 
@@ -1106,7 +1107,7 @@ bool TestRunner::runIpProbe(const Target& target) {
 
     if (!rpcOK || result.results.empty()) {
         // Detect missing Xray geo assets from a failed IPTest RPC (see runUrlProbe).
-        if (!rpcOK && !stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(target.entID));
+        if (!rpcOK && !stopRequested_.load()) Engine::AssetUpdates::HandleXrayGeoError(mw_, coreError, contextName(target.entID), true);
         return false;
     }
 
@@ -1421,7 +1422,7 @@ bool TestRunner::runSpeedTests(const QList<int>& requestedIDs, bool testCurrent,
             target.testCurrent = true;
             runSpeedProbe(target);
             testingCurrent_.store(false);
-            if (const auto running = mw_->running) tested[running->gid] << running->id;
+            if (const auto running = mw_->runningSnapshot()) tested[running->gid] << running->id;
         }
         const qint64 elapsedMs = elapsed.elapsed();
         session_.unlock();
@@ -1469,7 +1470,7 @@ void TestRunner::pollSpeedTest(const QMap<QString, int>& tag2entID, bool testCur
     const libcore::SpeedTestResult result = res.result.value();
     const auto tag = QString::fromStdString(result.outbound_tag.value());
     // value(tag, -1), not operator[]: a const QMap yields 0 for a missing key.
-    auto profile = testCurrent ? mw_->running
+    auto profile = testCurrent ? mw_->runningSnapshot()
                                : Configs::dataManager->profilesRepo->GetProfile(tag2entID.value(tag, -1));
     if (profile == nullptr)
     {
@@ -1506,7 +1507,7 @@ void TestRunner::pollCountryTest(const QMap<QString, int>& tag2entID, bool testC
     for (const auto& result : res.results)
     {
         const auto tag = QString::fromStdString(result.outbound_tag.value());
-        auto profile = testCurrent ? mw_->running
+        auto profile = testCurrent ? mw_->runningSnapshot()
                                    : Configs::dataManager->profilesRepo->GetProfile(tag2entID.value(tag, -1));
         if (profile == nullptr)
         {
@@ -1558,7 +1559,7 @@ void TestRunner::runSpeedProbe(const Target& target)
         });
     }
 
-    const int contextID = target.testCurrent ? (mw_->running ? mw_->running->id : -1) : target.entID;
+    const int contextID = target.testCurrent ? (mw_->runningSnapshot() ? mw_->runningSnapshot()->id : -1) : target.entID;
 
     bool rpcOK = false;
     QString coreError;
@@ -1575,13 +1576,13 @@ void TestRunner::runSpeedProbe(const Target& target)
 
     if (!rpcOK || result.results.empty()) {
         // Detect missing Xray geo assets from a failed SpeedTest RPC (see runUrlProbe).
-        if (!rpcOK && !stopRequested_.load()) mw_->handleXrayGeoAssetError(coreError, contextName(contextID));
+        if (!rpcOK && !stopRequested_.load()) Engine::AssetUpdates::HandleXrayGeoError(mw_, coreError, contextName(contextID), true);
         return;
     }
 
     for (const auto& res : result.results) {
         const int entid = target.testCurrent
-                              ? (mw_->running ? mw_->running->id : -1)
+                              ? (mw_->runningSnapshot() ? mw_->runningSnapshot()->id : -1)
                               : resolveEntID(target.tag2entID, res.outbound_tag.value(), target.entID);
         if (entid == -1) {
             MW_show_log(MainWindow::tr("Something is very wrong, the subject ent cannot be found!"));

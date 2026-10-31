@@ -1,9 +1,21 @@
 #pragma once
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QUrlQuery>
+
+#include <climits>
 
 namespace Configs
 {
+    bool AcceptOptional(const QString& field, const QString& message, const QString& value = {});
+    void ReadQueryInt(const QUrlQuery& query, const QString& key, int& target, int min = 0, int max = INT_MAX);
+    QStringList JsonStringList(const QJsonValue& value, const QString& field);
+    QString LegacyComboValue(const QString& value, const QStringList& identifiers);
+    namespace Checks {
+        QString HeaderPairs(const QString& text);
+        QString HostHeader(const QString& text, bool allowList);
+        QString ServerName(const QString& text);
+    }
     class TLS;
     class Transport;
 

@@ -1,8 +1,11 @@
 #include "include/ui/mainwindow.h"
 
+#include "include/engine/connection/ConnectionManager.h"
+
 #include <QApplication>
 #include <QCursor>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMimeData>
 #include <QResizeEvent>
 #include <QTextBrowser>
@@ -196,11 +199,20 @@ void MainWindow::openTraySelector(bool routing) {
     TrayProfileSelector::Callbacks cb;
     cb.startProfile = [this](int id) { profile_start(id); };
     cb.stopProfile = [this]() { profile_stop(false, false, true); };
-    cb.chooseRoute = [this](int id) { choose_route(id); };
-    cb.isRunning = [this]() { return running != nullptr; };
-    cb.runningId = [this]() { return running ? running->id : -1; };
-    cb.runningGid = [this]() { return running ? running->gid : -1; };
-    cb.runningName = [this]() { return running ? running->name : QString(); };
+    cb.chooseRoute = [this](int id) { connection()->chooseRoute(id); };
+    cb.isRunning = [this]() { return runningSnapshot() != nullptr; };
+    cb.runningId = [this]() {
+        const auto running = runningSnapshot();
+        return running ? running->id : -1;
+    };
+    cb.runningGid = [this]() {
+        const auto running = runningSnapshot();
+        return running ? running->gid : -1;
+    };
+    cb.runningName = [this]() {
+        const auto running = runningSnapshot();
+        return running ? running->name : QString();
+    };
 
     traySelector = new TrayProfileSelector(
         routing ? TrayProfileSelector::Routing : TrayProfileSelector::Server, cb, this);
@@ -251,6 +263,21 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
 
 void MainWindow::start_select_mode(QObject *context, const std::function<void(int)> &callback) {
     select_mode = true;
+    if (shortcut_select_cancel == nullptr) {
+        shortcut_select_cancel = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+        shortcut_select_cancel->setContext(Qt::WindowShortcut);
+        connect(shortcut_select_cancel, &QShortcut::activated, this, [this] {
+            if (select_mode) finish_select_mode(-1);
+        });
+    }
+    shortcut_select_cancel->setEnabled(true);
     connectOnce(this, &MainWindow::profile_selected, context, callback);
+    refresh_status();
+}
+
+void MainWindow::finish_select_mode(int profileId) {
+    if (shortcut_select_cancel != nullptr) shortcut_select_cancel->setEnabled(false);
+    emit profile_selected(profileId);
+    select_mode = false;
     refresh_status();
 }

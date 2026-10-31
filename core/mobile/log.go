@@ -6,7 +6,13 @@ import (
 	"strings"
 	"sync"
 
+	"ThroneCore/internal/xray"
+
 	"github.com/sagernet/sing-box/log"
+	"github.com/sagernet/sing-box/option"
+	xapplog "github.com/xtls/xray-core/app/log"
+	xlog "github.com/xtls/xray-core/common/log"
+	xcore "github.com/xtls/xray-core/core"
 )
 
 const (
@@ -20,7 +26,8 @@ const (
 )
 
 // LogSink receives sing-box lines (already formatted by the box's platform formatter) with their
-// log.Level, and Go std log lines (Xray gates, probes, close timing) as LogLevelInfo.
+// log.Level, Go std log lines (Xray gates, probes, close timing) as LogLevelInfo, an Xray gate that
+// cannot start as LogLevelError, and Xray's own log prefixed "xray: " at its severity.
 type LogSink interface {
 	Write(level int32, message string)
 }
@@ -61,11 +68,12 @@ func (p *logPump) setSink(sink LogSink) {
 	}
 }
 
-func (p *logPump) push(level int32, message string) {
+// Reports whether a sink took the line.
+func (p *logPump) push(level int32, message string) bool {
 	p.access.Lock()
 	if p.sink == nil {
 		p.access.Unlock()
-		return
+		return false
 	}
 	limit := p.limit
 	if limit <= 0 {
@@ -77,6 +85,7 @@ func (p *logPump) push(level int32, message string) {
 	p.pending = append(p.pending, logEntry{level: level, message: message})
 	p.access.Unlock()
 	p.wake()
+	return true
 }
 
 func (p *logPump) wake() {
@@ -104,6 +113,54 @@ func (p *logPump) run() {
 	}
 }
 
+// Std log lines arrive as info, below the app's default warn level; a gate dropping its members must still show.
+func init() {
+	xray.FailureLog = func(message string) {
+		if !pump.push(LogLevelError, message) {
+			stdlog.Println(message)
+		}
+	}
+	// Xray's console log is stdout, which goes nowhere on Android. Each instance still filters by its config's
+	// loglevel before a line gets here, and with no sink the line is dropped.
+	_ = xapplog.RegisterHandlerCreator(xapplog.LogType_Console, func(xapplog.LogType, xapplog.HandlerCreatorOptions) (xlog.Handler, error) {
+		return xrayLogHandler{}, nil
+	})
+}
+
+type xrayLogHandler struct{}
+
+func (xrayLogHandler) Handle(message xlog.Message) {
+	line := message.String()
+	pump.push(xrayLogLevel(message, line), "xray: "+line)
+}
+
+// Access and DNS lines carry no severity and come as info.
+func xrayLogLevel(message xlog.Message, line string) int32 {
+	if masked, isMasked := message.(*xapplog.MaskedMsgWrapper); isMasked {
+		message = masked.Message
+	}
+	general, isGeneral := message.(*xlog.GeneralMessage)
+	if !isGeneral {
+		return LogLevelInfo
+	}
+	switch general.Severity {
+	case xlog.Severity_Error:
+		return LogLevelError
+	case xlog.Severity_Warning:
+		// Xray announces every start as a warning, and gates, network resets and probes start instances often.
+		if strings.HasSuffix(line, xrayStartedLine) {
+			return LogLevelInfo
+		}
+		return LogLevelWarn
+	case xlog.Severity_Debug:
+		return LogLevelDebug
+	default:
+		return LogLevelInfo
+	}
+}
+
+var xrayStartedLine = "Xray " + xcore.Version() + " started"
+
 func SetLogSink(sink LogSink) {
 	pump.setSink(sink)
 	if sink == nil {
@@ -129,9 +186,24 @@ var _ log.PlatformWriter = platformLogWriter{}
 // Always handed to box.New for the main instance, sink or not: a non-nil PlatformLogWriter is what
 // switches on trafficcontrol, clash mode and the cache file, which Status()/Groups()/QueryOutboundStats()
 // read. Probe boxes pass nil so they never share cache.db or pay for accounting, and get a testLogWriter.
-type platformLogWriter struct{}
+// Like testLogWriter it applies the config's own level, so lines the sink would drop never cross into Kotlin.
+type platformLogWriter struct {
+	level log.Level
+}
 
-func (platformLogWriter) WriteMessage(level log.Level, message string) {
+// log.New's level: unset means trace, and an unknown level fails box.New anyway.
+func newPlatformLogWriter(options *option.LogOptions) platformLogWriter {
+	if options == nil || options.Level == "" {
+		return platformLogWriter{level: log.LevelTrace}
+	}
+	level, _ := log.ParseLevel(options.Level)
+	return platformLogWriter{level: level}
+}
+
+func (w platformLogWriter) WriteMessage(level log.Level, message string) {
+	if level > w.level {
+		return
+	}
 	pump.push(int32(level), message)
 }
 
